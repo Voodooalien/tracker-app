@@ -2156,6 +2156,23 @@ button:active, .tf-btn:active {
   background: var(--navy);
 }
 
+/* ── Quick log strip (repeat yesterday + bundle shortcuts) ── */
+.quick-log-title {
+  font-size: 11px; font-weight: 800; letter-spacing: .8px;
+  text-transform: uppercase; color: var(--muted); margin: 2px 0 8px;
+}
+.quick-log-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.quick-log-row + .quick-log-title { margin-top: 12px; }
+.quick-log-btn {
+  background: var(--bg); border: 1.5px solid var(--border); border-radius: 999px;
+  padding: 9px 14px; font-family: inherit; font-weight: 700; font-size: 12.5px;
+  color: var(--text); cursor: pointer; min-height: 40px; transition: all .15s;
+}
+.quick-log-btn:hover { border-color: var(--navy); }
+.quick-log-btn:active { transform: scale(0.97); }
+.quick-log-btn.quick-done { opacity: 0.6; }
+body.dark .quick-log-btn { background: var(--card); }
+
 /* Force Velocity column titles and subtitles to center */
 .lab-velocity-col h4 {
   text-align: center !important;
@@ -2417,10 +2434,14 @@ html body select.status-badge-select.status-blacklist {
   
   </style>
 
+  <div id="quick-log-card" style="background:var(--card); border:1px solid var(--border); border-radius:12px; padding:14px 16px; box-shadow:0 8px 24px rgba(0,0,0,0.04); margin-bottom:20px; display:none;"></div>
+
+  <div id="favs-section"></div>
+
   <div style="background:var(--card); border:1px solid var(--border); border-top:4px solid #18507f; border-radius:12px; padding:16px 20px; box-shadow:0 8px 24px rgba(0,0,0,0.04); margin-bottom:24px; position:relative; overflow:visible;">
-    
+
     <div style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:12px; margin-bottom:12px; z-index:1;">
-      
+
       <div style="display:flex; align-items:center; gap:8px; font-weight:800; font-size:15px; color:var(--text); letter-spacing:0.2px;">
         <span style="font-size:18px; line-height:1;">✍️</span> Log a new item
       </div>
@@ -2460,7 +2481,7 @@ html body select.status-badge-select.status-blacklist {
       
   </div>
 
-  </div> <div id="favs-section"></div>
+  </div>
   <div id="bundle-section"></div>
 
   <div class="pending-toolbar" style="margin-top: 28px;">
@@ -2474,7 +2495,10 @@ html body select.status-badge-select.status-blacklist {
         <button class="meal-filter-btn" onclick="setPendingMealFilter('dinner', this)">🌙 Dinner</button>
       </div>
     </div>
-    <button id="bulk-mode-btn" class="bulk-mode-btn" onclick="toggleBulkMode()">Bulk Edit: Off</button>
+    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+      <button id="all-due-btn" class="bulk-mode-btn" onclick="markAllDuePositive()" style="display:none;" title="Mark every fully-elapsed pending window as ✓ (no reaction) — then tap ✕ on the exceptions. Undo available.">✓ All due</button>
+      <button id="bulk-mode-btn" class="bulk-mode-btn" onclick="toggleBulkMode()">Bulk Edit: Off</button>
+    </div>
   </div>
   <div id="pending-bulk-hint"></div>
   <div id="pending-list"></div>
@@ -2941,7 +2965,10 @@ html body select.status-badge-select.status-blacklist {
 // ─── Window buttons HTML ──────────────────────────────────────────────────────
 
 // ─── THE 5 GLOBAL VARIABLES (CRASH FIX) ───
-const WIN_GLOW_AT = 80; // (or whatever number you set this to originally)
+// Hours after logging when each reaction window has fully elapsed and becomes
+// markable. Also drives the 🔔 "ready" glow (was a plain number before, which
+// made WIN_GLOW_AT[w.key] undefined — the glow never fired).
+const WIN_GLOW_AT = { w1: 4, w2: 8, w3: 13, w4: 17 };
 let _diary2Search = '';
 let _currentListModalSec = null;
 let _currentListModalEnt = null;
@@ -3270,6 +3297,14 @@ function executeUndo() {
     renderTimeline(); // Added this so your new timeline updates on undo!
     updateCheckinDot();
     toast('Check-in restored ✓');
+  } else if (state.type === 'bulkwin') {
+    const entries = loadMigrated();
+    const byId = {};
+    entries.forEach(e => { byId[e.id] = e; });
+    state.changes.forEach(c => { if (byId[c.id]) byId[c.id].windows[c.winKey] = c.prev; });
+    save(entries);
+    render();
+    toast('Bulk mark undone ✓');
   }
 }
 
@@ -3361,6 +3396,44 @@ function markReaction(id, winKey, value) {
   targets.forEach(target => { target.windows[winKey] = nextValue; });
   save(entries);
   render();
+}
+
+// ─── "✓ All due" bulk marking ────────────────────────────────────────────────
+// A window is "due" once its time span has fully elapsed — marking earlier
+// would record a reaction outcome that hasn't had time to happen yet.
+function isWindowDue(entry, winKey) {
+  if (entry.date < today()) return true;
+  const el = elapsedHoursSince(entry.date, entry.logTime);
+  return el !== null && el >= WIN_GLOW_AT[winKey];
+}
+
+function listDuePending() {
+  let entries = loadMigrated().filter(hasPending);
+  if (_pendingMealFilter) entries = entries.filter(e => (e.mealType || '') === _pendingMealFilter);
+  const due = [];
+  entries.forEach(e => WINDOWS.forEach(w => {
+    const v = e.windows[w.key];
+    if ((v === null || v === undefined) && isWindowDue(e, w.key)) due.push({ id: e.id, winKey: w.key });
+  }));
+  return due;
+}
+
+function markAllDuePositive() {
+  const due = listDuePending();
+  if (!due.length) { toast('Nothing due to mark'); return; }
+  const entries = loadMigrated();
+  const byId = {};
+  entries.forEach(e => { byId[e.id] = e; });
+  const changes = [];
+  due.forEach(d => {
+    const e = byId[d.id];
+    if (!e) return;
+    changes.push({ id: d.id, winKey: d.winKey, prev: e.windows[d.winKey] === undefined ? null : e.windows[d.winKey] });
+    e.windows[d.winKey] = true;
+  });
+  save(entries);
+  render();
+  startUndo({ type: 'bulkwin', changes }, `Marked ${changes.length} windows ✓ — tap ✕ on any exception`);
 }
 
 // ─── Mark symptom ─────────────────────────────────────────────────────────────
@@ -5468,6 +5541,73 @@ function quickLogFav(idx) {
   render();
 }
 
+// ─── Quick log: repeat yesterday + bundle shortcuts ──────────────────────────
+function repeatYesterdayMeal(mealKey) {
+  const yd = addDays(today(), -1);
+  const names = { breakfast: 'breakfast', lunch: 'lunch', snack: 'snacks', dinner: 'dinner' };
+  const label = names[mealKey] || 'items';
+  const entries = loadMigrated();
+  const src = entries.filter(e => e.date === yd && (e.mealType || '') === mealKey);
+  if (!src.length) { toast(`Nothing logged for yesterday's ${label}`); return; }
+  const t = today();
+  // skip foods already logged today in the same meal — makes a double-tap harmless
+  const already = new Set(entries.filter(e => e.date === t && (e.mealType || '') === mealKey).map(e => e.food));
+  const fresh = src.filter(e => !already.has(e.food));
+  if (!fresh.length) { toast(`Yesterday's ${label} already logged today ✓`); return; }
+  if (!confirm(`Log ${fresh.length} item(s) from yesterday's ${label}?`)) return;
+  for (let i = fresh.length - 1; i >= 0; i--) {
+    const s = fresh[i];
+    entries.unshift({ id: uid(), date: t, mealType: s.mealType || '', food: s.food, logTime: s.logTime || '', windows: { w1: null, w2: null, w3: null, w4: null }, symptoms: blankSymptoms() });
+  }
+  save(entries);
+  toast(`Logged ${fresh.length} from yesterday ✓`);
+  render();
+}
+
+function renderQuickLog() {
+  const card = document.getElementById('quick-log-card');
+  if (!card) return;
+  const t = today();
+  const yd = addDays(t, -1);
+  const entries = loadMigrated();
+  const meals = [
+    ['breakfast', '🌅', 'Breakfast'],
+    ['lunch', '☀️', 'Lunch'],
+    ['snack', '🍎', 'Snack'],
+    ['dinner', '🌙', 'Dinner']
+  ];
+  const ydCount = {}, todayFoods = {};
+  meals.forEach(([k]) => { ydCount[k] = 0; todayFoods[k] = new Set(); });
+  entries.forEach(e => {
+    const k = e.mealType || '';
+    if (ydCount[k] === undefined) return;
+    if (e.date === yd) ydCount[k]++;
+    if (e.date === t) todayFoods[k].add(e.food);
+  });
+
+  let html = '';
+  const repeatBtns = meals
+    .filter(([k]) => ydCount[k] > 0)
+    .map(([k, icon, name]) => {
+      const done = todayFoods[k].size > 0;
+      return `<button class="quick-log-btn${done ? ' quick-done' : ''}" onclick="repeatYesterdayMeal('${k}')" title="${done ? 'Already has items today — duplicates are skipped' : ''}">${icon} ${name} ×${ydCount[k]}${done ? ' ✓' : ''}</button>`;
+    }).join('');
+  if (repeatBtns) {
+    html += `<div class="quick-log-title">↻ Repeat yesterday</div><div class="quick-log-row">${repeatBtns}</div>`;
+  }
+
+  const bundles = loadBundles();
+  if (bundles.length) {
+    const bundleBtns = bundles.map(b =>
+      `<button class="quick-log-btn" onclick="logBundle('${b.id}')">🍱 ${esc(b.name)} ×${(b.items || []).length}</button>`
+    ).join('');
+    html += `<div class="quick-log-title">⚡ Log a bundle</div><div class="quick-log-row">${bundleBtns}</div>`;
+  }
+
+  card.style.display = html ? '' : 'none';
+  card.innerHTML = html;
+}
+
 function renderFavs() {
   const el = document.getElementById('favs-section');
   if (!el) return;
@@ -6805,7 +6945,7 @@ function renderReintro() {
 function render() {
   renderPending(); renderHistory(); renderSummary(); renderCheckin();
   renderCorrelations(); renderBucketLoad(); renderTimeline(); renderFactors();
-  renderHeatmap(); renderArchives(); renderFavs(); renderBundles();
+  renderHeatmap(); renderArchives(); renderQuickLog(); renderFavs(); renderBundles();
   renderTrends(); updateCheckinDot();
 }
 
@@ -6984,6 +7124,12 @@ function renderPending() {
   const container = document.getElementById('pending-list');
   const hint = document.getElementById('pending-bulk-hint');
   setBulkModeButton();
+  const dueBtn = document.getElementById('all-due-btn');
+  if (dueBtn) {
+    const dueCount = listDuePending().length;
+    dueBtn.style.display = dueCount ? '' : 'none';
+    dueBtn.textContent = `✓ All due (${dueCount})`;
+  }
   if (!container) return;
   let entries = loadMigrated().filter(hasPending);
   if (_pendingMealFilter) entries = entries.filter(e => (e.mealType || '') === _pendingMealFilter);
