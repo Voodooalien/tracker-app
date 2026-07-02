@@ -2173,6 +2173,34 @@ button:active, .tf-btn:active {
 .quick-log-btn.quick-done { opacity: 0.6; }
 body.dark .quick-log-btn { background: var(--card); }
 
+/* ── Verdict Hub ── */
+.verdict-row { padding: 12px 16px; border-bottom: 1px solid var(--border); }
+.verdict-row:last-child { border-bottom: none; }
+.verdict-row-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.verdict-food { font-size: 13.5px; font-weight: 700; min-width: 0; }
+.verdict-badges { display: inline-flex; gap: 6px; flex-shrink: 0; }
+.verdict-tag {
+  display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 999px;
+  font-size: 10.5px; font-weight: 800; white-space: nowrap;
+}
+.verdict-tag.staple { background: var(--bg); color: var(--muted); }
+.verdict-tag.conf-high { background: #E8F8EE; color: var(--pos); }
+.verdict-tag.conf-medium { background: #FEF3C7; color: #B45309; }
+.verdict-tag.conf-low { background: var(--bg); color: var(--muted); }
+.verdict-meta { font-size: 11px; color: var(--muted); margin-top: 3px; }
+.verdict-why { font-size: 12px; margin-top: 5px; line-height: 1.45; }
+.verdict-exp-row { padding: 8px 0; border-bottom: 1px solid var(--border); }
+.verdict-exp-row:last-child { border-bottom: none; padding-bottom: 0; }
+.verdict-exp-food { font-size: 13px; font-weight: 700; }
+.verdict-exp-text { font-size: 12px; color: var(--muted); margin-top: 3px; line-height: 1.5; }
+.verdict-baseline {
+  font-size: 11.5px; color: var(--muted); line-height: 1.5;
+  padding: 10px 12px; background: var(--bg); border-radius: 8px; margin-bottom: 4px;
+}
+body.dark .verdict-tag.conf-high { background: rgba(39,174,96,0.15); color: #4ADE80; }
+body.dark .verdict-tag.conf-medium { background: rgba(245,158,11,0.15); color: #FCD34D; }
+#verdict-search { border: 1.5px solid var(--border); border-radius: 7px; padding: 9px 12px; font-size: 14px; font-family: inherit; background: var(--card); color: var(--text); }
+
 /* Force Velocity column titles and subtitles to center */
 .lab-velocity-col h4 {
   text-align: center !important;
@@ -2297,6 +2325,7 @@ body.dark .quick-log-btn { background: var(--card); }
     <button onclick="showTab('archives2',this)" style="color: #FDECEC; ">📖 Diary</button>
     <button onclick="showTab('analysis',this)" style="color: #FDECEC; ">📊 Analysis</button>
     <button onclick="showTab('summary',this)" style="color: #FDECEC; ">📋 Summary</button>
+    <button onclick="showTab('verdicts',this)" style="color: #FDECEC; ">⚖️ Verdicts</button>
   </div>
   
   <div style="margin-left: auto; display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">
@@ -2502,6 +2531,31 @@ html body select.status-badge-select.status-blacklist {
   </div>
   <div id="pending-bulk-hint"></div>
   <div id="pending-list"></div>
+</main>
+</div>
+
+<!-- ═══ VERDICTS TAB ═══ -->
+<div id="tab-verdicts" class="tab-content">
+<main>
+  <div class="section-title">⚖️ Verdicts — one combined judgement per food</div>
+  <div class="card" style="margin-bottom:16px;">
+    <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+      <input type="text" id="verdict-search" placeholder="Search foods..." oninput="setVerdictSearch(this.value)" style="flex:1; min-width:160px;">
+      <div class="time-filter-row" style="margin:0;">
+        <button class="tf-btn active" onclick="setVerdictRange('all', this)">All time</button>
+        <button class="tf-btn" onclick="setVerdictRange('90d', this)">90d</button>
+        <button class="tf-btn" onclick="setVerdictRange('60d', this)">60d</button>
+        <button class="tf-btn" onclick="setVerdictRange('30d', this)">30d</button>
+      </div>
+    </div>
+    <div id="verdict-filter-chips" class="time-filter-row" style="margin:10px 0 0;"></div>
+    <div style="font-size:11px; color:var(--muted); margin-top:10px; line-height:1.5;">
+      Verdicts fuse your ✓/✕ reaction windows (the strongest signal), per-meal symptom flags, and how often you eat each food.
+      Foods eaten almost daily can't be judged by day-comparison — the hub says so instead of guessing.
+    </div>
+  </div>
+  <div id="verdict-experiments"></div>
+  <div id="verdict-list"></div>
 </main>
 </div>
 
@@ -6942,11 +6996,235 @@ function renderReintro() {
 }
 
 // ─── Render all ───────────────────────────────────────────────────────────────
+// ─── Verdict Hub ─────────────────────────────────────────────────────────────
+// One combined judgement per food. Primary evidence: the per-entry reaction
+// windows (✓/✕) — the only signal that isolates a single food. Secondary:
+// per-meal symptom flags compared against the all-food base rate. Foods eaten
+// on most days are flagged as "staples": day-level comparison has no control
+// days for them, so the hub proposes a skip-experiment instead of a verdict.
+let _verdictSearch = '';
+let _verdictFilter = 'all';
+let _verdictRange = 'all';
+let _verdictShowRare = false;
+
+function inVerdictRange(dateStr) {
+  if (_verdictRange === 'all') return true;
+  const d = parseYMD(dateStr);
+  if (!d) return false;
+  d.setHours(0, 0, 0, 0);
+  const days = { '30d': 29, '60d': 59, '90d': 89 }[_verdictRange];
+  return days === undefined ? true : d >= dateDaysAgo(days);
+}
+
+function computeVerdicts() {
+  const entries = loadMigrated().filter(e => inVerdictRange(e.date));
+  const totalDays = new Set(entries.map(e => e.date)).size || 1;
+  const totalEntries = entries.length || 1;
+
+  const isPosSym = s => /calm|energetic|flat belly|focused|good sleep/i.test(s.label || '');
+  const negSyms = allSymptoms().filter(s => !isPosSym(s));
+  const baseCounts = {};
+  negSyms.forEach(s => { baseCounts[s.key] = 0; });
+  entries.forEach(e => negSyms.forEach(s => { if (e.symptoms && e.symptoms[s.key]) baseCounts[s.key]++; }));
+
+  // Personal per-window baseline: with a chronic condition the average window
+  // is often marked ✕, so foods are judged RELATIVE to this baseline, not on
+  // absolute rates — otherwise everything reads "suspect" and nothing stands out.
+  const baseWin = {};
+  WINDOWS.forEach(w => { baseWin[w.key] = { p: 0, n: 0 }; });
+  entries.forEach(e => WINDOWS.forEach(w => {
+    const v = e.windows[w.key];
+    if (v === true) baseWin[w.key].p++;
+    else if (v === false) baseWin[w.key].n++;
+  }));
+  const baseRate = {};
+  WINDOWS.forEach(w => {
+    const b = baseWin[w.key];
+    baseRate[w.key] = (b.n + 1) / (b.p + b.n + 2);
+  });
+
+  const foods = {};
+  entries.forEach(e => {
+    const f = foods[e.food] || (foods[e.food] = {
+      food: e.food, logs: 0, days: new Set(),
+      win: { w1: { p: 0, n: 0 }, w2: { p: 0, n: 0 }, w3: { p: 0, n: 0 }, w4: { p: 0, n: 0 } },
+      symCounts: {}
+    });
+    f.logs++;
+    f.days.add(e.date);
+    WINDOWS.forEach(w => {
+      const v = e.windows[w.key];
+      if (v === true) f.win[w.key].p++;
+      else if (v === false) f.win[w.key].n++;
+    });
+    negSyms.forEach(s => { if (e.symptoms && e.symptoms[s.key]) f.symCounts[s.key] = (f.symCounts[s.key] || 0) + 1; });
+  });
+
+  const list = Object.values(foods).map(f => {
+    let pos = 0, neg = 0, expectedNeg = 0, worst = null, best = null;
+    WINDOWS.forEach(w => {
+      const s = f.win[w.key];
+      const tot = s.p + s.n;
+      pos += s.p; neg += s.n;
+      expectedNeg += tot * baseRate[w.key];
+      if (tot < 3) return;
+      const bayes = (s.n + 1) / (tot + 2);
+      const delta = bayes - baseRate[w.key];
+      const rec = { label: w.label, p: s.p, n: s.n, tot, bayes, rate: s.n / tot, base: baseRate[w.key], delta };
+      if (!worst || delta > worst.delta) worst = rec;
+      if (!best || delta < best.delta) best = rec;
+    });
+    const scored = pos + neg;
+    // how this food's overall ✕ rate compares to what your baseline predicts
+    // for the same mix of scored windows
+    const expRate = scored ? expectedNeg / scored : 0;
+    const overallDelta = scored ? (neg + 1) / (scored + 2) - expRate : 0;
+    const eatenShare = f.days.size / totalDays;
+    const staple = eatenShare >= 0.7 && totalDays >= 14;
+
+    const lifts = [];
+    negSyms.forEach(s => {
+      const c = f.symCounts[s.key] || 0;
+      if (c < 3) return;
+      const foodRate = c / f.logs;
+      const bRate = baseCounts[s.key] / totalEntries;
+      if (bRate > 0 && foodRate / bRate >= 1.5 && foodRate >= 0.15) {
+        lifts.push({ label: s.label, lift: foodRate / bRate, c });
+      }
+    });
+    lifts.sort((a, b) => b.lift - a.lift);
+
+    const pct = x => `${Math.round(x * 100)}%`;
+    let verdict;
+    const why = [];
+    if (scored < 4) {
+      verdict = 'unclear';
+      why.push(scored === 0 ? 'No reaction windows scored yet' : `Only ${scored} window${scored === 1 ? '' : 's'} scored — not enough to judge`);
+    } else if (worst && worst.n >= 3 && worst.delta >= 0.15) {
+      verdict = 'suspect';
+      why.push(`${worst.label}: ${worst.n} of ${worst.tot} ✕ (${pct(worst.rate)}) vs your ${pct(worst.base)} baseline`);
+    } else if (scored >= 8 && overallDelta <= -0.15 && (!worst || worst.delta < 0.1)) {
+      verdict = 'gentler';
+      why.push(`${pct(neg / scored)} ✕ overall vs ~${pct(expRate)} expected at your baseline`);
+      if (best && best.delta <= -0.15) why.push(`${best.label}: ${best.p} of ${best.tot} clear (${pct(1 - best.rate)}) vs ${pct(1 - best.base)} baseline`);
+    } else {
+      verdict = 'typical';
+      why.push(`${pct(neg / scored)} ✕ overall — close to the ~${pct(expRate)} your baseline predicts`);
+      if (worst && worst.delta >= 0.08 && worst.n >= 2) why.push(`Slightly elevated in ${worst.label}: ${worst.n} of ${worst.tot} ✕ (${pct(worst.rate)} vs ${pct(worst.base)})`);
+    }
+    if (verdict !== 'unclear' && lifts.length) {
+      lifts.slice(0, 2).forEach(l => why.push(`${l.label} flagged ${l.lift.toFixed(1)}× your average rate (${l.c}× on this food)`));
+      if (verdict === 'gentler' && lifts[0].lift >= 2) { verdict = 'typical'; why.push('Windows look better than baseline, but the symptom pattern above holds it at Typical'); }
+    }
+
+    const conf = scored >= 24 ? 'High' : scored >= 12 ? 'Medium' : 'Low';
+
+    let experiment = null;
+    if (staple && (verdict === 'typical' || verdict === 'unclear')) {
+      experiment = `Eaten on ${Math.round(eatenShare * 100)}% of days — there are almost no days without it to compare. Skip it for 4–5 days and watch your check-in scores.`;
+    } else if (verdict === 'suspect' && conf !== 'High') {
+      experiment = 'Avoid for a week to confirm — if that window stays clean without it, this was likely the trigger.';
+    }
+
+    return { food: f.food, logs: f.logs, daysEaten: f.days.size, eatenShare, staple, scored, pos, neg, worst, overallDelta, verdict, conf, why, lifts, experiment };
+  });
+
+  return { list, totalDays, baseRate };
+}
+
+const VERDICT_META = {
+  suspect: { label: 'Suspect', icon: '🔺', order: 0, hint: 'clearly worse than your baseline' },
+  typical: { label: 'Typical', icon: '🟡', order: 1, hint: 'tracks your baseline' },
+  gentler: { label: 'Gentler', icon: '🟢', order: 2, hint: 'clearly better than your baseline' },
+  unclear: { label: 'Unclear', icon: '❔', order: 3, hint: 'not enough scored windows' }
+};
+
+function setVerdictSearch(v) { _verdictSearch = (v || '').toLowerCase(); renderVerdicts(); }
+function setVerdictRange(r, btn) {
+  _verdictRange = r;
+  if (btn) { btn.parentElement.querySelectorAll('.tf-btn').forEach(b => b.classList.remove('active')); btn.classList.add('active'); }
+  renderVerdicts();
+}
+function setVerdictFilter(v) { _verdictFilter = v; renderVerdicts(); }
+function toggleVerdictRare() { _verdictShowRare = !_verdictShowRare; renderVerdicts(); }
+
+function renderVerdicts() {
+  const listEl = document.getElementById('verdict-list');
+  const expEl = document.getElementById('verdict-experiments');
+  const chipsEl = document.getElementById('verdict-filter-chips');
+  if (!listEl) return;
+
+  const { list, baseRate } = computeVerdicts();
+  let items = list;
+  if (!_verdictShowRare) items = items.filter(i => i.logs >= 3);
+  if (_verdictSearch) items = items.filter(i => i.food.toLowerCase().includes(_verdictSearch));
+
+  const counts = { suspect: 0, typical: 0, gentler: 0, unclear: 0 };
+  items.forEach(i => counts[i.verdict]++);
+  if (chipsEl) {
+    chipsEl.innerHTML =
+      `<button class="tf-btn ${_verdictFilter === 'all' ? 'active' : ''}" onclick="setVerdictFilter('all')">All ${items.length}</button>` +
+      Object.keys(VERDICT_META).map(k =>
+        `<button class="tf-btn ${_verdictFilter === k ? 'active' : ''}" onclick="setVerdictFilter('${k}')">${VERDICT_META[k].icon} ${VERDICT_META[k].label} ${counts[k]}</button>`
+      ).join('') +
+      `<button class="tf-btn ${_verdictShowRare ? 'active' : ''}" onclick="toggleVerdictRare()" title="Include foods logged fewer than 3 times">Rare foods: ${_verdictShowRare ? 'on' : 'off'}</button>`;
+  }
+
+  if (expEl) {
+    const experiments = items
+      .filter(i => i.experiment)
+      .sort((a, b) => (a.verdict === 'suspect' ? 0 : 1) - (b.verdict === 'suspect' ? 0 : 1) || b.eatenShare - a.eatenShare)
+      .slice(0, 3);
+    expEl.innerHTML = experiments.length ? `
+      <div class="card" style="margin-bottom:16px; border-left:4px solid var(--w1); border-radius:0 10px 10px 0;">
+        <div class="quick-log-title">🔬 Worth testing next</div>
+        ${experiments.map(i => `
+          <div class="verdict-exp-row">
+            <div class="verdict-exp-food">${esc(i.food)}</div>
+            <div class="verdict-exp-text">${i.experiment}</div>
+          </div>`).join('')}
+      </div>` : '';
+  }
+
+  let shown = _verdictFilter === 'all' ? items : items.filter(i => i.verdict === _verdictFilter);
+  const sections = ['suspect', 'typical', 'gentler', 'unclear'].filter(k => shown.some(i => i.verdict === k));
+  const sorters = {
+    suspect: (a, b) => (b.worst ? b.worst.delta : 0) - (a.worst ? a.worst.delta : 0),
+    typical: (a, b) => b.scored - a.scored,
+    gentler: (a, b) => a.overallDelta - b.overallDelta,
+    unclear: (a, b) => b.logs - a.logs
+  };
+
+  const baseLine = WINDOWS.map(w => `${w.label}: ${Math.round(baseRate[w.key] * 100)}%`).join(' · ');
+  const baseEl = `<div class="verdict-baseline">Your baseline ✕ rate per window — ${baseLine}. Verdicts compare each food against this.</div>`;
+
+  listEl.innerHTML = baseEl + sections.map(k => {
+    const group = shown.filter(i => i.verdict === k).sort(sorters[k]);
+    return `
+      <div class="meal-section-header" style="margin-top:18px;">${VERDICT_META[k].icon} ${VERDICT_META[k].label} · ${group.length} <span style="font-weight:600; font-size:10.5px; color:var(--muted); text-transform:none; letter-spacing:0;">— ${VERDICT_META[k].hint}</span></div>
+      <div class="card" style="padding:0; overflow:hidden;">
+        ${group.map(i => `
+          <div class="verdict-row">
+            <div class="verdict-row-top">
+              <span class="verdict-food">${esc(i.food)}</span>
+              <span class="verdict-badges">
+                ${i.staple ? '<span class="verdict-tag staple" title="Eaten on 70%+ of tracked days — day-comparison analyses cannot isolate it">📌 staple</span>' : ''}
+                <span class="verdict-tag conf-${i.conf.toLowerCase()}" title="Based on ${i.scored} scored reaction windows">${i.conf}</span>
+              </span>
+            </div>
+            <div class="verdict-meta">${i.logs} logs · ${i.daysEaten} days · ${i.scored} windows scored (${i.pos}✓ / ${i.neg}✕)</div>
+            ${i.why.map(w => `<div class="verdict-why">• ${w}</div>`).join('')}
+            ${i.experiment && _verdictFilter !== 'all' ? `<div class="verdict-why" style="color:var(--w1);">🔬 ${i.experiment}</div>` : ''}
+          </div>`).join('')}
+      </div>`;
+  }).join('') || `<div class="card"><div class="empty"><span>🔍</span>No foods match.</div></div>`;
+}
+
 function render() {
   renderPending(); renderHistory(); renderSummary(); renderCheckin();
   renderCorrelations(); renderBucketLoad(); renderTimeline(); renderFactors();
   renderHeatmap(); renderArchives(); renderQuickLog(); renderFavs(); renderBundles();
-  renderTrends(); updateCheckinDot();
+  renderVerdicts(); renderTrends(); updateCheckinDot();
 }
 
 // ─── Symptom buttons HTML ─────────────────────────────────────────────────────
