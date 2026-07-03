@@ -2184,9 +2184,9 @@ body.dark .quick-log-btn { background: var(--card); }
   font-size: 10.5px; font-weight: 800; white-space: nowrap;
 }
 .verdict-tag.staple { background: var(--bg); color: var(--muted); }
-.verdict-tag.conf-high { background: #E8F8EE; color: var(--pos); }
-.verdict-tag.conf-medium { background: #FEF3C7; color: #B45309; }
-.verdict-tag.conf-low { background: var(--bg); color: var(--muted); }
+/* Evidence strength is meta-info, NOT good/bad — always neutral so a green chip
+   never reads as "this food is good" next to a Suspect. */
+.verdict-tag.conf-neutral { background: var(--bg); color: var(--muted); font-weight: 700; border: 1px solid var(--border); }
 .verdict-meta { font-size: 11px; color: var(--muted); margin-top: 3px; }
 .verdict-why { font-size: 12px; margin-top: 5px; line-height: 1.45; }
 .verdict-exp-row { padding: 8px 0; border-bottom: 1px solid var(--border); }
@@ -2197,6 +2197,49 @@ body.dark .quick-log-btn { background: var(--card); }
   font-size: 11.5px; color: var(--muted); line-height: 1.5;
   padding: 10px 12px; background: var(--bg); border-radius: 8px; margin-bottom: 4px;
 }
+
+/* ── Verdicts: help panel ── */
+.verdict-help { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 10px; }
+.verdict-help > summary {
+  cursor: pointer; font-size: 12.5px; font-weight: 700; color: var(--navy);
+  list-style: none; display: flex; align-items: center; gap: 6px; user-select: none;
+}
+.verdict-help > summary::-webkit-details-marker { display: none; }
+.verdict-help > summary::after { content: '▾'; margin-left: auto; color: var(--muted); transition: transform .15s; }
+.verdict-help[open] > summary::after { transform: rotate(180deg); }
+body.dark .verdict-help > summary { color: var(--text); }
+.verdict-help-body { font-size: 12px; color: var(--text); line-height: 1.6; margin-top: 10px; }
+.verdict-help-body p { margin: 0 0 9px; }
+.verdict-help-body ul { margin: 0 0 9px; padding-left: 18px; }
+.verdict-help-body li { margin-bottom: 4px; }
+.verdict-help-body .verdict-tag { vertical-align: middle; }
+
+/* ── Verdicts: sentiment-colored section headers + row stripes ── */
+.verdict-section-head {
+  margin: 18px 0 8px; padding: 8px 12px; border-radius: 8px;
+  display: flex; flex-direction: column; gap: 2px; border-left: 4px solid var(--muted);
+}
+.verdict-section-title { font-size: 14px; font-weight: 800; }
+.verdict-section-hint { font-size: 11px; color: var(--muted); line-height: 1.4; }
+.verdict-section-head.v-suspect { background: #FDECEC; border-left-color: #C0392B; }
+.verdict-section-head.v-suspect .verdict-section-title { color: #C0392B; }
+.verdict-section-head.v-typical { background: #FEF6E0; border-left-color: #B45309; }
+.verdict-section-head.v-typical .verdict-section-title { color: #B45309; }
+.verdict-section-head.v-gentler { background: #E8F8EE; border-left-color: #1E8449; }
+.verdict-section-head.v-gentler .verdict-section-title { color: #1E8449; }
+.verdict-section-head.v-unclear { background: var(--bg); border-left-color: var(--muted); }
+.verdict-section-head.v-unclear .verdict-section-title { color: var(--muted); }
+.verdict-row.v-suspect { border-left: 3px solid #E24B4A; }
+.verdict-row.v-typical { border-left: 3px solid #EF9F27; }
+.verdict-row.v-gentler { border-left: 3px solid #3B6D11; }
+.verdict-row.v-unclear { border-left: 3px solid var(--border); }
+.verdict-why-exp { color: var(--w1); }
+body.dark .verdict-section-head.v-suspect { background: rgba(231,76,60,0.13); }
+body.dark .verdict-section-head.v-suspect .verdict-section-title { color: #F87171; }
+body.dark .verdict-section-head.v-typical { background: rgba(245,158,11,0.13); }
+body.dark .verdict-section-head.v-typical .verdict-section-title { color: #FCD34D; }
+body.dark .verdict-section-head.v-gentler { background: rgba(39,174,96,0.13); }
+body.dark .verdict-section-head.v-gentler .verdict-section-title { color: #4ADE80; }
 
 /* ── Weekly report ── */
 .weekly-row {
@@ -2403,7 +2446,7 @@ body.dark.visual-theme-ocean { --muted: #7FB5D1; }
     <button onclick="showTab('corr',this)" style="border: 1px dashed rgba(255,255,255,0.3);">Correlations</button>
     <button onclick="showTab('Exp',this)" style="border: 1px dashed rgba(255,255,255,0.3);">Bucket</button>
     
-    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v43</span>
+    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v44</span>
   </div>
 </nav>
 
@@ -2655,10 +2698,22 @@ html body select.status-badge-select.status-blacklist {
       </div>
     </div>
     <div id="verdict-filter-chips" class="time-filter-row" style="margin:10px 0 0;"></div>
-    <div style="font-size:11px; color:var(--muted); margin-top:10px; line-height:1.5;">
-      Verdicts fuse your ✓/✕ reaction windows (the strongest signal), per-meal symptom flags, and how often you eat each food.
-      Foods eaten almost daily can't be judged by day-comparison — the hub says so instead of guessing.
-    </div>
+    <details class="verdict-help">
+      <summary>ℹ️ How to read this tab</summary>
+      <div class="verdict-help-body">
+        <p><b>What this is:</b> one plain verdict per food, so you don't have to cross-read the other analysis tabs. It answers a single question — does this food react <i>more</i>, <i>less</i>, or <i>about the same</i> as your typical food?</p>
+        <p><b>Why “compared to your typical food”:</b> your body reacts to <i>most</i> things — your baseline ✕ rate is high (shown at the top of the list). So “totally safe” isn't realistic here; instead every food is graded against your own average. A food that reacts <i>less than usual</i> is a genuine win.</p>
+        <p><b>The four groups:</b></p>
+        <ul>
+          <li><b>🔺 Suspect</b> — reacts MORE than your average. Your prime candidates to cut or test.</li>
+          <li><b>🟡 Typical</b> — behaves like your average food. Neutral.</li>
+          <li><b>🟢 Easier on you</b> — reacts LESS than your average. Your safer choices — lean on these during flares.</li>
+          <li><b>❔ Unclear</b> — you haven't marked enough reaction windows for this food yet.</li>
+        </ul>
+        <p><b>The small tags:</b> <span class="verdict-tag conf-neutral">strong / some / weak evidence</span> = how many reaction windows back the verdict (more windows = more trustworthy). <span class="verdict-tag staple">📌 staple</span> = you eat it almost daily, so no day-comparison can isolate it — use <b>🧪 Test</b> to know for sure.</p>
+        <p><b>How to act:</b> tap <b>🧪 Test</b> on any Suspect to run a controlled trial that actually proves whether it's the culprit.</p>
+      </div>
+    </details>
   </div>
   <div id="verdict-experiments"></div>
   <div id="verdict-list"></div>
@@ -7406,11 +7461,14 @@ function computeVerdicts() {
 }
 
 const VERDICT_META = {
-  suspect: { label: 'Suspect', icon: '🔺', order: 0, hint: 'clearly worse than your baseline' },
-  typical: { label: 'Typical', icon: '🟡', order: 1, hint: 'tracks your baseline' },
-  gentler: { label: 'Gentler', icon: '🟢', order: 2, hint: 'clearly better than your baseline' },
-  unclear: { label: 'Unclear', icon: '❔', order: 3, hint: 'not enough scored windows' }
+  suspect: { label: 'Suspect', icon: '🔺', order: 0, hint: 'Reacts MORE than your typical food — worth cutting or testing' },
+  typical: { label: 'Typical', icon: '🟡', order: 1, hint: 'Reacts about as often as your average food' },
+  gentler: { label: 'Easier on you', icon: '🟢', order: 2, hint: 'Reacts LESS than your typical food — your safer choices' },
+  unclear: { label: 'Unclear', icon: '❔', order: 3, hint: 'Not enough marked reaction windows to judge yet' }
 };
+// Neutral wording for the evidence chip — never implies the food is good/bad,
+// only how much data backs the verdict.
+const CONF_LABEL = { high: 'strong evidence', medium: 'some evidence', low: 'weak evidence' };
 
 function setVerdictSearch(v) { _verdictSearch = (v || '').toLowerCase(); renderVerdicts(); }
 function setVerdictRange(r, btn) {
@@ -7469,26 +7527,29 @@ function renderVerdicts() {
   };
 
   const baseLine = WINDOWS.map(w => `${w.label}: ${Math.round(baseRate[w.key] * 100)}%`).join(' · ');
-  const baseEl = `<div class="verdict-baseline">Your baseline ✕ rate per window — ${baseLine}. Verdicts compare each food against this.</div>`;
+  const baseEl = `<div class="verdict-baseline"><b>Your baseline</b> — across all foods you mark a reaction (✕) this often per window: ${baseLine}. Every verdict below is measured against this, not against zero.</div>`;
 
   listEl.innerHTML = baseEl + sections.map(k => {
     const group = shown.filter(i => i.verdict === k).sort(sorters[k]);
     return `
-      <div class="meal-section-header" style="margin-top:18px;">${VERDICT_META[k].icon} ${VERDICT_META[k].label} · ${group.length} <span style="font-weight:600; font-size:10.5px; color:var(--muted); text-transform:none; letter-spacing:0;">— ${VERDICT_META[k].hint}</span></div>
+      <div class="verdict-section-head v-${k}">
+        <span class="verdict-section-title">${VERDICT_META[k].icon} ${VERDICT_META[k].label} · ${group.length}</span>
+        <span class="verdict-section-hint">${VERDICT_META[k].hint}</span>
+      </div>
       <div class="card" style="padding:0; overflow:hidden;">
         ${group.map(i => `
-          <div class="verdict-row">
+          <div class="verdict-row v-${k}">
             <div class="verdict-row-top">
               <span class="verdict-food">${esc(i.food)}</span>
               <span class="verdict-badges">
                 ${i.staple ? '<span class="verdict-tag staple" title="Eaten on 70%+ of tracked days — day-comparison analyses cannot isolate it">📌 staple</span>' : ''}
-                <span class="verdict-tag conf-${i.conf.toLowerCase()}" title="Based on ${i.scored} scored reaction windows">${i.conf}</span>
+                <span class="verdict-tag conf-neutral" title="Backed by ${i.scored} scored reaction windows — more windows means a more trustworthy verdict">${CONF_LABEL[i.conf.toLowerCase()] || i.conf}</span>
                 <button class="verdict-test-btn" title="Run a controlled elimination trial on this food" onclick='startExperiment(${JSON.stringify(i.food)})'>🧪 Test</button>
               </span>
             </div>
             <div class="verdict-meta">${i.logs} logs · ${i.daysEaten} days · ${i.scored} windows scored (${i.pos}✓ / ${i.neg}✕)</div>
             ${i.why.map(w => `<div class="verdict-why">• ${w}</div>`).join('')}
-            ${i.experiment && _verdictFilter !== 'all' ? `<div class="verdict-why" style="color:var(--w1);">🔬 ${i.experiment}</div>` : ''}
+            ${i.experiment && _verdictFilter !== 'all' ? `<div class="verdict-why verdict-why-exp">🔬 ${i.experiment}</div>` : ''}
           </div>`).join('')}
       </div>`;
   }).join('') || `<div class="card"><div class="empty"><span>🔍</span>No foods match.</div></div>`;
