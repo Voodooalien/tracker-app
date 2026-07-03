@@ -2500,7 +2500,7 @@ body.dark.visual-theme-ocean { --muted: #7FB5D1; }
     <button onclick="showTab('corr',this)" style="border: 1px dashed rgba(255,255,255,0.3);">Correlations</button>
     <button onclick="showTab('Exp',this)" style="border: 1px dashed rgba(255,255,255,0.3);">Bucket</button>
     
-    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v50</span>
+    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v51</span>
   </div>
 </nav>
 
@@ -5008,44 +5008,50 @@ function renderCorrelations() {
   const results = {};
   foods.forEach(food => {
     const eatingDates = new Set(entries.filter(e => e.food === food).map(e => e.date));
-    if (eatingDates.size < 2) return; 
-    results[food] = { count: eatingDates.size, checkins: {}, logs: {} };
+    if (eatingDates.size < 2) return;
+
+    // day-level exposure split for this food — the honesty metric: with < 3
+    // control (unexposed) days, no comparison here can mean anything
+    let expDays = 0, ctlDays = 0;
+    const exposedByDate = {};
+    checkinDates.forEach(cDate => {
+      let isExposed = false;
+      for (let lag = 0; lag <= lagDays; lag++) {
+        if (eatingDates.has(addDays(cDate, -lag))) { isExposed = true; break; }
+      }
+      exposedByDate[cDate] = isExposed;
+      isExposed ? expDays++ : ctlDays++;
+    });
+
+    results[food] = { count: eatingDates.size, checkins: {}, logs: {}, expDays, ctlDays, noContrast: ctlDays < 3 };
 
     checkinSyms.forEach(sym => {
       const exposed = [], unexposed = [];
       checkinDates.forEach(cDate => {
         const score = checkins[cDate]?.[sym.key];
         if (!score) return;
-        let isExposed = false;
-        for (let lag = 0; lag <= lagDays; lag++) {
-          if (eatingDates.has(addDays(cDate, -lag))) { isExposed = true; break; }
-        }
-        if (isExposed) exposed.push(score);
+        if (exposedByDate[cDate]) exposed.push(score);
         else unexposed.push(score);
       });
-      if (exposed.length >= 2 && unexposed.length >= 2) {
+      if (exposed.length >= 3 && unexposed.length >= 3) {
         const expAvg = exposed.reduce((a,b)=>a+b,0) / exposed.length;
         const baseAvg = unexposed.reduce((a,b)=>a+b,0) / unexposed.length;
-        results[food].checkins[sym.key] = { expAvg, baseAvg, drop: baseAvg - expAvg, n: exposed.length };
+        results[food].checkins[sym.key] = { expAvg, baseAvg, drop: baseAvg - expAvg, n: exposed.length, ctl: unexposed.length };
       }
     });
 
     logSyms.forEach(sym => {
       let exposedCount = 0, exposedHits = 0, unexposedCount = 0, unexposedHits = 0;
       checkinDates.forEach(cDate => {
-        let isExposed = false;
-        for (let lag = 0; lag <= lagDays; lag++) {
-          if (eatingDates.has(addDays(cDate, -lag))) { isExposed = true; break; }
-        }
         const hit = dayHasLogTag[sym.key][cDate] ? 1 : 0;
-        if (isExposed) { exposedCount++; exposedHits += hit; }
+        if (exposedByDate[cDate]) { exposedCount++; exposedHits += hit; }
         else { unexposedCount++; unexposedHits += hit; }
       });
-      if (exposedCount >= 2 && unexposedCount >= 2) {
+      if (exposedCount >= 3 && unexposedCount >= 3) {
         const expPct = (exposedHits / exposedCount) * 100;
         const basePct = (unexposedHits / unexposedCount) * 100;
         if (expPct > 0 || basePct > 0) {
-            results[food].logs[sym.key] = { expPct, basePct, spike: expPct - basePct, n: exposedCount };
+            results[food].logs[sym.key] = { expPct, basePct, spike: expPct - basePct, n: exposedCount, ctl: unexposedCount };
         }
       }
     });
@@ -5091,14 +5097,17 @@ const ciTableRows = Object.entries(results).map(([food, data]) => {
           arrowHtml = `<span style="color:var(--neg); margin-left:4px; font-weight:900;">↓</span>`; 
         }
         
-        return `<td>
+        return `<td title="${stat.n} exposed vs ${stat.ctl} control days">
           <div style="display:flex; flex-direction:column; align-items:center; gap:4px;">
             <div style="display:inline-flex; align-items:center; font-weight:800; font-size:13px; padding:3px 10px; border-radius:6px; ${getCiColor(stat.expAvg)}">${stat.expAvg.toFixed(1)}${arrowHtml}</div>
             <div style="font-size:10px; color:var(--muted); font-weight:600; text-transform:lowercase;">vs ${stat.baseAvg.toFixed(1)}</div>
           </div>
         </td>`;
       }).join('');
-      return `<tr><td class="food-name">${esc(food)} <span style="font-size:10px;color:var(--muted);font-weight:normal;float:right;">${data.count}x</span></td>${cells}</tr>`;
+      const rowFlag = data.noContrast
+        ? `<div style="margin-top:4px;"><span class="tl-flag tl-staple" title="Eaten so often there are only ${data.ctlDays} days without it in range — comparisons are meaningless. Run a Trial instead.">📌 can't isolate</span> <button class="verdict-test-btn" onclick='startExperiment(${JSON.stringify(food)})'>🧪 Test</button></div>`
+        : '';
+      return `<tr><td class="food-name">${esc(food)} <span style="font-size:10px;color:var(--muted);font-weight:normal;float:right;">${data.count}x</span>${rowFlag}</td>${cells}</tr>`;
     }).join('');
 
     const activeLogSyms = logSyms.filter(sym => Object.values(results).some(d => d.logs[sym.key])).sort(sortByLabel);
@@ -5120,14 +5129,14 @@ const ciTableRows = Object.entries(results).map(([food, data]) => {
            arrowHtml = `<span style="color:${isPositive ? 'var(--neg)' : 'var(--pos)'}; margin-left:4px; font-weight:900;">↓</span>`;
         }
         
-        return `<td>
+        return `<td title="${stat.n} exposed vs ${stat.ctl} control days">
           <div style="display:flex; flex-direction:column; align-items:center; gap:4px;">
             <div style="display:inline-flex; align-items:center; font-weight:800; font-size:12px; padding:3px 8px; border-radius:6px; ${getLogColor(stat.expPct, sym.label)}">${Math.round(stat.expPct)}%${arrowHtml}</div>
             <div style="font-size:10px; color:var(--muted); font-weight:600; text-transform:lowercase;">vs ${Math.round(stat.basePct)}%</div>
           </div>
         </td>`;
       }).join('');
-      return `<tr><td class="food-name">${esc(food)}</td>${cells}</tr>`;
+      return `<tr><td class="food-name">${esc(food)}${data.noContrast ? ' <span class="tl-flag tl-staple" title="Almost no days without this food in range — comparisons are meaningless">📌</span>' : ''}</td>${cells}</tr>`;
     }).join('') : `<tr><td colspan="100%" class="empty">No meal tags correlated in this date range.</td></tr>`;
     
   wrap.innerHTML = `
@@ -5278,10 +5287,14 @@ function renderBucketLoad() {
     }
   };
 
+  const MIN_BUCKET_N = 3; // an "average" of 1-2 days is noise, not a pattern
   const getAvgHTML = (arr) => {
       if (!arr.length) return `<div style="font-size:12px;color:var(--muted);display:flex;align-items:center;justify-content:center;height:34px;">—</div>`;
+      if (arr.length < MIN_BUCKET_N) {
+        return `<div title="Only ${arr.length} day${arr.length===1?'':'s'} at this streak length — too few to average honestly" style="font-size:11px;color:var(--muted);display:flex;align-items:center;justify-content:center;height:34px;border:1px dashed var(--border);border-radius:12px;min-width:54px;cursor:help;">${arr.length}× only</div>`;
+      }
       const avg = arr.reduce((a,b)=>a+b,0) / arr.length;
-      
+
       let displayVal = "";
       if (isLogTag) {
           const pct = Math.round(((5 - avg) / 4) * 100);
@@ -5289,8 +5302,11 @@ function renderBucketLoad() {
       } else {
           displayVal = (Math.round(avg * 10) / 10).toFixed(1);
       }
-      
-      return `<div style="display:inline-flex;align-items:center;justify-content:center;min-width:54px;height:32px;border-radius:12px;font-weight:800;font-size:13px;${getColor(avg, selectedSym.label)}">${displayVal}</div>`;
+
+      return `<div style="display:flex;flex-direction:column;align-items:center;gap:2px;">
+        <div style="display:inline-flex;align-items:center;justify-content:center;min-width:54px;height:32px;border-radius:12px;font-weight:800;font-size:13px;${getColor(avg, selectedSym.label)}">${displayVal}</div>
+        <div style="font-size:9.5px;color:var(--muted);font-weight:600;">${arr.length} days</div>
+      </div>`;
   };
 
   // Build the UI Rows
@@ -5336,6 +5352,7 @@ function renderBucketLoad() {
             <br><em>• The Bucket Load tab is for Cumulative Streaks (What happens while I am eating it?).</em>
             <br><em>• The Timeline tab is for Lagged Reactions (What happens 4 days after I ate it?).</em>
             <br><em><strong>Note:</strong> For delayed reactions that happen days after you stop eating a food, use the <strong>Timeline</strong> tab.</em>
+            <br><em>• Cells need <strong>3+ days</strong> at a streak length to show an average — "N× only" means too little data to judge.</em>
           </div>
         </div>
 
@@ -6603,10 +6620,13 @@ function renderFactors() {
     : [selectedFood];
     
   const results = [];
+  // foods we can't honestly judge here: eaten so often there are no control
+  // days (staples), or too few exposed days to mean anything
+  let hiddenNoContrast = 0, hiddenThin = 0;
 
   foodsToAnalyze.forEach(food => {
     const eatingDates = [...new Set(entries.filter(e => e.food === food).map(e => e.date))];
-    if (eatingDates.length < 2) return; 
+    if (eatingDates.length < 2) return;
 
     const exposedScores = [];
     const unexposedScores = [];
@@ -6615,7 +6635,7 @@ function renderFactors() {
     validDates.forEach(cDate => {
       let score = isLogTag ? (dayHasLogTag[cDate] ? 100 : 0) : allCheckins[cDate][symKey];
       const dateEaten = addDays(cDate, -lagDays);
-      
+
       if (eatingDates.includes(dateEaten)) exposedScores.push(score);
       else unexposedScores.push(score);
     });
@@ -6623,21 +6643,36 @@ function renderFactors() {
     if (exposedScores.length >= 2) {
       const expAvg = exposedScores.reduce((a,b)=>a+b,0) / exposedScores.length;
       const baseAvg = unexposedScores.length ? unexposedScores.reduce((a,b)=>a+b,0) / unexposedScores.length : 0;
-      
+
       let impactPct = 0;
       if (isLogTag) {
-        impactPct = expAvg - baseAvg; 
+        impactPct = expAvg - baseAvg;
       } else {
-        impactPct = ((expAvg - baseAvg) / 4) * 100; 
+        impactPct = ((expAvg - baseAvg) / 4) * 100;
       }
 
+      const expN = exposedScores.length, ctlN = unexposedScores.length;
+      const thin = expN < 5 || ctlN < 5; // enough to show, but flagged as weak
       if (calcMode === 'absolute') {
-        results.push({ food, impactPct, expAvg, baseAvg, count: exposedScores.length });
-      } else if (unexposedScores.length >= 2 && Math.abs(impactPct) > 5) {
-        results.push({ food, impactPct, expAvg, baseAvg, count: exposedScores.length });
+        results.push({ food, impactPct, expAvg, baseAvg, count: expN, ctlN, thin });
+      } else if (ctlN < 3) {
+        hiddenNoContrast++; // near-daily food — no control days to compare against
+      } else if (expN < 3) {
+        hiddenThin++;
+      } else if (Math.abs(impactPct) > 5) {
+        results.push({ food, impactPct, expAvg, baseAvg, count: expN, ctlN, thin });
       }
+    } else if (calcMode !== 'absolute' && exposedScores.length > 0) {
+      hiddenThin++;
     }
   });
+
+  const hiddenNote = (calcMode === 'relative' && (hiddenNoContrast || hiddenThin)) ? `
+    <div style="font-size:11px; color:var(--muted); background:var(--bg); border-radius:8px; padding:9px 12px; margin-bottom:12px; line-height:1.5;">
+      ${hiddenNoContrast ? `🔇 <b>${hiddenNoContrast}</b> food${hiddenNoContrast===1?'':'s'} hidden — eaten so often there are almost no comparison days (staples). Only a 🧪 Trial can judge those.` : ''}
+      ${hiddenNoContrast && hiddenThin ? '<br>' : ''}
+      ${hiddenThin ? `⚠️ <b>${hiddenThin}</b> hidden — fewer than 3 usable days of data.` : ''}
+    </div>` : '';
 
   if (!results.length) {
     let msg = selectedFood !== 'all' 
@@ -6673,9 +6708,11 @@ function renderFactors() {
   }
 
   // ─── RENDER CARDS ───
-  wrap.innerHTML = results.map(r => {
+  wrap.innerHTML = hiddenNote + results.map(r => {
     let barColor, barWidth, mainText, subtext;
-    const exposureText = r.count === 1 ? '1 tracked day' : `${r.count} tracked days`;
+    const exposureText = r.ctlN != null
+      ? `${r.count} exposed vs ${r.ctlN} control days`
+      : (r.count === 1 ? '1 tracked day' : `${r.count} tracked days`);
 
     if (calcMode === 'relative') {
       let isGood = isLogTag ? (isPositiveMetric ? r.impactPct > 0 : r.impactPct < 0) : (r.impactPct > 0);
@@ -6684,8 +6721,8 @@ function renderFactors() {
       const sign = r.impactPct > 0 ? '+' : '';
       mainText = `${sign}${Math.round(r.impactPct)}%`;
       subtext = isLogTag
-          ? `Chance changed from ${Math.round(r.baseAvg)}% to ${Math.round(r.expAvg)}% (based on ${exposureText})`
-          : `Score changed from ${r.baseAvg.toFixed(1)} to ${r.expAvg.toFixed(1)} (based on ${exposureText})`;
+          ? `Chance changed from ${Math.round(r.baseAvg)}% to ${Math.round(r.expAvg)}% (${exposureText})`
+          : `Score changed from ${r.baseAvg.toFixed(1)} to ${r.expAvg.toFixed(1)} (${exposureText})`;
     } else {
       // Absolute UI Logic
       if (isLogTag) {
@@ -6712,9 +6749,11 @@ function renderFactors() {
     return `
       <div class="impact-card">
         <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
-          <div>
-            <div style="font-size:15px; font-weight:800; display:flex; align-items:center; gap:8px;">
-              <span></span> ${esc(r.food)}
+          <div style="min-width:0;">
+            <div style="font-size:15px; font-weight:800; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+              <span>${esc(r.food)}</span>
+              ${r.thin ? '<span class="tl-flag tl-thin" title="Fewer than 5 exposed or control days — treat as a weak hint">⚠️ thin data</span>' : ''}
+              <button class="verdict-test-btn" title="Run a controlled elimination trial on this food" onclick='startExperiment(${JSON.stringify(r.food)})'>🧪 Test</button>
             </div>
             <div style="font-size:10px; color:var(--muted); margin-top:4px;">${subtext}</div>
           </div>
