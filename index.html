@@ -2317,6 +2317,8 @@ body.dark .learned-tag.proven { background: rgba(39,174,96,0.15); color: #4ADE80
 .learned-resolve.safe:hover { border-color: var(--pos); color: var(--pos); }
 .learned-resolve.avoid:hover { border-color: var(--neg); color: var(--neg); }
 .learned-more { padding: 10px 14px; font-size: 11.5px; color: var(--muted); font-style: italic; }
+.learned-row-controls { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+select.learned-relabel { font-size: 11px !important; padding: 5px 20px 5px 8px !important; min-height: 30px; width: auto !important; margin-top: 0 !important; }
 
 /* ── Timeline: enhanced-view flags ── */
 .tl-flag { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 999px; white-space: nowrap; }
@@ -2494,7 +2496,7 @@ body.dark.visual-theme-ocean { --muted: #7FB5D1; }
     <button onclick="showTab('corr',this)" style="border: 1px dashed rgba(255,255,255,0.3);">Correlations</button>
     <button onclick="showTab('Exp',this)" style="border: 1px dashed rgba(255,255,255,0.3);">Bucket</button>
     
-    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v47</span>
+    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v48</span>
   </div>
 </nav>
 
@@ -8046,7 +8048,7 @@ function learnedData() {
     }
     if (!avoid.length && !safe.length) return;
     const maxStr = Math.max(0, ...avoid.map(x => x.strength), ...safe.map(x => x.strength));
-    items.push({ food, avoid, safe, conflict: avoid.length > 0 && safe.length > 0, maxStr, hasTrial: !!t });
+    items.push({ food, avoid, safe, conflict: avoid.length > 0 && safe.length > 0, maxStr, hasTrial: !!t, label: lbl || 'N/A' });
   });
   return items;
 }
@@ -8056,26 +8058,32 @@ function learnedRow(i, kind) {
   const reasonHtml = reasons.map(r => `<div class="learned-reason">• ${r.text}</div>`).join('');
   const testBtn = i.hasTrial ? '<span class="learned-tag proven">🧪 tested</span>'
     : `<button class="verdict-test-btn" title="Prove it with a controlled Trial" onclick='startExperiment(${JSON.stringify(i.food)})'>🧪 Test</button>`;
+  const cur = i.label || 'N/A';
+  const relabel = `<select class="learned-relabel status-badge-select ${LEARNED_STATUS_CLS[cur] || 'status-na'}" title="Change this food's label" onchange='learnedSetStatus(${JSON.stringify(i.food)}, this.value)'>${LEARNED_STATUS_OPTS.map(o => `<option value="${o}" ${o === cur ? 'selected' : ''}>${o}</option>`).join('')}</select>`;
   const resolve = i.conflict ? `<div class="learned-actions">
-      <span style="font-size:11px;color:var(--muted);">Resolve:</span>
+      <span style="font-size:11px;color:var(--muted);">Quick resolve:</span>
       <button class="learned-resolve safe" onclick='learnedSetStatus(${JSON.stringify(i.food)},"✅ Safe")'>Mark Safe</button>
       <button class="learned-resolve avoid" onclick='learnedSetStatus(${JSON.stringify(i.food)},"🚩 Suspect")'>Mark Avoid</button>
     </div>` : '';
   return `<div class="learned-row ${kind}">
     <div class="learned-row-top">
       <span class="learned-food">${i.conflict ? '⚠️ ' : ''}${esc(i.food)}</span>
-      <span>${testBtn}</span>
+      <span class="learned-row-controls">${relabel}${testBtn}</span>
     </div>
     ${reasonHtml}
     ${resolve}
   </div>`;
 }
 
+const LEARNED_STATUS_OPTS = ['N/A', '🏅 Vital', '✅ Safe', '👍 Positive', '🤷‍♂️ Meh', '🚩 Suspect', '⚠️ Limit', '⛔ Banned', '🩻 B.List'];
+const LEARNED_STATUS_CLS = { 'N/A': 'status-na', '🏅 Vital': 'status-vital', '✅ Safe': 'status-safe', '👍 Positive': 'status-positive', '🤷‍♂️ Meh': 'status-meh', '🚩 Suspect': 'status-suspect', '⚠️ Limit': 'status-limit', '⛔ Banned': 'status-banned', '🩻 B.List': 'status-blacklist' };
+
 function learnedSetStatus(food, label) {
   const s = loadFoodStatus();
-  s[food] = label;
+  if (label === 'N/A' || !label) delete s[food];   // clear the label
+  else s[food] = label;
   saveFoodStatus(s);
-  if (typeof toast === 'function') toast('Marked: ' + label);
+  if (typeof toast === 'function') toast(label === 'N/A' ? 'Label cleared' : 'Marked: ' + label);
   renderLearned();
   renderSummary();
 }
