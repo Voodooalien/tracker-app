@@ -2258,6 +2258,12 @@ body.dark .verdict-section-head.v-gentler .verdict-section-title { color: #4ADE8
 .weekly-stat-num { font-size: 20px; font-weight: 800; }
 .weekly-stat-lbl { font-size: 10.5px; color: var(--muted); margin-top: 3px; line-height: 1.4; }
 #weekly-next-btn:disabled { opacity: 0.35; cursor: default; }
+.diet-change-block + .diet-change-block { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }
+.diet-change-title { font-size: 12.5px; font-weight: 800; margin-bottom: 8px; }
+.diet-change-title.added { color: var(--pos); }
+.diet-change-title.removed { color: var(--neg); }
+.diet-change-list { margin: 0; padding-left: 20px; list-style: disc; }
+.diet-change-list li { font-size: 13px; line-height: 1.7; }
 
 /* ── Trials / Experiments ── */
 .exp-card.exp-active { border-left: 4px solid var(--w1); }
@@ -2446,7 +2452,7 @@ body.dark.visual-theme-ocean { --muted: #7FB5D1; }
     <button onclick="showTab('corr',this)" style="border: 1px dashed rgba(255,255,255,0.3);">Correlations</button>
     <button onclick="showTab('Exp',this)" style="border: 1px dashed rgba(255,255,255,0.3);">Bucket</button>
     
-    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v44</span>
+    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v45</span>
   </div>
 </nav>
 
@@ -7263,8 +7269,16 @@ function renderWeekly() {
     ${(W.added.length || W.dropped.length) ? `
     <div class="card">
       <div class="quick-log-title">🔄 Diet changes vs previous week</div>
-      ${W.added.length ? `<div class="verdict-why" style="margin-bottom:6px;"><strong>Added (${W.added.length}):</strong> ${W.added.slice(0, 10).map(esc).join(' · ')}${W.added.length > 10 ? ' …' : ''}</div>` : ''}
-      ${W.dropped.length ? `<div class="verdict-why"><strong>Removed (${W.dropped.length}):</strong> ${W.dropped.slice(0, 10).map(esc).join(' · ')}${W.dropped.length > 10 ? ' …' : ''}</div>` : ''}
+      ${W.added.length ? `
+        <div class="diet-change-block">
+          <div class="diet-change-title added">＋ Added (${W.added.length})</div>
+          <ul class="diet-change-list">${W.added.map(f => `<li>${esc(f)}</li>`).join('')}</ul>
+        </div>` : ''}
+      ${W.dropped.length ? `
+        <div class="diet-change-block">
+          <div class="diet-change-title removed">－ Removed (${W.dropped.length})</div>
+          <ul class="diet-change-list">${W.dropped.map(f => `<li>${esc(f)}</li>`).join('')}</ul>
+        </div>` : ''}
     </div>` : ''}
   `;
 }
