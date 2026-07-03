@@ -2384,7 +2384,7 @@ body.dark.visual-theme-ocean { --muted: #7FB5D1; }
     <button onclick="showTab('corr',this)" style="border: 1px dashed rgba(255,255,255,0.3);">Correlations</button>
     <button onclick="showTab('Exp',this)" style="border: 1px dashed rgba(255,255,255,0.3);">Bucket</button>
     
-    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v38</span>
+    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v42</span>
   </div>
 </nav>
 
@@ -3118,6 +3118,13 @@ function winButtonsHTML(entry) {
 }
 
 // ─── Constants ───────────────────────────────────────────────────────────────
+// Positive meal-tags: their occurrence is GOOD, so color scales invert.
+// Single source of truth — previously four hardcoded lists disagreed on casing
+// ('Flat belly' vs 'Flat Belly'), inverting colors in some tabs.
+function isPositiveLabel(label) {
+  return /calm|energetic|flat belly|focused|good sleep/i.test(label || '');
+}
+
 const WINDOWS = [
   { key:'w1', label:'0 – 4 h',   cls:'w1' },
   { key:'w2', label:'5 – 8 h',   cls:'w2' },
@@ -3298,6 +3305,7 @@ function elapsedHoursSince(dateStr, timeStr) {
 function hoursAgoLabel(dateStr, timeStr) {
   const hrs = elapsedHoursSince(dateStr, timeStr);
   if (hrs === null) return '';
+  if (hrs < -0.5) return '⚠️ future-dated';
   if (hrs < 0) return 'just now';
   if (hrs < 1) return `${Math.max(1, Math.round(hrs * 60))}m ago`;
   const rounded = hrs < 10 ? Math.round(hrs * 10) / 10 : Math.round(hrs);
@@ -3525,9 +3533,11 @@ function markReaction(id, winKey, value) {
 // A window is "due" once its time span has fully elapsed — marking earlier
 // would record a reaction outcome that hasn't had time to happen yet.
 function isWindowDue(entry, winKey) {
-  if (entry.date < today()) return true;
+  // Trust the clock whenever we have a log time — a 21:30 dinner's 14-17h
+  // window is NOT due at 7am just because the calendar flipped.
   const el = elapsedHoursSince(entry.date, entry.logTime);
-  return el !== null && el >= WIN_GLOW_AT[winKey];
+  if (el !== null) return el >= WIN_GLOW_AT[winKey];
+  return entry.date < today(); // no log time: only fully-past days are safely due
 }
 
 function listDuePending() {
@@ -3843,8 +3853,10 @@ function normalizeArchiveEntry(ent) {
   return entry;
 }
 function bytesOfJson(value) {
-  try { return new Blob([JSON.stringify(value)]).size; }
-  catch { return JSON.stringify(value).length; }
+  // localStorage quota is charged in UTF-16 code units (2 bytes per char),
+  // not UTF-8 — the old Blob-based measure under-reported real usage ~2×.
+  try { return JSON.stringify(value).length * 2; }
+  catch { return 0; }
 }
 function formatBytes(num) {
   if (!Number.isFinite(num) || num < 1024) return `${Math.max(0, Math.round(num || 0))} B`;
@@ -3877,11 +3889,21 @@ function calcStorageMeterSnapshot() {
     extras: bytesOfJson({ customSyms: data.customSyms, favs: data.favs, bundles: data.bundles, theme: data.theme, uiStyle: data.uiStyle, foodStatus: data.foodStatus })
   };
   
-  const total = Object.values(parts).reduce((a,b) => a+b, 0);
-  const softLimit = 4 * 1024 * 1024;
+  // Ground truth: everything actually in localStorage, keys included —
+  // catches stray keys the part-list doesn't know about.
+  let actual = 0;
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    actual += (k.length + (localStorage.getItem(k) || '').length) * 2;
+  }
+  const partsTotal = Object.values(parts).reduce((a,b) => a+b, 0);
+  const total = Math.max(actual, partsTotal);
+  parts.other = Math.max(0, total - partsTotal);
+
+  const softLimit = 4 * 1024 * 1024; // browsers allow ~5MB (UTF-16); warn early
   const pct = Math.max(0, Math.min(100, (total / softLimit) * 100));
   const status = total < 1024 * 1024 ? 'Low' : total < 3 * 1024 * 1024 ? 'Moderate' : total < softLimit ? 'Heavy' : 'Very Heavy';
-  
+
   return { total, parts, softLimit, pct, status, updatedAt: new Date().toISOString() };
 }
 
@@ -4097,6 +4119,11 @@ function deleteCheckin(dateStr) {
   startUndo({ type: 'checkin', date: dateStr, data }, `Check-in for ${fmt(dateStr)} deleted`);
 }
 
+// Compute the date at CLICK time — baking it into the button at render time
+// meant "Today" saved to yesterday if the app sat open across midnight.
+function setCheckinDateOffset(offset) {
+  setCheckinDate(addDays(today(), -offset));
+}
 function setCheckinDate(dateStr) {
   _checkinDate = dateStr;
   renderCheckin();
@@ -4130,7 +4157,7 @@ function renderCheckin() {
     }).join('');
     const selVal = cur ? `<span style="font-size:11px;color:#1A2533;font-weight:700;margin-left:8px;padding:3px 10px;background:rgba(0,0,0,0.07);border-radius:12px;">${sevLabel[cur]}</span>` : '';
     const trend = getSevenDayTrend(sym.key, d);
-    const trendHtml = trend ? `<span class="trend-chip ${trend.dir}" title="Compared with previous ${trend.n}-day average of ${trend.avg}">${trend.arrow} 7d avg ${trend.avg}</span>` : '';
+    const trendHtml = trend ? `<span class="trend-chip ${trend.dir}" title="Compared with the average of your previous ${trend.n} check-ins (not necessarily consecutive days)">${trend.arrow} prev avg ${trend.avg}</span>` : '';
     const isCustom = !CHECK_IN_SYMPTOMS.find(b => b.key === sym.key);
     const isEditing = _ciSymState && _ciSymState.mode === 'edit' && _ciSymState.key === sym.key;
     const rowBg = isEditing ? 'background:rgba(46,64,87,0.05);outline:2px solid var(--navy);' : '';
@@ -4259,7 +4286,7 @@ function renderCheckin() {
           ${[['today','Today',0],['yesterday','Yesterday',1],['2ago','2 Days Ago',2]].map(([id,label,offset]) => {
             const dateVal = addDays(today(), -offset);
             const active = d === dateVal;
-            return `<button class="tf-btn${active?' active':''}" onclick="setCheckinDate('${dateVal}')">${label}</button>`;
+            return `<button class="tf-btn${active?' active':''}" onclick="setCheckinDateOffset(${offset})">${label}</button>`;
           }).join('')}
         </div>
         <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
@@ -4779,11 +4806,10 @@ function renderCorrelations() {
     return 'background:#F87171;';
   };
 
-  const positiveSyms = ['Calm', 'Energetic', 'Flat belly', 'Focused', 'Good Sleep'];
   const getLogColor = (pct, symLabel) => {
     if (pct === null) return 'background:transparent; color:var(--muted);';
-    if (pct === 0) return 'background:#F3F4F6; color:#6B7280 !important;'; 
-    const isPositive = positiveSyms.some(s => symLabel.includes(s));
+    if (pct === 0) return 'background:#F3F4F6; color:#6B7280 !important;';
+    const isPositive = isPositiveLabel(symLabel);
     if (isPositive) {
       if (pct >= 50) return 'background:#4ADE80;';
       if (pct >= 25) return 'background:#A7F3D0;';
@@ -4831,7 +4857,7 @@ const ciTableRows = Object.entries(results).map(([food, data]) => {
         
         // Log tag logic: Behavior flips based on positive/negative symptoms
         const diff = stat.expPct - stat.basePct;
-        const isPositive = positiveSyms.some(s => sym.label.includes(s));
+        const isPositive = isPositiveLabel(sym.label);
         
         let arrowHtml = '';
         if (diff > 1) {
@@ -4977,12 +5003,10 @@ function renderBucketLoad() {
   });
 
 // --- UPDATED COLOR LOGIC FOR BUCKET LOAD (Generous Positive Threshold) ---
-  const positiveSyms = ['Calm', 'Energetic', 'Flat Belly', 'Focused', 'Good Sleep'];
-
   const getColor = (val, label) => {
     if (val === null) return 'background:transparent; color:var(--muted); border:1px dashed var(--border);';
     
-    const isPositive = positiveSyms.some(ps => label.includes(ps));
+    const isPositive = isPositiveLabel(label);
 
     if (isPositive) {
       // Logic for Positive metrics:
@@ -5406,18 +5430,21 @@ function renderTimeline() {
   const q = searchInput.value.trim().toLowerCase();
 
   // --- DATA PROCESSING ---
+  // Apply the selected date range to ENTRIES too — previously only check-ins
+  // were filtered, so meal-tag timelines and "Logged Nx" counts silently used
+  // all-time data whatever range was picked.
   const allCheckins = loadCheckins();
-  const allEntries = loadMigrated();
+  const rangedEntries = loadMigrated().filter(e => inCorrRange(e.date));
   const checkins = {};
   Object.entries(allCheckins).forEach(([d,v]) => { if (inCorrRange(d)) checkins[d]=v; });
-  
-  const foods = [...new Set(allEntries.map(e => e.food))];
+
+  const foods = [...new Set(rangedEntries.map(e => e.food))];
   const data = [];
 
   const dayHasLogTag = {};
   const dayHasAnyEntry = {};
   if (isLogTag) {
-    allEntries.forEach(e => {
+    rangedEntries.forEach(e => {
         dayHasAnyEntry[e.date] = true;
         if (e.symptoms && e.symptoms[symKey]) dayHasLogTag[e.date] = true;
     });
@@ -5425,7 +5452,7 @@ function renderTimeline() {
 
   foods.forEach(food => {
     if (q && !food.toLowerCase().includes(q)) return;
-    const eatingDates = [...new Set(allEntries.filter(e => e.food === food).map(e => e.date))];
+    const eatingDates = [...new Set(rangedEntries.filter(e => e.food === food).map(e => e.date))];
     const lagScores = Array.from({length: 6}, () => []);
 
     eatingDates.forEach(date => {
@@ -5457,10 +5484,9 @@ function renderTimeline() {
   }
 
   // --- COLOR LOGIC ---
-  const positiveSyms = ['Calm', 'Energetic', 'Flat belly', 'Focused', 'Good Sleep'];
   const getColor = (val, label) => {
     if (val === null) return 'background:transparent; color:var(--muted); border:1px solid var(--border);';
-    const isPositive = positiveSyms.some(ps => label.includes(ps));
+    const isPositive = isPositiveLabel(label);
     if (isPositive) {
       if (val <= 1.5) return 'background:#4ADE80;'; 
       if (val <= 3.4) return 'background:#A7F3D0;'; 
@@ -5475,14 +5501,18 @@ function renderTimeline() {
     }
   };
 
-  const getReactionStory = (avgs) => {
-    const valid = avgs.filter(v => v !== null);
+  const getReactionStory = (avgs, isPositive, isTag) => {
+    // For positive metrics (Calm, Good Sleep…) a LOW value is the good end, so
+    // invert the series before analysing — otherwise the best day is narrated
+    // as "the strongest reaction" and worsening as "recovery".
+    const series = isPositive ? avgs.map(v => v === null ? null : 6 - v) : avgs;
+    const valid = series.filter(v => v !== null);
     if (valid.length < 2) return "Not enough data points to calculate a detailed trend.";
 
     let minVal = Infinity, minIdx = -1;
     let maxVal = -Infinity;
 
-    avgs.forEach((val, idx) => {
+    series.forEach((val, idx) => {
       if (val !== null) {
         if (val < minVal) { minVal = val; minIdx = idx; }
         if (val > maxVal) maxVal = val;
@@ -5492,6 +5522,10 @@ function renderTimeline() {
     const drop = maxVal - minVal;
     if (drop === 0) return "Levels remain completely flat. No noticeable reaction detected.";
     if (drop < 0.8) return "Relatively stable. Only minor baseline fluctuations.";
+
+    // Meal tags live on a hidden 1–5 scale where 4 points = 100% occurrence;
+    // report the shift in the same % units the table shows.
+    const spikeTxt = isTag ? `${Math.round((drop / 4) * 100)} percentage points` : `${drop.toFixed(1)} points`;
 
     let story = "";
 
@@ -5503,16 +5537,16 @@ function renderTimeline() {
     }
 
     // 2. The Spike Severity
-    story += `📉 <b>The Spike:</b> Intensity shifts dramatically by ${drop.toFixed(1)} points from your healthiest baseline.<br><br>`;
+    story += `📉 <b>The Spike:</b> Intensity shifts dramatically by ${spikeTxt} from your healthiest baseline.<br><br>`;
 
     // 3. Duration & Recovery
     let recoveryDay = -1;
     let tailDays = 0;
-    
-    for (let i = minIdx + 1; i < avgs.length; i++) {
-      if (avgs[i] !== null) {
+
+    for (let i = minIdx + 1; i < series.length; i++) {
+      if (series[i] !== null) {
         // We consider it "recovered" if the score climbs back up by at least 60% of the drop
-        if (avgs[i] >= minVal + (drop * 0.6)) {
+        if (series[i] >= minVal + (drop * 0.6)) {
           recoveryDay = i;
           break;
         }
@@ -5552,7 +5586,7 @@ function renderTimeline() {
             <span style="font-size:10px; cursor:help; color:var(--text); background:var(--bg); border:1px solid var(--border); padding:2px 6px; border-radius:4px; font-weight:700;">ℹ️ Breakdown</span>
             
             <div class="story-tt" style="opacity:0; visibility:hidden; position:fixed; width:220px; background:var(--card); border:1px solid var(--border); box-shadow:0 6px 16px rgba(0,0,0,0.18); padding:10px 12px; border-radius:8px; font-size:12px; z-index:999999; pointer-events:none; white-space:normal;">
-              💡 ${getReactionStory(r.avgs)}
+              💡 ${getReactionStory(r.avgs, isPositiveLabel(selectedSym.label), isLogTag)}
             </div>
           </div>
         </div>
@@ -5586,7 +5620,7 @@ function dateInFilter(dateStr, filter) {
   const t = today();
   const d = new Date(dateStr + 'T00:00:00');
   const now = new Date(t + 'T00:00:00');
-  const diff = Math.floor((now - d) / 86400000); // days ago
+  const diff = Math.round((now - d) / 86400000); // days ago (round, not floor — DST days are 23/25h)
   if (filter === 'today')     return dateStr === t;
   if (filter === 'yesterday') return diff === 1;
   if (filter === 'week')      return diff >= 0 && diff <= 6;
@@ -6191,8 +6225,7 @@ function renderFactors() {
   const isLogTag = selectedSym && selectedSym._source === 'log';
 
   // ─── POSITIVE METRIC DETECTION ───
-  const positiveSyms = ['Calm', 'Energetic', 'Flat belly', 'Focused', 'Good Sleep', 'overall'];
-  const isPositiveMetric = selectedSym && positiveSyms.some(ps => selectedSym.label.toLowerCase().includes(ps.toLowerCase()));
+  const isPositiveMetric = selectedSym && (isPositiveLabel(selectedSym.label) || selectedSym.label.toLowerCase().includes('overall'));
 
   const dayHasLogTag = {};
   const dayHasAnyEntry = {};
@@ -6280,7 +6313,7 @@ function renderFactors() {
   // ─── RENDER CARDS ───
   wrap.innerHTML = results.map(r => {
     let barColor, barWidth, mainText, subtext;
-    const exposureText = r.count === 1 ? '1 logged meal' : `${r.count} logged meals`;
+    const exposureText = r.count === 1 ? '1 tracked day' : `${r.count} tracked days`;
 
     if (calcMode === 'relative') {
       let isGood = isLogTag ? (isPositiveMetric ? r.impactPct > 0 : r.impactPct < 0) : (r.impactPct > 0);
@@ -6614,25 +6647,6 @@ function renderDiary2() {
         <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
           
           <div style="display:inline-flex; align-items:center; gap:6px;">
-            <button onclick="pruneOldData(5)" style="border: 1px solid var(--w1); background: transparent; color: var(--text); padding: 6px 12px; border-radius: 6px; cursor: pointer; font-family: inherit; font-size: 12px; font-weight: 700; transition: background 0.2s;">
-              ⏳ Optimize Storage
-            </button>
-
-            <div style="display:inline-block; vertical-align:middle; font-family:sans-serif;" 
-                 onmouseenter="const rect=this.getBoundingClientRect(); const t=this.querySelector('.story-tt'); if(t){ document.body.appendChild(t); t.style.left=(rect.right - 290)+'px'; t.style.top='auto'; t.style.bottom=(window.innerHeight - rect.top + 15)+'px'; t.style.opacity='1'; t.style.visibility='visible'; this._tt=t; }" 
-                 onmouseleave="if(this._tt){ this._tt.style.opacity='0'; this._tt.style.visibility='hidden'; this.appendChild(this._tt); this._tt=null; }">
-              <span style="display:inline-flex; align-items:center; justify-content:center; width:16px; height:16px; border-radius:50%; background:var(--w1); color:#fff; font-size:11px; font-family:serif; font-style:italic; font-weight:bold; cursor:help; line-height:1;">i</span>
-              
-              <div class="story-tt" style="opacity:0; visibility:hidden; position:fixed; width:280px; background:var(--card); border:1px solid var(--border); box-shadow:0 -6px 16px rgba(0,0,0,0.18); padding:12px; border-radius:8px; font-size:12px; z-index:999999; pointer-events:none; white-space:normal; font-weight:400; line-height:1.4; color:var(--text); text-transform:none; letter-spacing:normal; text-align:left;">
-                <strong style="font-size:13px; color:var(--text);">🧹 Storage Optimization Guide</strong><br><br>
-                <strong style="color:var(--text);">What it does:</strong> Deletes all daily logs older than 5 months, freeing up space while preserving your recent baseline data.<br><br>
-                <strong style="color:var(--text);">When it's useful:</strong> Use this if the app begins to feel sluggish or if your memory limit is getting full.<br><br>
-                <span style="color:var(--neg); font-weight:bold;">Always click "Export full backup" (💾) first!</span>
-              </div>
-            </div>
-          </div>
-
-          <div style="display:inline-flex; align-items:center; gap:6px;">
             <button class="delete-btn" style="border:1.5px solid var(--neg); padding:6px 12px; border-radius:6px; font-size:12px; font-weight:700;" onclick="promptClearLogs()">
               🛑 Clear Logs & Vitals
             </button>
@@ -6688,7 +6702,8 @@ function renderSafeBaseline() {
   const perfectDays = [];
   Object.entries(checkins).forEach(([dateStr, syms]) => {
     const scores = Object.values(syms).filter(v => typeof v === 'number');
-    if (scores.length > 0) {
+    // require 3+ filled scores — a day with a single lucky 5 isn't "perfect"
+    if (scores.length >= 3) {
       const avg = scores.reduce((a,b)=>a+b,0) / scores.length;
       if (avg >= 4.5) perfectDays.push(dateStr);
     }
@@ -6719,7 +6734,8 @@ function renderSafeBaseline() {
 
   wrap.innerHTML = `
     <div style="font-size:12px; color:var(--muted); line-height:1.5;">
-      These foods were most frequently eaten in the 48 hours leading up to your <strong>absolute best symptom days</strong>. Stick to this menu during severe flare-ups.
+      These foods were most frequently eaten on your <strong>best symptom days and the 2 days before them</strong>.
+      ⚠️ This is raw co-occurrence — foods you eat daily will always rank high here regardless of safety. For controlled per-food signals, use the ⚖️ Verdicts tab.
     </div>
     <div class="lab-baseline-list">
       ${topSafe.map(([food, count]) => `
@@ -6732,74 +6748,8 @@ function renderSafeBaseline() {
   `;
 }
 
-// ── Feature 2: Time-to-Symptom Velocity ──
-function renderVelocity() {
-  const wrap = document.getElementById('lab-velocity');
-  if (!wrap) return;
-
-  const entries = loadMigrated();
-  const velocityData = {
-    w1: { title: 'Upper GI (0-4h)', sub: 'Stomach / Immediate Acid', items: [] },
-    w2: { title: 'Mid GI (5-8h)', sub: 'Small Intestine / Rapid Ferment', items: [] },
-    w3: { title: 'Lower GI (9-13h)', sub: 'Colon / Deep Fermentation', items: [] },
-    w4: { title: 'Systemic (14h+)', sub: 'Inflammation / Delayed', items: [] }
-  };
-
-  const foodStats = {};
-  entries.forEach(e => {
-    if(!foodStats[e.food]) foodStats[e.food] = { w1:0, w2:0, w3:0, w4:0, totalNeg:0 };
-    WINDOWS.forEach(w => {
-      if (e.windows[w.key] === false) {
-        foodStats[e.food][w.key]++;
-        foodStats[e.food].totalNeg++;
-      }
-    });
-  });
-
-  Object.entries(foodStats).forEach(([food, stats]) => {
-    if (stats.totalNeg >= 2) { 
-      let max = 0; let dom = '';
-      WINDOWS.forEach(w => { if(stats[w.key] > max) { max = stats[w.key]; dom = w.key; } });
-      
-      if (dom && (max / stats.totalNeg) >= 0.5) {
-        velocityData[dom].items.push({ food, count: max, total: stats.totalNeg });
-      }
-    }
-  });
-
-  const colsHtml = Object.keys(velocityData).map(k => {
-    const group = velocityData[k];
-    group.items.sort((a,b) => b.count - a.count); // Sort by highest hits
-    
-    return `
-      <div class="lab-velocity-col">
-        
-        <div style="width: 100%; display: flex; flex-direction: column; align-items: center; text-align: center; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px dashed var(--border);">
-          <h4 style="display: flex; justify-content: center; align-items: center; width: 100%; margin: 0; gap: 6px; text-align: center;">
-            ${group.title}
-          </h4>
-          <div class="sub" style="margin-top: 4px; text-align: center;">${group.sub}</div>
-        </div>
-        
-        <div style="display:flex; flex-direction:column; gap:6px; width: 100%;">
-          ${group.items.length ? group.items.map(i => `
-            <div class="lab-velocity-tag">
-              <span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${esc(i.food)}</span>
-              <span style="color:var(--neg); font-size:10px;">${Math.round((i.count/i.total)*100)}%</span>
-            </div>
-          `).join('') : '<span style="font-size:11px; color:var(--muted);">No clear culprits.</span>'}
-        </div>
-      </div>
-    `;
-  }).join('');
-
-  wrap.innerHTML = `
-    <div style="font-size:12px; color:var(--muted); line-height:1.5; margin-bottom:14px;">
-      Maps your negative reactions by physiological location. If a food consistently triggers you in 0-4h, it's likely a stomach/upper-GI issue. If it hits at 9-13h, it's fermenting in the colon, if you mark X negative result after that, it is systemic.
-    </div>
-    <div class="lab-velocity-grid">${colsHtml}</div>
-  `;
-}
+// (a duplicate renderVelocity definition used to live here — the copy further
+// down is the live one; keeping two invited silent divergence)
 
 // ── Feature 3: Auto-Generated Safe Food List ──
 function renderSafeFoodList() {
@@ -6809,36 +6759,36 @@ function renderSafeFoodList() {
   const entries = typeof loadMigrated === 'function' ? loadMigrated() : [];
   const stats = {};
 
-  // 1. Gather all logs and count negative windows
+  // 1. Gather all logs; count negative AND scored windows. Pending (null)
+  //    windows are excluded — counting them as "clear" inflated clear rates
+  //    (a food with 2 scored windows, both negative, showed 90% ★★★).
   entries.forEach(e => {
-    if (!stats[e.food]) stats[e.food] = { logs: 0, negWindows: 0 };
+    if (!stats[e.food]) stats[e.food] = { logs: 0, negWindows: 0, scoredWindows: 0 };
     stats[e.food].logs++;
-    
-    // Check all 4 physiological windows (w1, w2, w3, w4)
+
     if (typeof WINDOWS !== 'undefined') {
       WINDOWS.forEach(w => {
-        if (e.windows && e.windows[w.key] === false) {
-          stats[e.food].negWindows++;
-        }
+        const v = e.windows && e.windows[w.key];
+        if (v === false) { stats[e.food].negWindows++; stats[e.food].scoredWindows++; }
+        else if (v === true) { stats[e.food].scoredWindows++; }
       });
     }
   });
 
   const safeFoods = [];
-  
-  // 2. Filter for 5+ logs and >= 70% clear rate
+
+  // 2. Filter for 5+ logs, 8+ scored windows and >= 70% clear rate
   Object.entries(stats).forEach(([food, data]) => {
-    if (data.logs >= 5) {
-      const totalWindows = data.logs * 4; // 4 windows tracked per log
-      const clearWindows = totalWindows - data.negWindows;
-      const clearRate = Math.round((clearWindows / totalWindows) * 100);
+    if (data.logs >= 5 && data.scoredWindows >= 8) {
+      const clearWindows = data.scoredWindows - data.negWindows;
+      const clearRate = Math.round((clearWindows / data.scoredWindows) * 100);
 
       if (clearRate >= 70) {
         let stars = '★☆☆';
         if (clearRate >= 90) stars = '★★★';
         else if (clearRate >= 80) stars = '★★☆';
 
-        safeFoods.push({ food, logs: data.logs, clearRate, stars });
+        safeFoods.push({ food, logs: data.logs, scored: data.scoredWindows, clearRate, stars });
       }
     }
   });
@@ -6864,8 +6814,8 @@ function renderSafeFoodList() {
       <div style="display:flex; flex-direction:column; gap:8px; padding: 14px 0; border-bottom: ${isLast ? 'none' : '1px solid var(--border)'};">
         <div style="display:flex; justify-content:space-between; align-items:center;">
           <div style="font-size:14px; font-weight:800; color:var(--text);">
-            ${esc(item.food)} 
-            <span style="font-size:11px; color:var(--muted); font-weight:600; margin-left:6px; background:var(--bg); padding:2px 6px; border-radius:6px;">${item.logs} logs</span>
+            ${esc(item.food)}
+            <span style="font-size:11px; color:var(--muted); font-weight:600; margin-left:6px; background:var(--bg); padding:2px 6px; border-radius:6px;">${item.logs} logs · ${item.scored} windows scored</span>
           </div>
           <div style="color:#FCD34D; font-size:15px; letter-spacing:2px; text-shadow: 0 1px 2px rgba(0,0,0,0.1);">${item.stars}</div>
         </div>
@@ -7008,7 +6958,7 @@ function renderReintro() {
 
   const testsHtml = reintros.map(r => {
     const start = new Date(r.startDate + 'T00:00:00');
-    const daysDiff = Math.floor((now - start) / 86400000);
+    const daysDiff = Math.round((now - start) / 86400000); // round, not floor — DST days are 23/25h
     
     const isDay1 = r.status === 'active' && daysDiff === 0;
     const isDay2 = r.status === 'active' && daysDiff === 1;
@@ -7107,7 +7057,7 @@ function computeWeekly(offset) {
   // best / worst day by mean of that day's filled check-ins
   const dayAvgs = [];
   Object.keys(checkins).forEach(d => {
-    if (!inRange(d, curFrom, curTo)) return;
+    if (!inRange(d, curFrom, curTo) || !checkins[d]) return;
     const vals = symList.map(s => checkins[d][s.key]).filter(v => v != null);
     if (vals.length >= 3) dayAvgs.push({ date: d, avg: vals.reduce((x, y) => x + y, 0) / vals.length });
   });
@@ -7157,11 +7107,12 @@ function computeWeekly(offset) {
       if (!s || s.n < 3) return;
       const tot = s.p + s.n;
       const base = (baseWin[w.key].n + 1) / (baseWin[w.key].p + baseWin[w.key].n + 2);
-      const bayes = (s.n + 1) / (tot + 2);
-      if (bayes - base >= 0.15) suspects.push({ food, win: w.label, n: s.n, tot, rate: s.n / tot, base });
+      const bayes = (s.n + 2 * base) / (tot + 2); // shrink toward baseline, same as Verdicts
+      const delta = bayes - base;
+      if (delta >= 0.15) suspects.push({ food, win: w.label, n: s.n, tot, rate: s.n / tot, base, delta });
     });
   });
-  suspects.sort((a, b) => (b.rate - b.base) - (a.rate - a.base));
+  suspects.sort((a, b) => b.delta - a.delta); // sort by the same metric that gated entry
 
   return {
     curFrom, curTo, prevFrom, prevTo, scores,
@@ -7174,9 +7125,11 @@ function computeWeekly(offset) {
 
 function weeklyDelta(cur, prev) {
   if (cur == null || prev == null) return { txt: '', cls: '' };
-  const d = cur - prev;
-  if (Math.abs(d) < 0.15) return { txt: '→ steady', cls: 'flat' };
-  return d > 0 ? { txt: `▲ +${d.toFixed(1)}`, cls: 'up' } : { txt: `▼ ${d.toFixed(1)}`, cls: 'down' };
+  // Judge on the ROUNDED value we display — a raw 0.15 used to be flagged but
+  // render as "+0.1" while 0.14 showed "steady"
+  const d1 = Math.round((cur - prev) * 10) / 10;
+  if (Math.abs(d1) <= 0.1) return { txt: '→ steady', cls: 'flat' };
+  return d1 > 0 ? { txt: `▲ +${d1.toFixed(1)}`, cls: 'up' } : { txt: `▼ ${d1.toFixed(1)}`, cls: 'down' };
 }
 
 function renderWeekly() {
@@ -7208,7 +7161,7 @@ function renderWeekly() {
       <div class="card weekly-stat"><div class="weekly-stat-num">${W.scoredPct == null ? '—' : W.scoredPct + '%'}</div><div class="weekly-stat-lbl">due windows scored</div></div>
       <div class="card weekly-stat"><div class="weekly-stat-num">${W.checkinDays}/7</div><div class="weekly-stat-lbl">check-in days</div></div>
       <div class="card weekly-stat"><div class="weekly-stat-num">${W.best ? W.best.avg.toFixed(1) : '—'}</div><div class="weekly-stat-lbl">best day ${W.best ? '· ' + fmtDayShort(W.best.date) : ''}</div></div>
-      <div class="card weekly-stat"><div class="weekly-stat-num">${W.worst ? W.worst.avg.toFixed(1) : '—'}</div><div class="weekly-stat-lbl">worst day ${W.worst ? '· ' + fmtDayShort(W.worst.date) : ''}</div></div>
+      <div class="card weekly-stat"><div class="weekly-stat-num">${W.worst && (!W.best || W.worst.date !== W.best.date) ? W.worst.avg.toFixed(1) : '—'}</div><div class="weekly-stat-lbl">worst day ${W.worst && (!W.best || W.worst.date !== W.best.date) ? '· ' + fmtDayShort(W.worst.date) : '· needs 2+ scored days'}</div></div>
     </div>
     ${W.suspects.length ? `
     <div class="card" style="margin-bottom:16px;">
@@ -7339,11 +7292,19 @@ function computeVerdicts() {
       const s = f.win[w.key];
       const tot = s.p + s.n;
       pos += s.p; neg += s.n;
-      expectedNeg += tot * baseRate[w.key];
+      // Baseline EXCLUDING this food's own windows — a staple that is 60% of
+      // all entries would otherwise drag the baseline toward itself and read
+      // "typical" by construction.
+      const bp = baseWin[w.key].p - s.p;
+      const bn = baseWin[w.key].n - s.n;
+      const base = (bn + 1) / (bp + bn + 2);
+      expectedNeg += tot * base;
       if (tot < 3) return;
-      const bayes = (s.n + 1) / (tot + 2);
-      const delta = bayes - baseRate[w.key];
-      const rec = { label: w.label, p: s.p, n: s.n, tot, bayes, rate: s.n / tot, base: baseRate[w.key], delta };
+      // Shrink toward the BASELINE, not toward 50% — Laplace smoothing made
+      // "gentler" unreachable whenever the baseline sits below ~25%.
+      const bayes = (s.n + 2 * base) / (tot + 2);
+      const delta = bayes - base;
+      const rec = { label: w.label, p: s.p, n: s.n, tot, bayes, rate: s.n / tot, base, delta };
       if (!worst || delta > worst.delta) worst = rec;
       if (!best || delta < best.delta) best = rec;
     });
@@ -7351,7 +7312,7 @@ function computeVerdicts() {
     // how this food's overall ✕ rate compares to what your baseline predicts
     // for the same mix of scored windows
     const expRate = scored ? expectedNeg / scored : 0;
-    const overallDelta = scored ? (neg + 1) / (scored + 2) - expRate : 0;
+    const overallDelta = scored ? (neg + 2 * expRate) / (scored + 2) - expRate : 0;
     const eatenShare = f.days.size / totalDays;
     const staple = eatenShare >= 0.7 && totalDays >= 14;
 
@@ -7360,7 +7321,9 @@ function computeVerdicts() {
       const c = f.symCounts[s.key] || 0;
       if (c < 3) return;
       const foodRate = c / f.logs;
-      const bRate = baseCounts[s.key] / totalEntries;
+      // base rate excluding this food's own entries (same self-inclusion trap)
+      const restEntries = totalEntries - f.logs;
+      const bRate = restEntries > 0 ? (baseCounts[s.key] - c) / restEntries : 0;
       if (bRate > 0 && foodRate / bRate >= 1.5 && foodRate >= 0.15) {
         lifts.push({ label: s.label, lift: foodRate / bRate, c });
       }
@@ -8282,15 +8245,18 @@ function renderSummary() {
       // Calculate which side is dominant and determine the style
       let cls = 'neutral';
       let displayPct = 0;
+      // Tier on the MARGIN between ✓ and ✕ shares. (posPct/negPct sum to 100,
+      // so the old share-based thresholds made every non-tied cell "strong".)
+      const margin = Math.abs(posPct - negPct);
 
       if (posPct > negPct) {
         displayPct = posPct;
-        if (posPct >= 25) cls = 'strong-pos';
-        else if (posPct >= 10) cls = 'mild-pos';
+        if (margin >= 25) cls = 'strong-pos';
+        else if (margin >= 10) cls = 'mild-pos';
       } else if (negPct > posPct) {
         displayPct = negPct;
-        if (negPct >= 25) cls = 'strong-neg';
-        else if (negPct >= 10) cls = 'mild-neg';
+        if (margin >= 25) cls = 'strong-neg';
+        else if (margin >= 10) cls = 'mild-neg';
       } else {
         // It's exactly 50/50
         displayPct = 50;
@@ -8443,7 +8409,7 @@ function normalizeImportedBackupData(rawData) {
         .map((entry, i) => {
           const clone = JSON.parse(JSON.stringify(entry));
           clone.id = String(clone.id || uid());
-          clone.date = typeof clone.date === 'string' && clone.date ? clone.date : today();
+          clone.date = typeof clone.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(clone.date) ? clone.date : today();
           clone.food = String(clone.food || clone.logName || clone.name || `Imported item ${i+1}`);
           clone.mealType = typeof clone.mealType === 'string' ? clone.mealType : '';
           clone.logTime = typeof clone.logTime === 'string' ? clone.logTime : '';
@@ -8580,7 +8546,6 @@ function importFullBackup(text, inputEl) {
   try {
     const data = normalizeImportedBackupData(rawData);
     saveCustomSyms(data.customSyms);
-    save(data.entries);
     save(data.entries);
     saveFoodNotes(data.foodNotes);
     saveFoodStatus(data.foodStatus);
@@ -8788,49 +8753,9 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
  // A function that handles data deletion which is 5 months or older, super useful to keep relevant data but still reduce local storage size.
-function pruneOldData(monthsToKeep = 5) {
-  // 1. Safety Check
-  if (!confirm(`⚠️ WAIT! Have you exported a backup first?\n\nThis will permanently delete all logs older than ${monthsToKeep} months. Click OK to proceed.`)) {
-    return;
-  }
-
-  // 2. Load current data
-  // Note: Check if 'trackerData' is the exact key you use to save your array in localStorage!
-  const rawData = localStorage.getItem('trackerData');
-  if (!rawData) {
-    alert("No data found to prune.");
-    return;
-  }
-  
-  const entries = JSON.parse(rawData);
-  const originalLength = entries.length;
-
-  // 3. Calculate the cutoff date (Formats it to YYYY-MM-DD)
-  const cutoffDate = new Date();
-  cutoffDate.setMonth(cutoffDate.getMonth() - monthsToKeep);
-  const cutoffStr = cutoffDate.toISOString().split('T')[0];
-
-  // 4. Filter out the old stuff
-  const freshData = entries.filter(entry => {
-    // Keeps the entry ONLY if its date is newer than or equal to the cutoff
-    return entry.date >= cutoffStr; 
-  });
-
-  const deletedCount = originalLength - freshData.length;
-
-  if (deletedCount === 0) {
-    alert(`Your storage is already clean! No logs older than ${monthsToKeep} months were found.`);
-    return;
-  }
-
-  // 5. Save the trimmed array back to memory
-  localStorage.setItem('trackerData', JSON.stringify(freshData));
-  
-  alert(`✅ Storage optimized! \n\nDeleted ${deletedCount} old logs.\nKept the most recent ${freshData.length} logs.`);
-  
-  // 6. Reload the page to refresh all tables and charts
-  location.reload();
-}
+// (pruneOldData removed — it read a storage key the app never used, so it was
+// a dead feature; long-term storage growth is handled by the planned
+// IndexedDB migration instead)
 
 </script>
 
@@ -8952,25 +8877,49 @@ function pruneOldData(monthsToKeep = 5) {
   });
 
   if (hasFS) document.getElementById('btn-load-pc').addEventListener('click', async () => {
+    let handle = null;
     try {
-      const [handle] = await window.showOpenFilePicker({
+      [handle] = await window.showOpenFilePicker({
         types: [{ description: 'Tracker Data File', accept: {'application/json': ['.json']} }]
       });
-      fileHandle = handle;
+    } catch (err) { console.log("Cancelled"); return; }
 
-      const file = await fileHandle.getFile();
+    try {
+      const file = await handle.getFile();
       const contents = await file.text();
       const data = JSON.parse(contents);
+
+      // Two JSON formats exist with similar names. Only a flat localStorage
+      // dump (fst_* keys) belongs here — loading an app-backup file used to
+      // wipe everything and write garbage keys.
+      const isFlatDump = data && typeof data === 'object' && Object.keys(data).some(k => k.startsWith('fst_'));
+      const isAppBackup = data && typeof data === 'object' && (data.data || data.entries || data.checkins);
+
+      if (!isFlatDump) {
+        if (isAppBackup) {
+          if (confirm('This looks like an app BACKUP file (from the 💾 export), not a database file.\n\nImport it through the backup importer instead?')) {
+            importFullBackup(contents, { value: '' });
+          }
+        } else {
+          alert('This file is not a Tracker database — nothing was changed.');
+        }
+        return; // never link a non-database file as the live save target
+      }
+
+      if (!confirm(`Replace ALL current data with "${file.name}"?\n\nA snapshot of the current state will NOT be taken automatically — cancel and use 🛟 Snapshot now first if unsure.`)) return;
 
       localStorage.clear();
       for (let key in data) {
         originalSetItem.call(localStorage, key, data[key]);
       }
+      fileHandle = handle; // link only after a successful, confirmed load
 
       const btn = document.getElementById('btn-load-pc');
       btn.innerText = "✅ Loaded!";
       setTimeout(() => { window.location.reload(); }, 1500);
-    } catch (err) { console.log("Cancelled"); }
+    } catch (err) {
+      alert('Could not load that file: ' + err);
+    }
   });
 
   // ── Persistent storage: ask the browser never to evict our data ──
