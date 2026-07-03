@@ -2500,7 +2500,7 @@ body.dark.visual-theme-ocean { --muted: #7FB5D1; }
     <button onclick="showTab('corr',this)" style="border: 1px dashed rgba(255,255,255,0.3);">Correlations</button>
     <button onclick="showTab('Exp',this)" style="border: 1px dashed rgba(255,255,255,0.3);">Bucket</button>
     
-    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v49</span>
+    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v50</span>
   </div>
 </nav>
 
@@ -3251,6 +3251,93 @@ html body select.status-badge-select.status-blacklist {
 <div id="toast"></div>
 
 <script>
+
+// ═══════════════════════════════════════════════════════════════════════════
+// IndexedDB-backed storage — removes the ~5MB localStorage cap.
+//   • _mem is the synchronous read cache (so the whole app stays unchanged).
+//   • Every write persists to IndexedDB (no size limit).
+//   • Writes also mirror to localStorage as a fallback that is NEVER cleared by
+//     this layer. If a write is too big for localStorage, its stale copy is
+//     REMOVED from localStorage — so "in localStorage ⇒ current, absent ⇒ read
+//     from IndexedDB" is an unambiguous rule (handles overflow AND missed
+//     flushes with no data loss).
+//   • If IndexedDB is unavailable, the app behaves exactly as before.
+// ═══════════════════════════════════════════════════════════════════════════
+window.__fstStorageReady = (function () {
+  const KV_DB = 'fst-kv', KV_STORE = 'kv';
+  const LS = window.localStorage;
+  // true native methods (bypass any later instance overrides, e.g. the PC file-link)
+  const nGet = Storage.prototype.getItem.bind(LS);
+  const nSet = Storage.prototype.setItem.bind(LS);
+  const nDel = Storage.prototype.removeItem.bind(LS);
+  const nClear = Storage.prototype.clear.bind(LS);
+  const nKey = Storage.prototype.key.bind(LS);
+
+  const _mem = {};
+  try { const n = LS.length; for (let i = 0; i < n; i++) { const k = nKey(i); _mem[k] = nGet(k); } } catch (e) {}
+
+  let _db = null, _putQ = {}, _delQ = {}, _timer = null;
+  function schedule() { if (_timer == null) _timer = setTimeout(flush, 250); }
+  function flush() {
+    _timer = null;
+    if (!_db) return;
+    const puts = _putQ, dels = _delQ; _putQ = {}; _delQ = {};
+    try {
+      const st = _db.transaction(KV_STORE, 'readwrite').objectStore(KV_STORE);
+      for (const k in puts) st.put(puts[k], k);
+      for (const k in dels) st.delete(k);
+    } catch (e) { console.warn('IndexedDB write failed (data still in localStorage)', e); }
+  }
+  function flushNow() { if (_timer != null) clearTimeout(_timer); flush(); }
+
+  LS.getItem = function (k) { k = String(k); return Object.prototype.hasOwnProperty.call(_mem, k) ? _mem[k] : null; };
+  LS.setItem = function (k, v) {
+    k = String(k); v = String(v);
+    _mem[k] = v; _putQ[k] = v; delete _delQ[k]; schedule();
+    try { nSet(k, v); }
+    catch (e) { try { nDel(k); } catch (e2) {} } // too big for localStorage → drop stale copy; IndexedDB carries it
+  };
+  LS.removeItem = function (k) { k = String(k); delete _mem[k]; _delQ[k] = 1; delete _putQ[k]; schedule(); try { nDel(k); } catch (e) {} };
+  LS.clear = function () {
+    for (const k in _mem) delete _mem[k];
+    _putQ = {}; _delQ = {};
+    try { nClear(); } catch (e) {}
+    if (_db) { try { _db.transaction(KV_STORE, 'readwrite').objectStore(KV_STORE).clear(); } catch (e) {} }
+  };
+
+  // complete serializers for backups/snapshots (localStorage may hold only part)
+  window.__fstSerialize = function () { return JSON.stringify(_mem); };
+  window.__fstKeys = function () { return Object.keys(_mem); };
+
+  window.addEventListener('pagehide', flushNow);
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') flushNow(); });
+
+  return new Promise(function (resolve) {
+    let req;
+    try { req = indexedDB.open(KV_DB, 1); }
+    catch (e) { console.warn('IndexedDB unavailable — localStorage only', e); return resolve(false); }
+    req.onupgradeneeded = function () { req.result.createObjectStore(KV_STORE); };
+    req.onerror = function () { console.warn('IndexedDB open failed — localStorage only', req.error); resolve(false); };
+    req.onsuccess = function () {
+      _db = req.result;
+      const idb = {};
+      let cur;
+      try { cur = _db.transaction(KV_STORE).objectStore(KV_STORE).openCursor(); }
+      catch (e) { return resolve(false); }
+      cur.onsuccess = function (e) {
+        const c = e.target.result;
+        if (c) { idb[c.key] = c.value; c.continue(); return; }
+        // reconcile: restore overflow keys (absent from localStorage) from IDB;
+        // push localStorage-current keys up to IDB.
+        for (const k in idb) { if (!Object.prototype.hasOwnProperty.call(_mem, k)) _mem[k] = idb[k]; }
+        for (const k in _mem) { if (idb[k] !== _mem[k]) _putQ[k] = _mem[k]; }
+        if (Object.keys(_putQ).length) flush();
+        resolve(true);
+      };
+      cur.onerror = function () { resolve(false); };
+    };
+  });
+})();
 
 // ─── Window buttons HTML ──────────────────────────────────────────────────────
 
@@ -4056,11 +4143,11 @@ function calcStorageMeterSnapshot() {
     extras: bytesOfJson({ customSyms: data.customSyms, favs: data.favs, bundles: data.bundles, theme: data.theme, uiStyle: data.uiStyle, foodStatus: data.foodStatus })
   };
   
-  // Ground truth: everything actually in localStorage, keys included —
-  // catches stray keys the part-list doesn't know about.
+  // Ground truth: every key in the store (now IndexedDB-backed via __fstKeys),
+  // keys included — catches stray keys the part-list doesn't know about.
   let actual = 0;
-  for (let i = 0; i < localStorage.length; i++) {
-    const k = localStorage.key(i);
+  const _allKeys = (typeof window.__fstKeys === 'function') ? window.__fstKeys() : (function(){ const a=[]; for(let i=0;i<localStorage.length;i++) a.push(localStorage.key(i)); return a; })();
+  for (const k of _allKeys) {
     actual += (k.length + (localStorage.getItem(k) || '').length) * 2;
   }
   const partsTotal = Object.values(parts).reduce((a,b) => a+b, 0);
@@ -9424,7 +9511,8 @@ setInterval(() => {
 }, 60000);
 
 // ─── INIT (SAFE BOOT AT THE END OF THE FILE) ───
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
+    await window.__fstStorageReady; // ensure IndexedDB data is loaded before first read/render
     document.getElementById('inp-date').value = today();
     
     // Set current time as default
@@ -9538,7 +9626,7 @@ document.addEventListener("DOMContentLoaded", () => {
       saveTimeout = setTimeout(async () => {
         try {
           const writable = await fileHandle.createWritable();
-          await writable.write(JSON.stringify(localStorage));
+          await writable.write(window.__fstSerialize());
           await writable.close();
         } catch (err) {
           console.error("PC save failed", err);
@@ -9562,7 +9650,7 @@ document.addEventListener("DOMContentLoaded", () => {
       });
 
       const writable = await fileHandle.createWritable();
-      await writable.write(JSON.stringify(localStorage));
+      await writable.write(window.__fstSerialize());
       await writable.close();
 
       const btn = document.getElementById('btn-save-pc');
@@ -9648,7 +9736,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   async function takeSnapshot(auto) {
     const db = await openSnapDB();
-    const data = JSON.stringify(localStorage);
+    const data = window.__fstSerialize();
     const ts = Date.now();
     await new Promise((resolve, reject) => {
       const tx = db.transaction(SNAP_STORE, 'readwrite');
