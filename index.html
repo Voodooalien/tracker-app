@@ -2282,6 +2282,12 @@ body.dark .exp-slip { background: rgba(245,158,11,0.15); color: #FCD34D; }
   color: var(--text); cursor: pointer; white-space: nowrap;
 }
 .verdict-test-btn:hover { border-color: var(--w1); color: var(--w1); }
+
+/* ── Timeline: enhanced-view flags ── */
+.tl-flag { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 999px; white-space: nowrap; }
+.tl-flag.tl-staple { background: var(--bg); color: var(--muted); border: 1px solid var(--border); }
+.tl-flag.tl-thin { background: #FEF3C7; color: #B45309; }
+body.dark .tl-flag.tl-thin { background: rgba(245,158,11,0.15); color: #FCD34D; }
 body.dark .verdict-tag.conf-high { background: rgba(39,174,96,0.15); color: #4ADE80; }
 body.dark .verdict-tag.conf-medium { background: rgba(245,158,11,0.15); color: #FCD34D; }
 #verdict-search { border: 1.5px solid var(--border); border-radius: 7px; padding: 9px 12px; font-size: 14px; font-family: inherit; background: var(--card); color: var(--text); }
@@ -2452,7 +2458,7 @@ body.dark.visual-theme-ocean { --muted: #7FB5D1; }
     <button onclick="showTab('corr',this)" style="border: 1px dashed rgba(255,255,255,0.3);">Correlations</button>
     <button onclick="showTab('Exp',this)" style="border: 1px dashed rgba(255,255,255,0.3);">Bucket</button>
     
-    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v45</span>
+    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v46</span>
   </div>
 </nav>
 
@@ -2843,13 +2849,18 @@ html body select.status-badge-select.status-blacklist {
       <div style="flex:1; min-width:300px;">
         <div style="font-size:14px;font-weight:700;">⏱️ Reaction Timeline (Day 0 to Day +5)</div>
         <div style="font-size:11px;color:var(--muted);margin-top:4px;line-height:1.5;">
-          • Watch how your absolute symptom scores progress day by day after eating a food.
-          <br><em>• Use this tab to see <strong>one-time strong reactions</strong> and "Absolute Impact".</em>
-          <br><em>• The Timeline tab is your source of truth, it plots the absolute score rather than looking for relative math, it will honestly show you the state of your skin in the days following any logged item. If you see a sea of red following a specific food or supplement, trust that visual evidence.</em>
+          • How your symptoms in the days after a food compare to <strong>your usual level</strong> for that symptom.
+          <br><em>• A <strong>pattern spotter</strong>, not a verdict: it surfaces foods worth a closer look. To actually confirm a trigger, tap 🧪 Test to run a Trial.</em>
+          <br><em>• <strong>Enhanced</strong> shows each day vs your baseline (so a number means something). <strong>Legacy</strong> is the old absolute-score view.</em>
         </div>
+        <div id="Timeline-note" style="font-size:11px;color:var(--muted);margin-top:6px;line-height:1.5;"></div>
       </div>
 
       <div style="display:flex; flex-direction:column; gap:10px; align-items:flex-end;">
+        <div class="time-filter-row" id="Timeline-view-toggle" style="margin:0;">
+          <button class="tf-btn" data-v="enhanced" onclick="setTimelineView('enhanced')">Enhanced</button>
+          <button class="tf-btn" data-v="legacy" onclick="setTimelineView('legacy')">Legacy</button>
+        </div>
         <div id="Timeline-symptom-container" class="lag-selector" style="margin-bottom:0; display:flex; align-items:center; gap:8px;">
           </div>
         <input id="Timeline-search" class="summary-search-input" type="text" placeholder="Search foods..." oninput="renderTimeline()" style="width:220px;">
@@ -5492,11 +5503,20 @@ function renderHeatmap() {
 }
 
 // ─── Timeline: Reaction Timeline ──────────────────────────────────────────────────
+let _timelineView = 'enhanced';
+try { _timelineView = localStorage.getItem('fst_timeline_view') || 'enhanced'; } catch (e) {}
+function setTimelineView(v) {
+  _timelineView = v;
+  try { localStorage.setItem('fst_timeline_view', v); } catch (e) {}
+  renderTimeline();
+}
+
 function renderTimeline() {
   const tbody = document.getElementById('Timeline-tbody');
   const container = document.getElementById('Timeline-symptom-container');
   const searchInput = document.getElementById('Timeline-search');
   if (!tbody || !container || !searchInput) return;
+  document.querySelectorAll('#Timeline-view-toggle .tf-btn').forEach(b => b.classList.toggle('active', b.dataset.v === _timelineView));
 
   const checkinSyms = allCheckinSymptoms();
   const logSyms = allSymptoms();
@@ -5581,14 +5601,29 @@ function renderTimeline() {
     return;
   }
 
-  // --- COLOR LOGIC ---
+  // Personal baseline for this metric across the range — the reference the
+  // Enhanced view measures every day against.
+  let baseline = null; // check-in: avg 1–5 score · log tag: occurrence fraction 0–1
+  if (isLogTag) {
+    const eDays = Object.keys(dayHasAnyEntry);
+    const tagDays = eDays.filter(d => dayHasLogTag[d]).length;
+    baseline = eDays.length ? tagDays / eDays.length : null;
+  } else {
+    const vals = Object.keys(checkins).map(d => checkins[d] && checkins[d][symKey]).filter(v => v != null);
+    baseline = vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+  }
+  const totalDays = new Set(rangedEntries.map(e => e.date)).size || 1;
+  const isPos = isPositiveLabel(selectedSym.label);
+  const noteEl = document.getElementById('Timeline-note');
+
+  // --- COLOR LOGIC (legacy view only) ---
   const getColor = (val, label) => {
     if (val === null) return 'background:transparent; color:var(--muted); border:1px solid var(--border);';
     const isPositive = isPositiveLabel(label);
     if (isPositive) {
-      if (val <= 1.5) return 'background:#4ADE80;'; 
-      if (val <= 3.4) return 'background:#A7F3D0;'; 
-      if (val <= 3.8) return 'background:#FDE68A;'; 
+      if (val <= 1.5) return 'background:#4ADE80;';
+      if (val <= 3.4) return 'background:#A7F3D0;';
+      if (val <= 3.8) return 'background:#FDE68A;';
       return 'background:#F87171;';
     } else {
       if (val >= 4.5) return 'background:#4ADE80;';
@@ -5663,31 +5698,115 @@ function renderTimeline() {
     return story;
   };
 
-  // ... [rest of your renderTimeline code above] ...
+  // ═══ LEGACY VIEW (unchanged absolute-score table) ═══
+  if (_timelineView === 'legacy') {
+    if (noteEl) noteEl.innerHTML = '';
+    tbody.innerHTML = data.map(r => {
+      const cells = r.avgs.map(val => {
+        if (val === null) return `<td><div style="font-size:12px;color:var(--muted);display:flex;align-items:center;justify-content:center;height:34px;">—</div></td>`;
+        const displayVal = isLogTag ? (Math.round(((5 - val) / 4) * 100) + "%") : (Math.round(val * 10) / 10).toFixed(1);
+        return `<td><div style="display:inline-flex;align-items:center;justify-content:center;min-width:54px;height:32px;border-radius:12px;font-weight:800;font-size:13px;color:#1A2533;${getColor(val, selectedSym.label)}">${displayVal}</div></td>`;
+      }).join('');
 
-  tbody.innerHTML = data.map(r => {
-    const cells = r.avgs.map(val => {
-      if (val === null) return `<td><div style="font-size:12px;color:var(--muted);display:flex;align-items:center;justify-content:center;height:34px;">—</div></td>`;
-      const displayVal = isLogTag ? (Math.round(((5 - val) / 4) * 100) + "%") : (Math.round(val * 10) / 10).toFixed(1);
-      return `<td><div style="display:inline-flex;align-items:center;justify-content:center;min-width:54px;height:32px;border-radius:12px;font-weight:800;font-size:13px;color:#1A2533;${getColor(val, selectedSym.label)}">${displayVal}</div></td>`;
-    }).join('');
-
-    return `<tr>
-      <td class="food-name" title="${esc(r.food)}" style="max-width: 180px; padding: 12px 8px;">
-        <div style="margin-bottom:6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-weight:700;">${esc(r.food)}</div>
-        <div style="display:flex; gap:6px; align-items:center;">
-          <span style="font-size:10px; color:var(--muted); background:var(--bg); padding:2px 6px; border-radius:4px;">Logged ${r.count}x</span>
-          
-          <div style="display:inline-block;" 
-               onmouseenter="const rect = this.getBoundingClientRect(); const t = this.querySelector('.story-tt'); if(t){ document.body.appendChild(t); t.style.left = (rect.right + 10) + 'px'; t.style.top = (rect.top - 10) + 'px'; t.style.opacity = '1'; t.style.visibility = 'visible'; this._tt = t; }" 
-               onmouseleave="if(this._tt){ this._tt.style.opacity = '0'; this._tt.style.visibility = 'hidden'; this.appendChild(this._tt); this._tt = null; }">
-            <span style="font-size:10px; cursor:help; color:var(--text); background:var(--bg); border:1px solid var(--border); padding:2px 6px; border-radius:4px; font-weight:700;">ℹ️ Breakdown</span>
-            
-            <div class="story-tt" style="opacity:0; visibility:hidden; position:fixed; width:220px; background:var(--card); border:1px solid var(--border); box-shadow:0 6px 16px rgba(0,0,0,0.18); padding:10px 12px; border-radius:8px; font-size:12px; z-index:999999; pointer-events:none; white-space:normal;">
-              💡 ${getReactionStory(r.avgs, isPositiveLabel(selectedSym.label), isLogTag)}
+      return `<tr>
+        <td class="food-name" title="${esc(r.food)}" style="max-width: 180px; padding: 12px 8px;">
+          <div style="margin-bottom:6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-weight:700;">${esc(r.food)}</div>
+          <div style="display:flex; gap:6px; align-items:center;">
+            <span style="font-size:10px; color:var(--muted); background:var(--bg); padding:2px 6px; border-radius:4px;">Logged ${r.count}x</span>
+            <div style="display:inline-block;"
+                 onmouseenter="const rect = this.getBoundingClientRect(); const t = this.querySelector('.story-tt'); if(t){ document.body.appendChild(t); t.style.left = (rect.right + 10) + 'px'; t.style.top = (rect.top - 10) + 'px'; t.style.opacity = '1'; t.style.visibility = 'visible'; this._tt = t; }"
+                 onmouseleave="if(this._tt){ this._tt.style.opacity = '0'; this._tt.style.visibility = 'hidden'; this.appendChild(this._tt); this._tt = null; }">
+              <span style="font-size:10px; cursor:help; color:var(--text); background:var(--bg); border:1px solid var(--border); padding:2px 6px; border-radius:4px; font-weight:700;">ℹ️ Breakdown</span>
+              <div class="story-tt" style="opacity:0; visibility:hidden; position:fixed; width:220px; background:var(--card); border:1px solid var(--border); box-shadow:0 6px 16px rgba(0,0,0,0.18); padding:10px 12px; border-radius:8px; font-size:12px; z-index:999999; pointer-events:none; white-space:normal;">
+                💡 ${getReactionStory(r.avgs, isPositiveLabel(selectedSym.label), isLogTag)}
+              </div>
             </div>
           </div>
+        </td>
+        ${cells}
+      </tr>`;
+    }).join('');
+    return;
+  }
+
+  // ═══ ENHANCED VIEW: each day vs your personal baseline ═══
+  if (baseline == null) {
+    if (noteEl) noteEl.innerHTML = 'Not enough check-in history for a baseline in this range.';
+    tbody.innerHTML = `<tr><td colspan="7"><div class="empty">No baseline yet — fill in more daily check-ins.</div></td></tr>`;
+    return;
+  }
+  if (noteEl) {
+    noteEl.innerHTML = isLogTag
+      ? `<b>Your usual:</b> you log “${esc(selectedSym.label)}” on <b>${Math.round(baseline * 100)}%</b> of days. Cells show how much more (+) or less (−) often after a food. <b style="color:var(--pos);">Green = better for you</b>, <b style="color:var(--neg);">red = worse</b>.`
+      : `<b>Your usual ${esc(selectedSym.label)}:</b> <b>${baseline.toFixed(1)} / 5</b>. Cells show each day’s average <b>minus</b> your usual. <b style="color:var(--pos);">Green/+ = better than usual</b>, <b style="color:var(--neg);">red/− = worse</b>.`;
+  }
+
+  // betterness: positive = better than your usual (green), negative = worse (red)
+  const betterness = (val) => {
+    if (val == null) return null;
+    if (isLogTag) {
+      const occ = (5 - val) / 4;          // fraction of days the tag occurred
+      const d = occ - baseline;           // more occurrence
+      return isPos ? d : -d;              // for a bad tag, more = worse
+    }
+    return val - baseline;                // higher score = better
+  };
+  const th1 = isLogTag ? 0.08 : 0.3;
+  const th2 = isLogTag ? 0.20 : 0.7;
+  const cellColor = (b) => {
+    if (b == null) return 'background:transparent; color:var(--muted); border:1px solid var(--border);';
+    if (b >= th2) return 'background:#4ADE80; color:#1A2533;';
+    if (b >= th1) return 'background:#A7F3D0; color:#1A2533;';
+    if (b <= -th2) return 'background:#F87171; color:#1A2533;';
+    if (b <= -th1) return 'background:#FECACA; color:#1A2533;';
+    return 'background:var(--bg); color:var(--muted); border:1px solid var(--border);';
+  };
+  const cellText = (val) => {
+    if (val == null) return '—';
+    if (isLogTag) {
+      const pp = Math.round(((5 - val) / 4 - baseline) * 100);
+      return (pp > 0 ? '+' : pp < 0 ? '−' : '') + Math.abs(pp) + 'pp';
+    }
+    const d = val - baseline;
+    return (d >= 0.05 ? '+' : d <= -0.05 ? '−' : '±') + Math.abs(d).toFixed(1);
+  };
+
+  // enrich + sort so the most adverse foods rise to the top
+  const enriched = data.map(r => {
+    const bs = r.avgs.map(betterness);
+    const worst = Math.min(...bs.filter(v => v != null).concat([0]));
+    const worstIdx = bs.indexOf(worst);
+    const eatenShare = r.count / totalDays;
+    const staple = eatenShare >= 0.7 && totalDays >= 14;
+    const lowN = r.count < 3;
+    return { ...r, bs, worst, worstIdx, staple, lowN };
+  });
+  enriched.sort((a, b) => a.worst - b.worst || b.count - a.count);
+
+  tbody.innerHTML = enriched.map(r => {
+    const cells = r.bs.map((b, i) => {
+      const val = r.avgs[i];
+      return `<td><div style="display:inline-flex;align-items:center;justify-content:center;min-width:54px;height:32px;border-radius:12px;font-weight:800;font-size:12.5px;${cellColor(b)}">${cellText(val)}</div></td>`;
+    }).join('');
+
+    let flag = '';
+    if (r.staple) flag = `<span class="tl-flag tl-staple" title="You eat this on most days, so a day-comparison can't separate it from everything else. Run a Trial to know for sure.">📌 eaten daily — can't isolate</span>`;
+    else if (r.lowN) flag = `<span class="tl-flag tl-thin" title="Only ${r.count} exposures — treat as a weak hint, not proof.">⚠️ thin data (${r.count}×)</span>`;
+
+    let summary;
+    if (r.staple) summary = 'You eat this most days — run a 🧪 Trial to isolate it.';
+    else if (r.worst <= -th1 && r.worstIdx >= 0) summary = `Worst on Day +${r.worstIdx}, ${cellText(r.avgs[r.worstIdx])} vs your usual${r.lowN ? ' (weak — few exposures)' : ''}.`;
+    else summary = 'Stays close to your usual — no clear reaction.';
+
+    return `<tr${r.lowN ? ' style="opacity:0.72;"' : ''}>
+      <td class="food-name" title="${esc(r.food)}" style="max-width: 190px; padding: 12px 8px;">
+        <div style="margin-bottom:6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-weight:700;">${esc(r.food)}</div>
+        <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
+          <span style="font-size:10px; color:var(--muted); background:var(--bg); padding:2px 6px; border-radius:4px;">${r.count}× eaten</span>
+          <button class="verdict-test-btn" title="Run a controlled elimination trial on this food" onclick='startExperiment(${JSON.stringify(r.food)})'>🧪 Test</button>
+          ${flag}
         </div>
+        <div style="font-size:10.5px; color:var(--muted); margin-top:5px; line-height:1.4;">${summary}</div>
       </td>
       ${cells}
     </tr>`;
