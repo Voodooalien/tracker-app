@@ -2215,6 +2215,24 @@ body.dark .quick-log-btn { background: var(--card); }
 .weekly-stat-num { font-size: 20px; font-weight: 800; }
 .weekly-stat-lbl { font-size: 10.5px; color: var(--muted); margin-top: 3px; line-height: 1.4; }
 #weekly-next-btn:disabled { opacity: 0.35; cursor: default; }
+
+/* ── Trials / Experiments ── */
+.exp-card.exp-active { border-left: 4px solid var(--w1); }
+.exp-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.exp-food { font-size: 15px; font-weight: 800; }
+.exp-phase { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.exp-headline { font-size: 13px; margin: 10px 0 4px; line-height: 1.5; }
+.exp-slip { font-size: 11.5px; color: #B45309; background: #FEF3C7; border-radius: 8px; padding: 8px 10px; margin: 6px 0; line-height: 1.45; }
+body.dark .exp-slip { background: rgba(245,158,11,0.15); color: #FCD34D; }
+.exp-meta { font-size: 10.5px; color: var(--muted); margin-top: 10px; line-height: 1.5; }
+.exp-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; align-items: center; }
+#exp-food-input { border: 1.5px solid var(--border); border-radius: 7px; padding: 9px 12px; font-size: 14px; font-family: inherit; background: var(--card); color: var(--text); }
+.verdict-test-btn {
+  background: var(--bg); border: 1.5px solid var(--border); border-radius: 999px;
+  padding: 4px 10px; font-family: inherit; font-weight: 700; font-size: 11px;
+  color: var(--text); cursor: pointer; white-space: nowrap;
+}
+.verdict-test-btn:hover { border-color: var(--w1); color: var(--w1); }
 body.dark .verdict-tag.conf-high { background: rgba(39,174,96,0.15); color: #4ADE80; }
 body.dark .verdict-tag.conf-medium { background: rgba(245,158,11,0.15); color: #FCD34D; }
 #verdict-search { border: 1.5px solid var(--border); border-radius: 7px; padding: 9px 12px; font-size: 14px; font-family: inherit; background: var(--card); color: var(--text); }
@@ -2376,6 +2394,7 @@ body.dark.visual-theme-ocean { --muted: #7FB5D1; }
     <button onclick="showTab('analysis',this)" style="color: #FDECEC; ">📊 Analysis</button>
     <button onclick="showTab('summary',this)" style="color: #FDECEC; ">📋 Summary</button>
     <button onclick="showTab('verdicts',this)" style="color: #FDECEC; ">⚖️ Verdicts</button>
+    <button onclick="showTab('experiments',this)" style="color: #FDECEC; ">🧪 Trials</button>
     <button onclick="showTab('weekly',this)" style="color: #FDECEC; ">📅 Weekly</button>
   </div>
   
@@ -2384,7 +2403,7 @@ body.dark.visual-theme-ocean { --muted: #7FB5D1; }
     <button onclick="showTab('corr',this)" style="border: 1px dashed rgba(255,255,255,0.3);">Correlations</button>
     <button onclick="showTab('Exp',this)" style="border: 1px dashed rgba(255,255,255,0.3);">Bucket</button>
     
-    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v42</span>
+    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v43</span>
   </div>
 </nav>
 
@@ -2582,6 +2601,24 @@ html body select.status-badge-select.status-blacklist {
   </div>
   <div id="pending-bulk-hint"></div>
   <div id="pending-list"></div>
+</main>
+</div>
+
+<!-- ═══ EXPERIMENTS / TRIALS TAB ═══ -->
+<div id="tab-experiments" class="tab-content">
+<main>
+  <div class="section-title">🧪 Trials — test a suspect food properly</div>
+  <div class="card" style="margin-bottom:16px;">
+    <div style="font-size:12.5px; color:var(--muted); line-height:1.6; margin-bottom:12px;">
+      A controlled test the app scores for you. <b>Avoid</b> one food for a few days while it watches your check-in scores against your recent baseline, then optionally <b>reintroduce</b> it to confirm. Because you log everything, it can verify you actually stuck to the trial.
+    </div>
+    <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+      <input type="text" id="exp-food-input" list="exp-food-list" placeholder="Food to test (type or pick)..." style="flex:1; min-width:180px;">
+      <datalist id="exp-food-list"></datalist>
+      <button class="btn-primary" onclick="startExperimentFromInput()" style="padding:9px 16px; font-size:13px;">Start trial</button>
+    </div>
+  </div>
+  <div id="experiments-list"></div>
 </main>
 </div>
 
@@ -7446,6 +7483,7 @@ function renderVerdicts() {
               <span class="verdict-badges">
                 ${i.staple ? '<span class="verdict-tag staple" title="Eaten on 70%+ of tracked days — day-comparison analyses cannot isolate it">📌 staple</span>' : ''}
                 <span class="verdict-tag conf-${i.conf.toLowerCase()}" title="Based on ${i.scored} scored reaction windows">${i.conf}</span>
+                <button class="verdict-test-btn" title="Run a controlled elimination trial on this food" onclick='startExperiment(${JSON.stringify(i.food)})'>🧪 Test</button>
               </span>
             </div>
             <div class="verdict-meta">${i.logs} logs · ${i.daysEaten} days · ${i.scored} windows scored (${i.pos}✓ / ${i.neg}✕)</div>
@@ -7456,11 +7494,275 @@ function renderVerdicts() {
   }).join('') || `<div class="card"><div class="empty"><span>🔍</span>No foods match.</div></div>`;
 }
 
+// ─── Trials (n-of-1 elimination experiments) ─────────────────────────────────
+// A controlled test: avoid a food (elimination) → measure check-in scores vs a
+// pre-trial baseline → optionally reintroduce and watch for relapse. The app
+// verifies adherence from the logs. This is the one method that yields real
+// causal evidence from single-person observational data.
+const EXP_ELIM_DAYS = 5;      // planned avoidance length
+const EXP_WASHOUT_DAYS = 2;   // first days excluded — last dose is still clearing
+const EXP_BASELINE_DAYS = 7;  // pre-trial reference window
+const EXP_REINTRO_DAYS = 3;
+
+function loadExperiments() {
+  try { return JSON.parse(localStorage.getItem('fst_experiments') || '[]'); } catch { return []; }
+}
+function saveExperiments(arr) { localStorage.setItem('fst_experiments', JSON.stringify(arr)); }
+
+// Normalize a food name for adherence matching (drop emoji/symbols, lowercase).
+function normFood(s) {
+  return String(s || '').replace(/[^\p{L}\p{N} ]/gu, '').replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
+function overallCheckinKey() {
+  const s = allCheckinSymptoms().find(x => /overall/i.test(x.label || ''));
+  return s ? s.key : null;
+}
+
+// Smart-pick target symptoms: overall daily score + the check-in symptoms this
+// food was flagged for in Verdicts, else the most-affected (lowest-baseline) ones.
+function pickTargetSyms(food) {
+  const syms = allCheckinSymptoms();
+  const picked = [];
+  const overall = overallCheckinKey();
+  if (overall) picked.push(overall);
+
+  // match the food's Verdict symptom-lift labels to check-in symptom names
+  const verdict = computeVerdicts().list.find(v => v.food === food);
+  if (verdict && verdict.lifts) {
+    verdict.lifts.forEach(l => {
+      const m = syms.find(s => !picked.includes(s.key) && normFood(s.label) && normFood(l.label).includes(normFood(s.name || s.label)));
+      if (m) picked.push(m.key);
+    });
+  }
+
+  // fall back to the lowest-recent-average (most bothersome) symptoms
+  if (picked.length < 3) {
+    const checkins = loadCheckins();
+    const recent = Object.keys(checkins).filter(d => d >= addDays(today(), -14));
+    const avgOf = key => {
+      const vals = recent.map(d => checkins[d] && checkins[d][key]).filter(v => v != null);
+      return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 99;
+    };
+    syms.filter(s => !picked.includes(s.key))
+      .map(s => ({ key: s.key, avg: avgOf(s.key) }))
+      .sort((a, b) => a.avg - b.avg)
+      .slice(0, 3 - picked.length)
+      .forEach(s => picked.push(s.key));
+  }
+  return picked.slice(0, 4);
+}
+
+function meanCheckin(checkins, fromDate, toDate, key) {
+  const vals = [];
+  Object.keys(checkins).forEach(d => {
+    if (d >= fromDate && d <= toDate) {
+      const v = checkins[d] ? checkins[d][key] : null;
+      if (v != null) vals.push(v);
+    }
+  });
+  return vals.length ? { avg: vals.reduce((a, b) => a + b, 0) / vals.length, n: vals.length } : { avg: null, n: 0 };
+}
+
+function computeExperiment(exp) {
+  const checkins = loadCheckins();
+  const entries = loadMigrated();
+  const target = normFood(exp.food);
+
+  const baseTo = addDays(exp.elimStart, -1);
+  const baseFrom = addDays(exp.elimStart, -EXP_BASELINE_DAYS);
+  const elimEnd = addDays(exp.elimStart, exp.elimDays - 1);
+  const measFrom = addDays(exp.elimStart, exp.washoutDays);   // post-washout
+  const measTo = elimEnd;
+
+  const t = today();
+  const elimDayNum = Math.min(exp.elimDays, Math.max(0, Math.round((parseYMD(t) - parseYMD(exp.elimStart)) / 86400000) + 1));
+
+  // adherence: did the food appear during the elimination window?
+  const slipDays = new Set();
+  entries.forEach(e => {
+    if (e.date >= exp.elimStart && e.date <= elimEnd && normFood(e.food) === target) slipDays.add(e.date);
+  });
+
+  // per-symptom baseline vs measured elimination
+  const syms = allCheckinSymptoms();
+  const rows = exp.targetSyms.map(key => {
+    const sym = syms.find(s => s.key === key);
+    const base = meanCheckin(checkins, baseFrom, baseTo, key);
+    const elim = meanCheckin(checkins, measFrom, measTo, key);
+    let reintro = null;
+    if (exp.reintroStart) {
+      reintro = meanCheckin(checkins, exp.reintroStart, addDays(exp.reintroStart, exp.reintroDays - 1), key);
+    }
+    const delta = (base.avg != null && elim.avg != null) ? elim.avg - base.avg : null;
+    return { key, label: sym ? sym.label : key, base, elim, reintro, delta };
+  });
+
+  const overallKey = overallCheckinKey();
+  const overallRow = rows.find(r => r.key === overallKey) || rows[0];
+  const measuredDays = new Set();
+  Object.keys(checkins).forEach(d => { if (d >= measFrom && d <= measTo) measuredDays.add(d); });
+
+  // verdict
+  let verdict = 'collecting', headline = '';
+  if (measuredDays.size < 2) {
+    verdict = 'collecting';
+    headline = `Still collecting — ${measuredDays.size} of ~${exp.elimDays - exp.washoutDays} measured days logged so far.`;
+  } else {
+    const improved = rows.filter(r => r.delta != null && r.delta >= 0.4).length;
+    const worsened = rows.filter(r => r.delta != null && r.delta <= -0.4).length;
+    const od = overallRow ? overallRow.delta : null;
+    if (od != null && od >= 0.5 && improved >= worsened) { verdict = 'helped'; headline = 'Scores improved while avoiding it — a likely trigger.'; }
+    else if (od != null && od <= -0.5) { verdict = 'worse'; headline = 'Scores were worse while avoiding it — probably not this food (or something else was going on).'; }
+    else { verdict = 'nochange'; headline = 'No clear change while avoiding it — likely not a major trigger.'; }
+
+    // reintroduction confirmation
+    if (exp.reintroStart && overallRow && overallRow.reintro && overallRow.reintro.avg != null) {
+      const relapse = overallRow.reintro.avg - (overallRow.elim.avg != null ? overallRow.elim.avg : overallRow.base.avg);
+      if (verdict === 'helped' && relapse <= -0.5) headline = '✅ Confirmed: improved off it, worsened when reintroduced — strong evidence it\'s a trigger.';
+      else if (verdict === 'helped' && relapse > -0.2) headline = 'Improved while avoiding it, but reintroducing didn\'t bring symptoms back — treat as unconfirmed.';
+    }
+  }
+
+  return { rows, overallRow, verdict, headline, slipDays: [...slipDays], elimDayNum, elimEnd, measuredDays: measuredDays.size, baseFrom, baseTo };
+}
+
+function foodsForDatalist() {
+  const counts = {};
+  loadMigrated().forEach(e => { counts[e.food] = (counts[e.food] || 0) + 1; });
+  return Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([f]) => f);
+}
+
+function startExperiment(food) {
+  food = String(food || '').trim();
+  if (!food) { toast('Pick a food to test'); return; }
+  const exps = loadExperiments();
+  if (exps.some(e => normFood(e.food) === normFood(food) && (e.status === 'eliminating' || e.status === 'reintroducing'))) {
+    toast('A trial for this food is already running');
+    showTab('experiments', document.querySelector('nav button[onclick*="experiments"]'));
+    return;
+  }
+  exps.unshift({
+    id: uid(), food, status: 'eliminating',
+    elimStart: today(), elimDays: EXP_ELIM_DAYS, washoutDays: EXP_WASHOUT_DAYS,
+    reintroStart: null, reintroDays: EXP_REINTRO_DAYS,
+    targetSyms: pickTargetSyms(food), createdAt: today()
+  });
+  saveExperiments(exps);
+  toast('🧪 Trial started — avoid it for ' + EXP_ELIM_DAYS + ' days');
+  render();
+  showTab('experiments', document.querySelector('nav button[onclick*="experiments"]'));
+}
+function startExperimentFromInput() {
+  const el = document.getElementById('exp-food-input');
+  startExperiment(el.value);
+  el.value = '';
+}
+function beginReintro(id) {
+  const exps = loadExperiments();
+  const e = exps.find(x => x.id === id);
+  if (!e) return;
+  if (!confirm('Start reintroducing "' + e.food + '"? Eat it normally for the next ' + EXP_REINTRO_DAYS + ' days so the app can watch for a relapse.')) return;
+  e.status = 'reintroducing';
+  e.reintroStart = today();
+  saveExperiments(exps);
+  render();
+}
+function finishExperiment(id, skipReintro) {
+  const exps = loadExperiments();
+  const e = exps.find(x => x.id === id);
+  if (!e) return;
+  e.status = 'done';
+  saveExperiments(exps);
+  render();
+}
+function deleteExperiment(id) {
+  if (!confirm('Delete this trial? Your logs and check-ins are not affected.')) return;
+  saveExperiments(loadExperiments().filter(x => x.id !== id));
+  render();
+}
+
+function renderExperiments() {
+  const listEl = document.getElementById('experiments-list');
+  const dl = document.getElementById('exp-food-list');
+  if (!listEl) return;
+  if (dl) dl.innerHTML = foodsForDatalist().slice(0, 200).map(f => `<option value="${esc(f)}"></option>`).join('');
+
+  const exps = loadExperiments();
+  if (!exps.length) {
+    listEl.innerHTML = `<div class="card"><div class="empty"><span>🧪</span>No trials yet. Pick a suspect from ⚖️ Verdicts (look for “🔬 Worth testing”) or type a food above.</div></div>`;
+    return;
+  }
+
+  const VMETA = {
+    helped:     { cls: 'suspect', icon: '🔺', txt: 'Likely trigger' },
+    worse:      { cls: 'gentler', icon: '🟢', txt: 'Probably fine' },
+    nochange:   { cls: 'typical', icon: '🟡', txt: 'No clear effect' },
+    collecting: { cls: '',        icon: '⏳', txt: 'Collecting' }
+  };
+  const f1 = v => v == null ? '—' : v.toFixed(1);
+
+  listEl.innerHTML = exps.map(exp => {
+    const c = computeExperiment(exp);
+    const m = VMETA[c.verdict] || VMETA.collecting;
+    const active = exp.status === 'eliminating' || exp.status === 'reintroducing';
+    const phaseLabel = exp.status === 'eliminating' ? `Avoiding · day ${c.elimDayNum} of ${exp.elimDays}`
+      : exp.status === 'reintroducing' ? 'Reintroducing' : 'Finished';
+
+    const slipWarn = (exp.status === 'eliminating' && c.slipDays.length)
+      ? `<div class="exp-slip">⚠️ Logged on ${c.slipDays.length} day(s) during avoidance — adherence ${exp.elimDays - c.slipDays.length}/${exp.elimDays}. Result shown anyway, but weaker.</div>` : '';
+
+    const rowsHtml = c.rows.map(r => {
+      const d = r.delta;
+      const cls = d == null ? 'flat' : d >= 0.4 ? 'up' : d <= -0.4 ? 'down' : 'flat';
+      const arrow = d == null ? '' : d >= 0.4 ? `▲ +${d.toFixed(1)}` : d <= -0.4 ? `▼ ${d.toFixed(1)}` : '→';
+      const reintroTxt = r.reintro && r.reintro.avg != null ? ` · reintro ${f1(r.reintro.avg)}` : '';
+      return `<div class="weekly-row">
+        <span class="weekly-sym">${r.label}</span>
+        <span class="weekly-vals">base ${f1(r.base.avg)} → avoid <strong>${f1(r.elim.avg)}</strong>${reintroTxt}</span>
+        <span class="weekly-delta ${cls}">${arrow}</span>
+      </div>`;
+    }).join('');
+
+    let actions = '';
+    if (exp.status === 'eliminating') {
+      const canReintro = c.elimDayNum >= exp.elimDays;
+      actions = `<div class="exp-actions">
+        ${canReintro ? `<button class="btn-primary" style="padding:7px 12px; font-size:12px;" onclick="beginReintro('${exp.id}')">Reintroduce to confirm</button>` : ''}
+        <button class="bundle-secondary-btn" onclick="finishExperiment('${exp.id}')">Finish now</button>
+        <button class="delete-btn" style="padding:6px 10px; font-size:12px;" onclick="deleteExperiment('${exp.id}')">Delete</button>
+      </div>`;
+    } else if (exp.status === 'reintroducing') {
+      actions = `<div class="exp-actions">
+        <button class="btn-primary" style="padding:7px 12px; font-size:12px;" onclick="finishExperiment('${exp.id}')">Finish trial</button>
+        <button class="delete-btn" style="padding:6px 10px; font-size:12px;" onclick="deleteExperiment('${exp.id}')">Delete</button>
+      </div>`;
+    } else {
+      actions = `<div class="exp-actions"><button class="delete-btn" style="padding:6px 10px; font-size:12px;" onclick="deleteExperiment('${exp.id}')">Delete</button></div>`;
+    }
+
+    return `<div class="card exp-card ${active ? 'exp-active' : ''}" style="margin-bottom:14px;">
+      <div class="exp-head">
+        <div style="min-width:0;">
+          <div class="exp-food">${esc(exp.food)}</div>
+          <div class="exp-phase">${phaseLabel} · started ${fmtDayShort(exp.elimStart)}</div>
+        </div>
+        <span class="verdict-tag conf-${m.cls === 'suspect' ? 'low' : 'high'}" style="background:${c.verdict==='helped'?'#FDECEC':c.verdict==='worse'?'#E8F8EE':'var(--bg)'}; color:${c.verdict==='helped'?'#C0392B':c.verdict==='worse'?'#1E8449':'var(--muted)'};">${m.icon} ${m.txt}</span>
+      </div>
+      <div class="exp-headline">${c.headline}</div>
+      ${slipWarn}
+      <div style="margin-top:6px;">${rowsHtml}</div>
+      <div class="exp-meta">Baseline: ${fmtDayShort(c.baseFrom)}–${fmtDayShort(c.baseTo)} · washout ${exp.washoutDays}d · scores 1 (severe) → 5 (good), higher is better</div>
+      ${actions}
+    </div>`;
+  }).join('');
+}
+
 function render() {
   renderPending(); renderHistory(); renderSummary(); renderCheckin();
   renderCorrelations(); renderBucketLoad(); renderTimeline(); renderFactors();
   renderHeatmap(); renderArchives(); renderQuickLog(); renderFavs(); renderBundles();
-  renderVerdicts(); renderWeekly(); renderTrends(); updateCheckinDot();
+  renderVerdicts(); renderExperiments(); renderWeekly(); renderTrends(); updateCheckinDot();
 }
 
 // ─── Symptom buttons HTML ─────────────────────────────────────────────────────
