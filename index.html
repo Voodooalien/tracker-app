@@ -2283,6 +2283,41 @@ body.dark .exp-slip { background: rgba(245,158,11,0.15); color: #FCD34D; }
 }
 .verdict-test-btn:hover { border-color: var(--w1); color: var(--w1); }
 
+/* ── What I've learned ── */
+.learned-section-head {
+  margin: 18px 0 8px; padding: 8px 12px; border-radius: 8px;
+  display: flex; flex-direction: column; gap: 2px; border-left: 4px solid var(--muted);
+}
+.learned-section-title { font-size: 14px; font-weight: 800; }
+.learned-section-hint { font-size: 11px; color: var(--muted); line-height: 1.4; }
+.learned-section-head.v-suspect { background: #FDECEC; border-left-color: #C0392B; }
+.learned-section-head.v-suspect .learned-section-title { color: #C0392B; }
+.learned-section-head.v-gentler { background: #E8F8EE; border-left-color: #1E8449; }
+.learned-section-head.v-gentler .learned-section-title { color: #1E8449; }
+.learned-section-head.v-conflict { background: #FEF6E0; border-left-color: #B45309; }
+.learned-section-head.v-conflict .learned-section-title { color: #B45309; }
+body.dark .learned-section-head.v-suspect { background: rgba(231,76,60,0.13); }
+body.dark .learned-section-head.v-suspect .learned-section-title { color: #F87171; }
+body.dark .learned-section-head.v-gentler { background: rgba(39,174,96,0.13); }
+body.dark .learned-section-head.v-gentler .learned-section-title { color: #4ADE80; }
+body.dark .learned-section-head.v-conflict { background: rgba(245,158,11,0.13); }
+body.dark .learned-section-head.v-conflict .learned-section-title { color: #FCD34D; }
+.learned-row { padding: 11px 14px; border-bottom: 1px solid var(--border); }
+.learned-row:last-child { border-bottom: none; }
+.learned-row.avoid { border-left: 3px solid #E24B4A; }
+.learned-row.safe { border-left: 3px solid #3B6D11; }
+.learned-row.conflict { border-left: 3px solid #EF9F27; }
+.learned-row-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.learned-food { font-size: 13.5px; font-weight: 700; min-width: 0; }
+.learned-reason { font-size: 12px; color: var(--text); margin-top: 5px; line-height: 1.45; }
+.learned-tag.proven { font-size: 10.5px; font-weight: 800; padding: 2px 8px; border-radius: 999px; background: #E8F8EE; color: #1E8449; white-space: nowrap; }
+body.dark .learned-tag.proven { background: rgba(39,174,96,0.15); color: #4ADE80; }
+.learned-actions { display: flex; align-items: center; gap: 8px; margin-top: 9px; flex-wrap: wrap; }
+.learned-resolve { font-family: inherit; font-size: 11.5px; font-weight: 700; padding: 5px 11px; border-radius: 999px; cursor: pointer; border: 1.5px solid var(--border); background: var(--card); color: var(--text); }
+.learned-resolve.safe:hover { border-color: var(--pos); color: var(--pos); }
+.learned-resolve.avoid:hover { border-color: var(--neg); color: var(--neg); }
+.learned-more { padding: 10px 14px; font-size: 11.5px; color: var(--muted); font-style: italic; }
+
 /* ── Timeline: enhanced-view flags ── */
 .tl-flag { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 999px; white-space: nowrap; }
 .tl-flag.tl-staple { background: var(--bg); color: var(--muted); border: 1px solid var(--border); }
@@ -2450,6 +2485,7 @@ body.dark.visual-theme-ocean { --muted: #7FB5D1; }
     <button onclick="showTab('summary',this)" style="color: #FDECEC; ">📋 Summary</button>
     <button onclick="showTab('verdicts',this)" style="color: #FDECEC; ">⚖️ Verdicts</button>
     <button onclick="showTab('experiments',this)" style="color: #FDECEC; ">🧪 Trials</button>
+    <button onclick="showTab('learned',this)" style="color: #FDECEC; ">📓 Learned</button>
     <button onclick="showTab('weekly',this)" style="color: #FDECEC; ">📅 Weekly</button>
   </div>
   
@@ -2458,7 +2494,7 @@ body.dark.visual-theme-ocean { --muted: #7FB5D1; }
     <button onclick="showTab('corr',this)" style="border: 1px dashed rgba(255,255,255,0.3);">Correlations</button>
     <button onclick="showTab('Exp',this)" style="border: 1px dashed rgba(255,255,255,0.3);">Bucket</button>
     
-    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v46</span>
+    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v47</span>
   </div>
 </nav>
 
@@ -2674,6 +2710,22 @@ html body select.status-badge-select.status-blacklist {
     </div>
   </div>
   <div id="experiments-list"></div>
+</main>
+</div>
+
+<!-- ═══ LEARNED TAB ═══ -->
+<div id="tab-learned" class="tab-content">
+<main>
+  <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin-bottom:12px;">
+    <div class="section-title" style="margin:0;">📓 What I've learned</div>
+    <button class="btn-primary" onclick="copyLearnedText()" style="padding:8px 14px; font-size:12.5px;">📋 Copy as text</button>
+  </div>
+  <div class="card" style="margin-bottom:16px;">
+    <div style="font-size:12.5px; color:var(--muted); line-height:1.6;">
+      Your accumulated conclusions in one place, fusing three sources: <b>your own labels</b> (set in 📋 Summary), the <b>⚖️ Verdicts</b> analysis, and your <b>🧪 Trial</b> results. Trial-proven findings rank first. Where a food's signals disagree, it's flagged for you to settle — nothing is silently overridden.
+    </div>
+  </div>
+  <div id="learned-content"></div>
 </main>
 </div>
 
@@ -7952,11 +8004,146 @@ function renderExperiments() {
   }).join('');
 }
 
+// ─── "What I've learned" — fuse your labels + verdicts + trial results ───────
+// Match on wording, not exact string — older data stores labels without emoji
+// (e.g. "Suspect" as well as "🚩 Suspect").
+function learnedLabelDir(lbl) {
+  if (!lbl) return null;
+  if (/suspect|limit|banned|b\.?\s*list|blacklist/i.test(lbl)) return 'avoid';
+  if (/vital|safe|positive/i.test(lbl)) return 'safe';
+  return null; // Meh / N/A → no lean
+}
+
+function learnedData() {
+  const status = loadFoodStatus();
+  const verdicts = {};
+  computeVerdicts().list.forEach(v => { verdicts[v.food] = v; });
+  const trials = {};
+  loadExperiments().filter(e => e.status === 'done').forEach(e => {
+    const prev = trials[e.food];
+    if (!prev || e.elimStart > prev.start) trials[e.food] = { verdict: computeExperiment(e).verdict, start: e.elimStart };
+  });
+
+  const foods = new Set([...Object.keys(status), ...Object.keys(verdicts), ...Object.keys(trials)]);
+  const items = [];
+  foods.forEach(food => {
+    const avoid = [], safe = [];
+    const lbl = status[food];
+    const dir = learnedLabelDir(lbl);
+    if (dir === 'avoid') avoid.push({ src: 'you', strength: 2, text: `You labeled it ${lbl}` });
+    if (dir === 'safe') safe.push({ src: 'you', strength: 2, text: `You labeled it ${lbl}` });
+    const v = verdicts[food];
+    if (v) {
+      const s = v.conf === 'High' ? 1.5 : v.conf === 'Medium' ? 1 : 0.5;
+      if (v.verdict === 'suspect') avoid.push({ src: 'verdict', strength: s, text: `Reacts more than your baseline (${v.conf.toLowerCase()} evidence)` });
+      if (v.verdict === 'gentler') safe.push({ src: 'verdict', strength: s, text: `Easier than your baseline (${v.conf.toLowerCase()} evidence)` });
+    }
+    const t = trials[food];
+    if (t) {
+      if (t.verdict === 'helped') avoid.push({ src: 'trial', strength: 3, text: '🧪 Trial: you improved while avoiding it (likely trigger)' });
+      if (t.verdict === 'worse') safe.push({ src: 'trial', strength: 3, text: '🧪 Trial: avoiding it made you worse (probably fine)' });
+      if (t.verdict === 'nochange') safe.push({ src: 'trial', strength: 1.5, text: '🧪 Trial: no change while avoiding it (probably not a trigger)' });
+    }
+    if (!avoid.length && !safe.length) return;
+    const maxStr = Math.max(0, ...avoid.map(x => x.strength), ...safe.map(x => x.strength));
+    items.push({ food, avoid, safe, conflict: avoid.length > 0 && safe.length > 0, maxStr, hasTrial: !!t });
+  });
+  return items;
+}
+
+function learnedRow(i, kind) {
+  const reasons = kind === 'avoid' ? i.avoid : kind === 'safe' ? i.safe : [...i.avoid, ...i.safe];
+  const reasonHtml = reasons.map(r => `<div class="learned-reason">• ${r.text}</div>`).join('');
+  const testBtn = i.hasTrial ? '<span class="learned-tag proven">🧪 tested</span>'
+    : `<button class="verdict-test-btn" title="Prove it with a controlled Trial" onclick='startExperiment(${JSON.stringify(i.food)})'>🧪 Test</button>`;
+  const resolve = i.conflict ? `<div class="learned-actions">
+      <span style="font-size:11px;color:var(--muted);">Resolve:</span>
+      <button class="learned-resolve safe" onclick='learnedSetStatus(${JSON.stringify(i.food)},"✅ Safe")'>Mark Safe</button>
+      <button class="learned-resolve avoid" onclick='learnedSetStatus(${JSON.stringify(i.food)},"🚩 Suspect")'>Mark Avoid</button>
+    </div>` : '';
+  return `<div class="learned-row ${kind}">
+    <div class="learned-row-top">
+      <span class="learned-food">${i.conflict ? '⚠️ ' : ''}${esc(i.food)}</span>
+      <span>${testBtn}</span>
+    </div>
+    ${reasonHtml}
+    ${resolve}
+  </div>`;
+}
+
+function learnedSetStatus(food, label) {
+  const s = loadFoodStatus();
+  s[food] = label;
+  saveFoodStatus(s);
+  if (typeof toast === 'function') toast('Marked: ' + label);
+  renderLearned();
+  renderSummary();
+}
+
+function renderLearned() {
+  const el = document.getElementById('learned-content');
+  if (!el) return;
+  const items = learnedData();
+  if (!items.length) {
+    el.innerHTML = `<div class="card"><div class="empty"><span>📓</span>Nothing learned yet. Label foods in 📋 Summary, run 🧪 Trials, or mark ✕ reactions — findings collect here.</div></div>`;
+    return;
+  }
+  const conflicts = items.filter(i => i.conflict).sort((a, b) => b.maxStr - a.maxStr);
+  const avoid = items.filter(i => !i.conflict && i.avoid.length).sort((a, b) => b.maxStr - a.maxStr);
+  const safe = items.filter(i => !i.conflict && i.safe.length).sort((a, b) => b.maxStr - a.maxStr);
+
+  const CAP = 40; // keep it a usable shortlist — strongest evidence first
+  const section = (cls, icon, title, hint, arr, kind) => {
+    if (!arr.length) return '';
+    const shown = arr.slice(0, CAP);
+    const more = arr.length - shown.length;
+    return `
+      <div class="learned-section-head ${cls}">
+        <span class="learned-section-title">${icon} ${title}</span>
+        <span class="learned-section-hint">${hint}</span>
+      </div>
+      <div class="card" style="padding:0; overflow:hidden;">
+        ${shown.map(i => learnedRow(i, kind)).join('')}
+        ${more > 0 ? `<div class="learned-more">+ ${more} more (mostly your own labels with lighter evidence) — see 📋 Summary for the full list</div>` : ''}
+      </div>`;
+  };
+
+  el.innerHTML =
+    section('v-conflict', '⚠️', `Needs your call · ${conflicts.length}`, 'Signals point both ways — you decide.', conflicts, 'conflict') +
+    section('v-suspect', '⛔', `Avoid · ${avoid.length}`, 'Your triggers and strong suspects. 🧪 = confirmed by a Trial.', avoid, 'avoid') +
+    section('v-gentler', '✅', `Safe to lean on · ${safe.length}`, 'Your reliable foods — lean on these during flares.', safe, 'safe');
+}
+
+function buildLearnedText() {
+  const items = learnedData();
+  const strip = s => s.replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}\u{200D}]/gu, '').trim();
+  const lines = ['WHAT I\'VE LEARNED — food summary', ''];
+  const dump = (title, arr, kind) => {
+    if (!arr.length) return;
+    lines.push(title + ':');
+    arr.forEach(i => {
+      const reasons = (kind === 'avoid' ? i.avoid : kind === 'safe' ? i.safe : [...i.avoid, ...i.safe]).map(r => strip(r.text)).join('; ');
+      lines.push(`  - ${strip(i.food)} (${reasons})`);
+    });
+    lines.push('');
+  };
+  dump('NEEDS A CALL (conflicting signals)', items.filter(i => i.conflict).sort((a, b) => b.maxStr - a.maxStr), 'conflict');
+  dump('AVOID', items.filter(i => !i.conflict && i.avoid.length).sort((a, b) => b.maxStr - a.maxStr), 'avoid');
+  dump('SAFE TO LEAN ON', items.filter(i => !i.conflict && i.safe.length).sort((a, b) => b.maxStr - a.maxStr), 'safe');
+  return lines.join('\n').trim();
+}
+function copyLearnedText() {
+  const text = buildLearnedText();
+  const done = () => toast('Summary copied 📋');
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done).catch(() => fallbackCopy(text, done));
+  else fallbackCopy(text, done);
+}
+
 function render() {
   renderPending(); renderHistory(); renderSummary(); renderCheckin();
   renderCorrelations(); renderBucketLoad(); renderTimeline(); renderFactors();
   renderHeatmap(); renderArchives(); renderQuickLog(); renderFavs(); renderBundles();
-  renderVerdicts(); renderExperiments(); renderWeekly(); renderTrends(); updateCheckinDot();
+  renderVerdicts(); renderExperiments(); renderLearned(); renderWeekly(); renderTrends(); updateCheckinDot();
 }
 
 // ─── Symptom buttons HTML ─────────────────────────────────────────────────────
