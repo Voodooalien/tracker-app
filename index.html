@@ -2197,6 +2197,24 @@ body.dark .quick-log-btn { background: var(--card); }
   font-size: 11.5px; color: var(--muted); line-height: 1.5;
   padding: 10px 12px; background: var(--bg); border-radius: 8px; margin-bottom: 4px;
 }
+
+/* ── Weekly report ── */
+.weekly-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 0; border-bottom: 1px solid var(--border);
+}
+.weekly-row:last-child { border-bottom: none; }
+.weekly-sym { flex: 1; min-width: 0; font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.weekly-vals { font-size: 12.5px; color: var(--muted); white-space: nowrap; }
+.weekly-vals strong { color: var(--text); }
+.weekly-delta { font-size: 12px; font-weight: 800; min-width: 64px; text-align: right; white-space: nowrap; }
+.weekly-delta.up { color: var(--pos); }
+.weekly-delta.down { color: var(--neg); }
+.weekly-delta.flat { color: var(--muted); }
+.weekly-stat { padding: 12px 14px; text-align: center; }
+.weekly-stat-num { font-size: 20px; font-weight: 800; }
+.weekly-stat-lbl { font-size: 10.5px; color: var(--muted); margin-top: 3px; line-height: 1.4; }
+#weekly-next-btn:disabled { opacity: 0.35; cursor: default; }
 body.dark .verdict-tag.conf-high { background: rgba(39,174,96,0.15); color: #4ADE80; }
 body.dark .verdict-tag.conf-medium { background: rgba(245,158,11,0.15); color: #FCD34D; }
 #verdict-search { border: 1.5px solid var(--border); border-radius: 7px; padding: 9px 12px; font-size: 14px; font-family: inherit; background: var(--card); color: var(--text); }
@@ -2215,6 +2233,38 @@ body.dark .verdict-tag.conf-medium { background: rgba(245,158,11,0.15); color: #
   width: 100% !important;
   display: block !important;
 }
+
+/* ═══ Theme hardening: dark-mode readability + visible active states ═══ */
+/* Bulk/All-due toolbar buttons hardcoded a white background — unreadable in
+   every dark theme */
+body.dark .bulk-mode-btn { background: var(--card); border-color: var(--border); }
+body.dark .bulk-mode-btn:hover { background: var(--bg); }
+
+/* Obsidian dark flips --navy to near-white (#fafafa), which breaks every
+   "navy background + white text" component the theme didn't patch itself */
+body.dark.visual-theme-obsidian .meal-filter-btn.active,
+body.dark.visual-theme-obsidian .bulk-mode-btn.active,
+body.dark.visual-theme-obsidian .btn-rename-all,
+body.dark.visual-theme-obsidian #notes-modal .btn-save-note,
+body.dark.visual-theme-obsidian #btn-snapshots,
+body.dark.visual-theme-obsidian #toast {
+  background: #fafafa !important; color: #09090b !important; border-color: #fafafa !important;
+}
+
+/* Amethyst dark sets --navy to a mid purple — white text on it is weak; use
+   the theme's own deep-purple active color instead */
+body.dark.visual-theme-amethyst .meal-filter-btn.active,
+body.dark.visual-theme-amethyst .bulk-mode-btn.active,
+body.dark.visual-theme-amethyst .btn-rename-all,
+body.dark.visual-theme-amethyst #notes-modal .btn-save-note,
+body.dark.visual-theme-amethyst #btn-snapshots,
+body.dark.visual-theme-amethyst #toast {
+  background: #50395D !important; color: #FFFFFF !important; border-color: #50395D !important;
+}
+
+/* Ocean light: secondary text (--muted #6B9AB8) sat below 3:1 contrast */
+body.visual-theme-ocean { --muted: #47758F; }
+body.dark.visual-theme-ocean { --muted: #7FB5D1; }
 
 /* ═══ Mobile / narrow-screen layout (phones) ═══ */
 @media (max-width: 640px) {
@@ -2326,6 +2376,7 @@ body.dark .verdict-tag.conf-medium { background: rgba(245,158,11,0.15); color: #
     <button onclick="showTab('analysis',this)" style="color: #FDECEC; ">📊 Analysis</button>
     <button onclick="showTab('summary',this)" style="color: #FDECEC; ">📋 Summary</button>
     <button onclick="showTab('verdicts',this)" style="color: #FDECEC; ">⚖️ Verdicts</button>
+    <button onclick="showTab('weekly',this)" style="color: #FDECEC; ">📅 Weekly</button>
   </div>
   
   <div style="margin-left: auto; display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">
@@ -2531,6 +2582,24 @@ html body select.status-badge-select.status-blacklist {
   </div>
   <div id="pending-bulk-hint"></div>
   <div id="pending-list"></div>
+</main>
+</div>
+
+<!-- ═══ WEEKLY TAB ═══ -->
+<div id="tab-weekly" class="tab-content">
+<main>
+  <div class="section-title">📅 Weekly report</div>
+  <div class="card" style="margin-bottom:16px;">
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+      <div style="display:flex; align-items:center; gap:8px;">
+        <button class="tf-btn" onclick="shiftWeek(1)" title="Earlier week">‹</button>
+        <div id="weekly-label" style="font-size:13.5px; font-weight:700;"></div>
+        <button class="tf-btn" id="weekly-next-btn" onclick="shiftWeek(-1)" title="Later week">›</button>
+      </div>
+      <button class="btn-primary" onclick="copyWeeklyText()" style="padding:8px 14px; font-size:12.5px;">📋 Copy as text</button>
+    </div>
+  </div>
+  <div id="weekly-content"></div>
 </main>
 </div>
 
@@ -6996,6 +7065,210 @@ function renderReintro() {
 }
 
 // ─── Render all ───────────────────────────────────────────────────────────────
+// ─── Weekly report ───────────────────────────────────────────────────────────
+// Rolling 7-day window vs the 7 days before it. Higher check-in score = better
+// (all check-in scales are "1 = severe, 5 = good").
+let _weekOffset = 0;
+
+function shiftWeek(dir) {
+  _weekOffset = Math.max(0, _weekOffset + dir);
+  renderWeekly();
+}
+
+function fmtDayShort(dateStr) {
+  const d = parseYMD(dateStr);
+  if (!d) return dateStr;
+  return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+}
+
+function computeWeekly(offset) {
+  const curTo = addDays(today(), -offset * 7);
+  const curFrom = addDays(curTo, -6);
+  const prevTo = addDays(curFrom, -1);
+  const prevFrom = addDays(prevTo, -6);
+  const inRange = (d, from, to) => d >= from && d <= to;
+
+  const checkins = loadCheckins();
+  const symList = allCheckinSymptoms();
+  const scores = [];
+  symList.forEach(s => {
+    const vals = { cur: [], prev: [] };
+    Object.keys(checkins).forEach(d => {
+      const v = checkins[d] ? checkins[d][s.key] : null;
+      if (v == null) return;
+      if (inRange(d, curFrom, curTo)) vals.cur.push(v);
+      else if (inRange(d, prevFrom, prevTo)) vals.prev.push(v);
+    });
+    if (!vals.cur.length && !vals.prev.length) return;
+    const avg = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : null;
+    scores.push({ label: s.label, cur: avg(vals.cur), prev: avg(vals.prev), nCur: vals.cur.length });
+  });
+
+  // best / worst day by mean of that day's filled check-ins
+  const dayAvgs = [];
+  Object.keys(checkins).forEach(d => {
+    if (!inRange(d, curFrom, curTo)) return;
+    const vals = symList.map(s => checkins[d][s.key]).filter(v => v != null);
+    if (vals.length >= 3) dayAvgs.push({ date: d, avg: vals.reduce((x, y) => x + y, 0) / vals.length });
+  });
+  dayAvgs.sort((a, b) => b.avg - a.avg);
+
+  const entries = loadMigrated();
+  const cur = entries.filter(e => inRange(e.date, curFrom, curTo));
+  const prev = entries.filter(e => inRange(e.date, prevFrom, prevTo));
+  const curFoods = new Set(cur.map(e => e.food));
+  const prevFoods = new Set(prev.map(e => e.food));
+  const added = [...curFoods].filter(f => !prevFoods.has(f));
+  const dropped = [...prevFoods].filter(f => !curFoods.has(f));
+
+  let scored = 0, pending = 0;
+  cur.forEach(e => WINDOWS.forEach(w => {
+    const v = e.windows[w.key];
+    if (v === true || v === false) scored++;
+    else if (isWindowDue(e, w.key)) pending++;
+  }));
+
+  const checkinDays = Object.keys(checkins).filter(d => inRange(d, curFrom, curTo) &&
+    symList.some(s => checkins[d][s.key] != null)).length;
+
+  // new suspects: this week's window ✕ pattern clearly above the all-time baseline
+  const baseWin = {};
+  WINDOWS.forEach(w => { baseWin[w.key] = { p: 0, n: 0 }; });
+  entries.forEach(e => WINDOWS.forEach(w => {
+    const v = e.windows[w.key];
+    if (v === true) baseWin[w.key].p++;
+    else if (v === false) baseWin[w.key].n++;
+  }));
+  const byFood = {};
+  cur.forEach(e => {
+    const f = byFood[e.food] || (byFood[e.food] = {});
+    WINDOWS.forEach(w => {
+      const v = e.windows[w.key];
+      if (v === true || v === false) {
+        const s = f[w.key] || (f[w.key] = { p: 0, n: 0 });
+        v === true ? s.p++ : s.n++;
+      }
+    });
+  });
+  const suspects = [];
+  Object.keys(byFood).forEach(food => {
+    WINDOWS.forEach(w => {
+      const s = byFood[food][w.key];
+      if (!s || s.n < 3) return;
+      const tot = s.p + s.n;
+      const base = (baseWin[w.key].n + 1) / (baseWin[w.key].p + baseWin[w.key].n + 2);
+      const bayes = (s.n + 1) / (tot + 2);
+      if (bayes - base >= 0.15) suspects.push({ food, win: w.label, n: s.n, tot, rate: s.n / tot, base });
+    });
+  });
+  suspects.sort((a, b) => (b.rate - b.base) - (a.rate - a.base));
+
+  return {
+    curFrom, curTo, prevFrom, prevTo, scores,
+    best: dayAvgs[0] || null, worst: dayAvgs[dayAvgs.length - 1] || null,
+    mealsCur: cur.length, mealsPrev: prev.length,
+    scoredPct: (scored + pending) ? Math.round(scored / (scored + pending) * 100) : null,
+    checkinDays, added, dropped, suspects: suspects.slice(0, 6)
+  };
+}
+
+function weeklyDelta(cur, prev) {
+  if (cur == null || prev == null) return { txt: '', cls: '' };
+  const d = cur - prev;
+  if (Math.abs(d) < 0.15) return { txt: '→ steady', cls: 'flat' };
+  return d > 0 ? { txt: `▲ +${d.toFixed(1)}`, cls: 'up' } : { txt: `▼ ${d.toFixed(1)}`, cls: 'down' };
+}
+
+function renderWeekly() {
+  const el = document.getElementById('weekly-content');
+  const labelEl = document.getElementById('weekly-label');
+  if (!el) return;
+  const W = computeWeekly(_weekOffset);
+  const nextBtn = document.getElementById('weekly-next-btn');
+  if (nextBtn) nextBtn.disabled = _weekOffset === 0;
+  if (labelEl) labelEl.textContent = `${fmtDayShort(W.curFrom)} – ${fmtDayShort(W.curTo)}${_weekOffset === 0 ? ' (last 7 days)' : ''}`;
+
+  const f1 = v => v == null ? '—' : v.toFixed(1);
+  const rows = W.scores.map(s => {
+    const d = weeklyDelta(s.cur, s.prev);
+    return `<div class="weekly-row">
+      <span class="weekly-sym">${s.label}</span>
+      <span class="weekly-vals">${f1(s.prev)} → <strong>${f1(s.cur)}</strong></span>
+      <span class="weekly-delta ${d.cls}">${d.txt}</span>
+    </div>`;
+  }).join('');
+
+  el.innerHTML = `
+    <div class="card" style="margin-bottom:16px;">
+      <div class="quick-log-title">💓 Check-ins — previous week → this week (1 severe · 5 good)</div>
+      ${rows || '<div class="empty" style="padding:10px;">No check-ins in this period.</div>'}
+    </div>
+    <div class="summary-stats-grid" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin-bottom:16px;">
+      <div class="card weekly-stat"><div class="weekly-stat-num">${W.mealsCur}</div><div class="weekly-stat-lbl">items logged (prev ${W.mealsPrev})</div></div>
+      <div class="card weekly-stat"><div class="weekly-stat-num">${W.scoredPct == null ? '—' : W.scoredPct + '%'}</div><div class="weekly-stat-lbl">due windows scored</div></div>
+      <div class="card weekly-stat"><div class="weekly-stat-num">${W.checkinDays}/7</div><div class="weekly-stat-lbl">check-in days</div></div>
+      <div class="card weekly-stat"><div class="weekly-stat-num">${W.best ? W.best.avg.toFixed(1) : '—'}</div><div class="weekly-stat-lbl">best day ${W.best ? '· ' + fmtDayShort(W.best.date) : ''}</div></div>
+      <div class="card weekly-stat"><div class="weekly-stat-num">${W.worst ? W.worst.avg.toFixed(1) : '—'}</div><div class="weekly-stat-lbl">worst day ${W.worst ? '· ' + fmtDayShort(W.worst.date) : ''}</div></div>
+    </div>
+    ${W.suspects.length ? `
+    <div class="card" style="margin-bottom:16px;">
+      <div class="quick-log-title">🔺 New reaction patterns this week</div>
+      ${W.suspects.map(s => `<div class="verdict-why">• ${esc(s.food)} — ${s.win}: ${s.n} of ${s.tot} ✕ (${Math.round(s.rate * 100)}% vs ${Math.round(s.base * 100)}% baseline)</div>`).join('')}
+    </div>` : ''}
+    ${(W.added.length || W.dropped.length) ? `
+    <div class="card">
+      <div class="quick-log-title">🔄 Diet changes vs previous week</div>
+      ${W.added.length ? `<div class="verdict-why" style="margin-bottom:6px;"><strong>Added (${W.added.length}):</strong> ${W.added.slice(0, 10).map(esc).join(' · ')}${W.added.length > 10 ? ' …' : ''}</div>` : ''}
+      ${W.dropped.length ? `<div class="verdict-why"><strong>Removed (${W.dropped.length}):</strong> ${W.dropped.slice(0, 10).map(esc).join(' · ')}${W.dropped.length > 10 ? ' …' : ''}</div>` : ''}
+    </div>` : ''}
+  `;
+}
+
+function buildWeeklyText() {
+  const W = computeWeekly(_weekOffset);
+  const f1 = v => v == null ? '—' : v.toFixed(1);
+  const strip = s => s.replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}\u{200D}]/gu, '').trim();
+  const lines = [];
+  lines.push(`WEEKLY REPORT ${fmtDayShort(W.curFrom)} - ${fmtDayShort(W.curTo)} (vs ${fmtDayShort(W.prevFrom)} - ${fmtDayShort(W.prevTo)})`);
+  lines.push('');
+  lines.push('Check-ins (1 = severe, 5 = good), previous week -> this week:');
+  W.scores.forEach(s => {
+    const d = weeklyDelta(s.cur, s.prev);
+    lines.push(`  ${strip(s.label)}: ${f1(s.prev)} -> ${f1(s.cur)} ${d.txt.replace('▲', '(up').replace('▼', '(down').replace('→ steady', '(steady')}${d.txt ? ')' : ''}`);
+  });
+  lines.push('');
+  if (W.best)  lines.push(`Best day:  ${fmtDayShort(W.best.date)} (avg ${W.best.avg.toFixed(1)})`);
+  if (W.worst) lines.push(`Worst day: ${fmtDayShort(W.worst.date)} (avg ${W.worst.avg.toFixed(1)})`);
+  lines.push(`Logged: ${W.mealsCur} items (prev week ${W.mealsPrev}) · due windows scored: ${W.scoredPct == null ? '—' : W.scoredPct + '%'} · check-ins ${W.checkinDays}/7 days`);
+  if (W.suspects.length) {
+    lines.push('');
+    lines.push('New reaction patterns this week:');
+    W.suspects.forEach(s => lines.push(`  - ${strip(s.food)} — ${s.win}: ${s.n}/${s.tot} reactions (${Math.round(s.rate * 100)}% vs ${Math.round(s.base * 100)}% baseline)`));
+  }
+  if (W.added.length)   { lines.push(''); lines.push(`Added to diet: ${W.added.slice(0, 12).map(strip).join(', ')}${W.added.length > 12 ? ', …' : ''}`); }
+  if (W.dropped.length) { lines.push(`Removed from diet: ${W.dropped.slice(0, 12).map(strip).join(', ')}${W.dropped.length > 12 ? ', …' : ''}`); }
+  return lines.join('\n');
+}
+
+function copyWeeklyText() {
+  const text = buildWeeklyText();
+  const done = () => toast('Report copied — paste it anywhere 📋');
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(done).catch(() => fallbackCopy(text, done));
+  } else {
+    fallbackCopy(text, done);
+  }
+}
+function fallbackCopy(text, done) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.cssText = 'position:absolute; left:-9999px;';
+  document.body.appendChild(ta);
+  ta.select();
+  try { document.execCommand('copy'); done(); } catch (e) { alert(text); }
+  ta.remove();
+}
+
 // ─── Verdict Hub ─────────────────────────────────────────────────────────────
 // One combined judgement per food. Primary evidence: the per-entry reaction
 // windows (✓/✕) — the only signal that isolates a single food. Secondary:
@@ -7224,7 +7497,7 @@ function render() {
   renderPending(); renderHistory(); renderSummary(); renderCheckin();
   renderCorrelations(); renderBucketLoad(); renderTimeline(); renderFactors();
   renderHeatmap(); renderArchives(); renderQuickLog(); renderFavs(); renderBundles();
-  renderVerdicts(); renderTrends(); updateCheckinDot();
+  renderVerdicts(); renderWeekly(); renderTrends(); updateCheckinDot();
 }
 
 // ─── Symptom buttons HTML ─────────────────────────────────────────────────────
