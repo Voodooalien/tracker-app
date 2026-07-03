@@ -2320,6 +2320,30 @@ body.dark .learned-tag.proven { background: rgba(39,174,96,0.15); color: #4ADE80
 .learned-row-controls { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 select.learned-relabel { font-size: 11px !important; padding: 5px 20px 5px 8px !important; min-height: 30px; width: auto !important; margin-top: 0 !important; }
 
+/* ── Check-in reminder banner ── */
+.reminder-bar {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  max-width: 940px; margin: 10px auto 0; padding: 9px 14px;
+  background: #FDECEC; border: 1px solid #F5C4B3; border-radius: 9px;
+  font-size: 12.5px; line-height: 1.4;
+}
+.reminder-text { color: #993C1D; font-weight: 600; min-width: 0; }
+.reminder-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.reminder-fill {
+  background: var(--neg); color: #fff; border: none; border-radius: 999px;
+  padding: 6px 14px; font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+}
+.reminder-dismiss {
+  background: none; border: none; color: #993C1D; font-size: 14px;
+  cursor: pointer; padding: 4px 6px; opacity: 0.7;
+}
+.reminder-dismiss:hover { opacity: 1; }
+body.dark .reminder-bar { background: rgba(231,76,60,0.13); border-color: rgba(231,76,60,0.3); }
+body.dark .reminder-text, body.dark .reminder-dismiss { color: #F5A78F; }
+@media (max-width: 640px) {
+  .reminder-bar { margin: 8px 10px 0; flex-wrap: wrap; }
+}
+
 /* ── Timeline: enhanced-view flags ── */
 .tl-flag { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 999px; white-space: nowrap; }
 .tl-flag.tl-staple { background: var(--bg); color: var(--muted); border: 1px solid var(--border); }
@@ -2500,9 +2524,12 @@ body.dark.visual-theme-ocean { --muted: #7FB5D1; }
     <button onclick="showTab('corr',this)" style="border: 1px dashed rgba(255,255,255,0.3);">Correlations</button>
     <button onclick="showTab('Exp',this)" style="border: 1px dashed rgba(255,255,255,0.3);">Bucket</button>
     
-    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v51</span>
+    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v52</span>
   </div>
 </nav>
+
+<!-- Check-in reminder banner (filled by renderCheckinReminder) -->
+<div id="checkin-reminder" style="display:none;"></div>
 
 <!-- ═══ LOG TAB ═══ -->
 <div id="tab-log" class="tab-content">
@@ -3622,6 +3649,51 @@ function getBulkTargets(entries, entry) {
   if (!_bulkMode || !entry) return [entry];
   const mealKey = entry.mealType || '';
   return entries.filter(e => (e.mealType || '') === mealKey && hasPending(e));
+}
+
+// ─── Check-in reminder banner ────────────────────────────────────────────────
+// Everything downstream (Verdicts, Trials, Weekly, Learned) is scored against
+// daily check-ins — this nags on the next app open when one is missing.
+function checkinIsEmpty(dateStr) {
+  const day = loadCheckins()[dateStr];
+  if (!day) return true;
+  return !allCheckinSymptoms().some(s => day[s.key] != null);
+}
+function reminderTarget() {
+  const yd = addDays(today(), -1);
+  if (checkinIsEmpty(yd)) return yd;
+  if (new Date().getHours() >= 18 && checkinIsEmpty(today())) return today();
+  return null;
+}
+function dismissCheckinReminder(target) {
+  localStorage.setItem('fst_reminder_dismissed', target);
+  renderCheckinReminder();
+}
+function openCheckinFor(target) {
+  const btn = document.getElementById('nav-checkin-btn');
+  showTab('checkin', btn);
+  setCheckinDate(target);
+  window.scrollTo(0, 0);
+}
+function renderCheckinReminder() {
+  const el = document.getElementById('checkin-reminder');
+  if (!el) return;
+  const target = reminderTarget();
+  if (!target || localStorage.getItem('fst_reminder_dismissed') === target) {
+    el.style.display = 'none';
+    el.innerHTML = '';
+    return;
+  }
+  const label = target === today() ? "Today's" : "Yesterday's";
+  el.style.display = '';
+  el.innerHTML = `
+    <div class="reminder-bar">
+      <span class="reminder-text">💓 ${label} check-in is empty — your verdicts and trials depend on it.</span>
+      <span class="reminder-actions">
+        <button class="reminder-fill" onclick="openCheckinFor('${target}')">Fill now</button>
+        <button class="reminder-dismiss" onclick="dismissCheckinReminder('${target}')" title="Hide this reminder for ${label.toLowerCase()} check-in">✕</button>
+      </span>
+    </div>`;
 }
 
 // ─── Check-in missing dot ────────────────────────────────────────────────────
@@ -8282,6 +8354,7 @@ function render() {
   renderCorrelations(); renderBucketLoad(); renderTimeline(); renderFactors();
   renderHeatmap(); renderArchives(); renderQuickLog(); renderFavs(); renderBundles();
   renderVerdicts(); renderExperiments(); renderLearned(); renderWeekly(); renderTrends(); updateCheckinDot();
+  renderCheckinReminder();
 }
 
 // ─── Symptom buttons HTML ─────────────────────────────────────────────────────
