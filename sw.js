@@ -6,20 +6,26 @@
  * All user data lives in localStorage/IndexedDB on the device — the SW only
  * caches the app shell.
  */
-const VERSION = 'v1';
+const VERSION = 'v2';
 const SHELL_CACHE = 'fst-shell-' + VERSION;
 const ASSET_CACHE = 'fst-assets-' + VERSION;
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(ASSET_CACHE).then((cache) =>
-      cache.addAll([
-        './manifest.webmanifest',
-        './icons/icon-192.png',
-        './icons/icon-512.png',
-        './icons/icon-512-maskable.png'
-      ]).catch(() => {}) // icons missing must not brick install
-    ).then(() => self.skipWaiting())
+    Promise.all([
+      caches.open(ASSET_CACHE).then((cache) =>
+        cache.addAll([
+          './manifest.webmanifest',
+          './icons/icon-192.png',
+          './icons/icon-512.png',
+          './icons/icon-512-maskable.png'
+        ]).catch(() => {}) // icons missing must not brick install
+      ),
+      // Precache the app page itself: a user who installs on first visit and
+      // next opens offline used to get a network error (nothing had populated
+      // SHELL_CACHE yet).
+      caches.open(SHELL_CACHE).then((cache) => cache.add('./').catch(() => {}))
+    ]).then(() => self.skipWaiting())
   );
 });
 
@@ -43,8 +49,12 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       fetch(req)
         .then((res) => {
-          const copy = res.clone();
-          caches.open(SHELL_CACHE).then((c) => c.put(req, copy));
+          // never cache an error page as the app shell — a transient 404/500
+          // would otherwise be served on every offline launch
+          if (res && res.ok) {
+            const copy = res.clone();
+            caches.open(SHELL_CACHE).then((c) => c.put(req, copy));
+          }
           return res;
         })
         .catch(() =>

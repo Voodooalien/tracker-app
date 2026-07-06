@@ -65,7 +65,6 @@
   body.dark .ac-item:hover, body.dark .ac-item.highlighted { background: var(--bg); }
   body.dark .autocomplete-dropdown { background: #1e2630; border-color: var(--navy); }
   body.dark .entry-date-badge { background: var(--bg); }
-  body.dark .fav-chip { background: var(--card); }
   body.dark .rbtn { background: var(--card); }
   body.dark .sym-btn { background: var(--card); }
   body.dark #edit-modal, body.dark #notes-modal,
@@ -630,23 +629,6 @@
     background: #FFFDE7; border: 1px solid #FFF176; margin-bottom: 14px; line-height: 1.6;
   }
 
-  /* ── Favorites bar ── */
-  .fav-bar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-  .fav-chip {
-    display: inline-flex; align-items: center; gap: 5px;
-    padding: 6px 13px; border-radius: 20px; border: 1.5px solid var(--border);
-    background: #fff; font-size: 13px; font-weight: 600; cursor: pointer;
-    transition: all .15s; white-space: nowrap;
-  }
-  .fav-chip:hover { border-color: var(--navy); background: var(--bg); box-shadow: 0 2px 6px rgba(0,0,0,.07); }
-  .fav-chip-x { font-size: 10px; color: #ccc; cursor: pointer; margin-left: 2px; transition: color .1s; }
-  .fav-chip-x:hover { color: var(--neg); }
-  .fav-star {
-    background: none; border: none; font-size: 15px; cursor: pointer;
-    padding: 2px 4px; border-radius: 4px; transition: all .12s; line-height: 1; opacity: .4;
-  }
-  .fav-star:hover { opacity: 1; background: var(--bg); }
-  .fav-star.on { opacity: 1; }
 
   /* ── Window-ready glow animation ── */
   @keyframes winGlow {
@@ -2340,6 +2322,13 @@ select.learned-relabel { font-size: 11px !important; padding: 5px 20px 5px 8px !
 .reminder-dismiss:hover { opacity: 1; }
 body.dark .reminder-bar { background: rgba(231,76,60,0.13); border-color: rgba(231,76,60,0.3); }
 body.dark .reminder-text, body.dark .reminder-dismiss { color: #F5A78F; }
+/* amber variant: backup-age nag */
+.reminder-bar.backup { background: #FAEEDA; border-color: #FAC775; }
+.reminder-bar.backup .reminder-text { color: #854F0B; }
+.reminder-bar.backup .reminder-fill { background: #BA7517; }
+.reminder-bar.backup .reminder-dismiss { color: #854F0B; }
+body.dark .reminder-bar.backup { background: rgba(239,159,39,0.12); border-color: rgba(239,159,39,0.3); }
+body.dark .reminder-bar.backup .reminder-text, body.dark .reminder-bar.backup .reminder-dismiss { color: #FAC775; }
 @media (max-width: 640px) {
   .reminder-bar { margin: 8px 10px 0; flex-wrap: wrap; }
 }
@@ -2501,35 +2490,40 @@ body.dark.visual-theme-ocean { --muted: #7FB5D1; }
 </header>
 
 <nav style="display: flex; align-items: center; flex-wrap: wrap; gap: 4px;">
-  
+
   <div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">
     <button class="active" id="nav-checkin-btn" onclick="showTab('checkin',this)" style="color: #FDECEC;">💓 Vitals<span id="checkin-dot" class="nav-dot" style="display:none;"></span>
     </button>
     <span class="nav-sep" aria-hidden="true"></span>
     <button onclick="showTab('log',this)" style="color: #FDECEC; ">📑 Logs</button>
     <button onclick="showTab('history',this)" style="color: #FDECEC; ">📦 History</button>
+    <button onclick="showTab('archives2',this)" style="color: #FDECEC; ">📖 Diary</button>
+    <button onclick="showTab('verdicts',this)" style="color: #FDECEC; ">⚖️ Verdicts</button>
+    <button onclick="showTab('summary',this)" style="color: #FDECEC; ">📋 Summary</button>
+    <button onclick="showTab('weekly',this)" style="color: #FDECEC; ">📅 Weekly</button>
+    <button id="nav-more-btn" onclick="toggleNavMore()" title="Analysis, Timeline, Trials and more" style="color: #FDECEC; border: 1px dashed rgba(255,255,255,0.4);">⋯ More</button>
+  </div>
+
+  <div style="margin-left: auto; display: flex; align-items: center; gap: 4px;">
+    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v54</span>
+  </div>
+
+  <div id="nav-more-tray" style="display:none; flex-basis:100%; flex-wrap:wrap; gap:4px; padding-top:6px; margin-top:4px; border-top:1px dashed rgba(255,255,255,0.18);">
     <button onclick="showTab('Timeline',this)" style="color: #FDECEC; ">⏱️ Timeline</button>
     <button onclick="showTab('factors',this)" style="color: #FDECEC; ">🧪 Factors</button>
-    <button onclick="showTab('archives2',this)" style="color: #FDECEC; ">📖 Diary</button>
     <button onclick="showTab('analysis',this)" style="color: #FDECEC; ">📊 Analysis</button>
-    <button onclick="showTab('summary',this)" style="color: #FDECEC; ">📋 Summary</button>
-    <button onclick="showTab('verdicts',this)" style="color: #FDECEC; ">⚖️ Verdicts</button>
-    <button onclick="showTab('experiments',this)" style="color: #FDECEC; ">🧪 Trials</button>
     <button onclick="showTab('learned',this)" style="color: #FDECEC; ">📓 Learned</button>
-    <button onclick="showTab('weekly',this)" style="color: #FDECEC; ">📅 Weekly</button>
-  </div>
-  
-  <div style="margin-left: auto; display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">
+    <button onclick="showTab('experiments',this)" style="color: #FDECEC; ">🧪 Trials</button>
     <button onclick="showTab('lab',this)" style="border: 1px dashed rgba(255,255,255,0.4);">🛠️ Lab</button>
     <button onclick="showTab('corr',this)" style="border: 1px dashed rgba(255,255,255,0.3);">Correlations</button>
     <button onclick="showTab('Exp',this)" style="border: 1px dashed rgba(255,255,255,0.3);">Bucket</button>
-    
-    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v52</span>
   </div>
 </nav>
 
 <!-- Check-in reminder banner (filled by renderCheckinReminder) -->
 <div id="checkin-reminder" style="display:none;"></div>
+<!-- Backup-age nag (filled by renderBackupNag) -->
+<div id="backup-nag" style="display:none;"></div>
 
 <!-- ═══ LOG TAB ═══ -->
 <div id="tab-log" class="tab-content">
@@ -2659,7 +2653,6 @@ html body select.status-badge-select.status-blacklist {
 
   <div id="quick-log-card" style="background:var(--card); border:1px solid var(--border); border-radius:12px; padding:14px 16px; box-shadow:0 8px 24px rgba(0,0,0,0.04); margin-bottom:20px; display:none;"></div>
 
-  <div id="favs-section"></div>
 
   <div style="background:var(--card); border:1px solid var(--border); border-top:4px solid #18507f; border-radius:12px; padding:16px 20px; box-shadow:0 8px 24px rgba(0,0,0,0.04); margin-bottom:24px; position:relative; overflow:visible;">
 
@@ -2737,7 +2730,7 @@ html body select.status-badge-select.status-blacklist {
       A controlled test the app scores for you. <b>Avoid</b> one food for a few days while it watches your check-in scores against your recent baseline, then optionally <b>reintroduce</b> it to confirm. Because you log everything, it can verify you actually stuck to the trial.
     </div>
     <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-      <input type="text" id="exp-food-input" list="exp-food-list" placeholder="Food to test (type or pick)..." style="flex:1; min-width:180px;">
+      <input type="text" id="exp-food-input" list="exp-food-list" placeholder="Food to test (type or pick)..." style="flex:1; min-width:180px;" onkeydown="if(event.key==='Enter'){event.preventDefault();startExperimentFromInput();}">
       <datalist id="exp-food-list"></datalist>
       <button class="btn-primary" onclick="startExperimentFromInput()" style="padding:9px 16px; font-size:13px;">Start trial</button>
     </div>
@@ -2839,10 +2832,6 @@ html body select.status-badge-select.status-blacklist {
 
 
 <!-- ═══ DIARY TAB ═══ -->
-<div id="tab-archives" class="tab-content">
-<main>
-  <p class="section-title">Diary</p>
-  <div id="archives-wrap"></div>
 </main>
 </div>
 
@@ -3217,6 +3206,10 @@ html body select.status-badge-select.status-blacklist {
       <label>Time Logged</label>
       <input type="time" id="edit-time">
     </div>
+    <div class="form-group">
+      <label>Date</label>
+      <input type="date" id="edit-date">
+    </div>
     <div id="rename-note-wrap"></div>
     <div class="modal-actions">
       <button class="btn-rename-all" id="btn-rename-all" onclick="saveEdit(true)"></button>
@@ -3339,18 +3332,41 @@ window.__fstStorageReady = (function () {
   window.addEventListener('pagehide', flushNow);
   document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') flushNow(); });
 
+  // Cross-tab sync: with two open instances (installed PWA + a browser tab),
+  // each tab's _mem snapshots boot state — without this, a stale tab's next
+  // whole-array save clobbers everything the other tab wrote this session.
+  // 'storage' fires only in OTHER tabs, so there is no echo. A null newValue
+  // also occurs when the writer dropped an oversized key from localStorage
+  // (IndexedDB still carries it), so only non-null updates are taken.
+  window.addEventListener('storage', function (e) {
+    if (!e.key || e.newValue === null || e.storageArea !== LS) return;
+    if (_mem[e.key] === e.newValue) return;
+    _mem[e.key] = e.newValue;
+    delete _putQ[e.key]; delete _delQ[e.key]; // the writing tab owns the IndexedDB write
+    if (typeof window.__fstExternalChange === 'function') window.__fstExternalChange(e.key);
+  });
+
+  // Block interaction until the reconcile finishes: a tap in the first
+  // ~100ms could run an inline onclick that read a pre-reconcile store
+  // (missing IDB-only overflow keys) and saved a truncated copy back over it.
+  try { document.body.style.pointerEvents = 'none'; } catch (e) {}
+
   return new Promise(function (resolve) {
+    function done(ok) {
+      try { document.body.style.pointerEvents = ''; } catch (e) {}
+      resolve(ok);
+    }
     let req;
     try { req = indexedDB.open(KV_DB, 1); }
-    catch (e) { console.warn('IndexedDB unavailable — localStorage only', e); return resolve(false); }
+    catch (e) { console.warn('IndexedDB unavailable — localStorage only', e); return done(false); }
     req.onupgradeneeded = function () { req.result.createObjectStore(KV_STORE); };
-    req.onerror = function () { console.warn('IndexedDB open failed — localStorage only', req.error); resolve(false); };
+    req.onerror = function () { console.warn('IndexedDB open failed — localStorage only', req.error); done(false); };
     req.onsuccess = function () {
       _db = req.result;
       const idb = {};
       let cur;
       try { cur = _db.transaction(KV_STORE).objectStore(KV_STORE).openCursor(); }
-      catch (e) { return resolve(false); }
+      catch (e) { return done(false); }
       cur.onsuccess = function (e) {
         const c = e.target.result;
         if (c) { idb[c.key] = c.value; c.continue(); return; }
@@ -3359,9 +3375,9 @@ window.__fstStorageReady = (function () {
         for (const k in idb) { if (!Object.prototype.hasOwnProperty.call(_mem, k)) _mem[k] = idb[k]; }
         for (const k in _mem) { if (idb[k] !== _mem[k]) _putQ[k] = _mem[k]; }
         if (Object.keys(_putQ).length) flush();
-        resolve(true);
+        done(true);
       };
-      cur.onerror = function () { resolve(false); };
+      cur.onerror = function () { done(false); };
     };
   });
 })();
@@ -3431,11 +3447,17 @@ const BUILTIN_SYMPTOMS = [
 ];
 
 // ─── Storage ─────────────────────────────────────────────────────────────────
+// Parsing ~1 MB of entries at 45 call sites (some renders 2-3× each) was the
+// main tab-switch cost on the phone. Memoized on the exact raw string: any
+// setItem('fst_entries') — save(), import, snapshot restore, or a cross-tab
+// update — stores a new string and misses the memo. Callers mutate the
+// returned objects and save() in the same tick, so sharing the array is safe.
+let _entriesMemoRaw = null, _entriesMemo = null;
 function load() {
   try { return JSON.parse(localStorage.getItem('fst_entries') || '[]'); }
   catch { return []; }
 }
-function save(entries) { 
+function save(entries) {
   const optimized = entries.map(e => {
     const clone = { ...e };
     
@@ -3466,8 +3488,14 @@ function save(entries) {
     
     return clone;
   });
-  
-  localStorage.setItem('fst_entries', JSON.stringify(optimized)); 
+
+  const json = JSON.stringify(optimized);
+  localStorage.setItem('fst_entries', json);
+  // Keep the memo warm: the passed array IS the current state (stripped
+  // fields behave identically to re-migrated ones), so the next loadMigrated
+  // can skip the 1 MB reparse.
+  _entriesMemo = entries;
+  _entriesMemoRaw = json;
 }
 
 function loadCustomSyms() {
@@ -3490,11 +3518,20 @@ function migrate(entry) {
   BUILTIN_SYMPTOMS.forEach(s => {
     if (entry.symptoms[s.key] === undefined) entry.symptoms[s.key] = false;
   });
+  // Hand-edited/imported/ghost entries without a windows object must not
+  // crash hasPending()/winButtonsHTML — absent keys read as "unmarked".
+  if (!entry.windows) entry.windows = {};
   if (!entry.mealType) entry.mealType = '';
   if (!entry.logTime) entry.logTime = '';
   return entry;
 }
-function loadMigrated() { return load().map(migrate); }
+function loadMigrated() {
+  const raw = localStorage.getItem('fst_entries') || '[]';
+  if (_entriesMemo !== null && raw === _entriesMemoRaw) return _entriesMemo;
+  _entriesMemo = load().map(migrate);
+  _entriesMemoRaw = raw;
+  return _entriesMemo;
+}
 
 // ─── All symptoms (builtin + custom) ─────────────────────────────────────────
 function allSymptoms() {
@@ -3519,7 +3556,7 @@ function toast(msg) {
   setTimeout(() => t.classList.remove('show'), 2200);
 }
 function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-function escAttr(s) { return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function escAttr(s) { return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function hasPending(e) { return WINDOWS.some(w => e.windows[w.key] === null || e.windows[w.key] === undefined); }
 function mealBadgeHTML(mt) {
   if (!mt) return '';
@@ -3543,11 +3580,13 @@ function saveLastMealType(mealType) {
 // ─── State variables (must be declared before render()) ──────────────────────
 let _histFilter  = 'today';
 let _editId      = null, _editOriginalFood = null;
-let _trendActive = JSON.parse(localStorage.getItem('fst_trend_active')) || null;
+let _trendActive = null; // guarded: a corrupted value here used to kill the whole boot
+try { _trendActive = JSON.parse(localStorage.getItem('fst_trend_active')) || null; } catch (e) {}
 let _notesFood   = null;
 let _archiveNoteTarget = null; // { sectionId, entryId } | null
 let _ciSymState  = null; // null | { mode:'add'|'edit', key:string|null, emoji:string, name:string }
 let _checkinDate = null; // null = defaults to today() on first render
+let _checkinDateManual = false; // true only when the user explicitly picked a date
 let _summaryRange = 'all';
 let _summaryMinLogs = 1;
 let _summaryCustomFrom = '';
@@ -3617,11 +3656,23 @@ function getSevenDayTrend(symKey, dateStr) {
 
 // ─── Tab navigation ──────────────────────────────────────────────────────────
 // ─── Tab navigation ──────────────────────────────────────────────────────────
+// Tabs that live in the collapsible "⋯ More" tray — the More button itself
+// lights up when one of these is active, and the tray closes after any pick.
+const MORE_TABS = ['Timeline', 'factors', 'analysis', 'learned', 'experiments', 'lab', 'corr', 'Exp'];
+function toggleNavMore(force) {
+  const tray = document.getElementById('nav-more-tray');
+  if (!tray) return;
+  const show = force !== undefined ? force : tray.style.display === 'none';
+  tray.style.display = show ? 'flex' : 'none';
+}
 function showTab(name, btn) {
   document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
   document.getElementById('tab-' + name).classList.add('active');
-  btn.classList.add('active');
+  if (btn) btn.classList.add('active');
+  const moreBtn = document.getElementById('nav-more-btn');
+  if (moreBtn) moreBtn.classList.toggle('active', MORE_TABS.includes(name));
+  toggleNavMore(false);
   
   // INSTANT SYNC: Update clock ONLY if the food input is empty (starting a fresh entry)
   if (name === 'log' && !document.getElementById('inp-food').value.trim()) {
@@ -3648,7 +3699,12 @@ function toggleBulkMode() {
 function getBulkTargets(entries, entry) {
   if (!_bulkMode || !entry) return [entry];
   const mealKey = entry.mealType || '';
-  return entries.filter(e => (e.mealType || '') === mealKey && hasPending(e));
+  // Same MEAL only: same date + same meal type. The old filter spanned every
+  // date in storage, so one tap could rewrite weeks of history — and because
+  // it also required hasPending, a fully-marked clicked entry was excluded
+  // from its own bulk action while everything else changed.
+  const group = entries.filter(e => e.date === entry.date && (e.mealType || '') === mealKey);
+  return group.length ? group : [entry];
 }
 
 // ─── Check-in reminder banner ────────────────────────────────────────────────
@@ -3659,14 +3715,24 @@ function checkinIsEmpty(dateStr) {
   if (!day) return true;
   return !allCheckinSymptoms().some(s => day[s.key] != null);
 }
+function isReminderDismissed(target) {
+  // Dismissals expire at midnight: storing only the target date meant
+  // dismissing tonight's "Today" banner pre-dismissed tomorrow morning's
+  // "Yesterday" banner for the same date.
+  return localStorage.getItem('fst_reminder_dismissed') === target + '|' + today();
+}
 function reminderTarget() {
+  if (!Object.keys(loadCheckins()).length) return null; // brand-new device: nothing to nag about
+  const candidates = [];
   const yd = addDays(today(), -1);
-  if (checkinIsEmpty(yd)) return yd;
-  if (new Date().getHours() >= 18 && checkinIsEmpty(today())) return today();
-  return null;
+  if (checkinIsEmpty(yd)) candidates.push(yd);
+  if (new Date().getHours() >= 18 && checkinIsEmpty(today())) candidates.push(today());
+  // Skip dismissed candidates instead of returning them: with yesterday
+  // dismissed, the after-18:00 nag for today must still be able to fire.
+  return candidates.find(c => !isReminderDismissed(c)) || null;
 }
 function dismissCheckinReminder(target) {
-  localStorage.setItem('fst_reminder_dismissed', target);
+  localStorage.setItem('fst_reminder_dismissed', target + '|' + today());
   renderCheckinReminder();
 }
 function openCheckinFor(target) {
@@ -3678,8 +3744,8 @@ function openCheckinFor(target) {
 function renderCheckinReminder() {
   const el = document.getElementById('checkin-reminder');
   if (!el) return;
-  const target = reminderTarget();
-  if (!target || localStorage.getItem('fst_reminder_dismissed') === target) {
+  const target = reminderTarget(); // already skips dismissed candidates
+  if (!target) {
     el.style.display = 'none';
     el.innerHTML = '';
     return;
@@ -3692,6 +3758,43 @@ function renderCheckinReminder() {
       <span class="reminder-actions">
         <button class="reminder-fill" onclick="openCheckinFor('${target}')">Fill now</button>
         <button class="reminder-dismiss" onclick="dismissCheckinReminder('${target}')" title="Hide this reminder for ${label.toLowerCase()} check-in">✕</button>
+      </span>
+    </div>`;
+}
+
+// ─── Backup-age nag ──────────────────────────────────────────────────────────
+// Snapshots and IndexedDB live on this device and die with it — a file export
+// is the only off-device copy, so its age is worth nagging about.
+const BACKUP_NAG_AFTER_DAYS = 7;
+function daysSinceLastBackup() {
+  const ts = Number(localStorage.getItem('fst_last_backup') || 0);
+  if (!ts) return null; // never recorded on this device
+  return Math.floor((Date.now() - ts) / 86400000);
+}
+function snoozeBackupNag() {
+  localStorage.setItem('fst_backup_nag_snooze', addDays(today(), 3));
+  renderBackupNag();
+  toast('Backup reminder snoozed for 3 days');
+}
+function renderBackupNag() {
+  const el = document.getElementById('backup-nag');
+  if (!el) return;
+  // don't nag a brand-new device about backing up nothing
+  const hasData = loadMigrated().length > 50 || Object.keys(loadCheckins()).length > 7;
+  const snoozedUntil = localStorage.getItem('fst_backup_nag_snooze') || '';
+  const days = daysSinceLastBackup();
+  const due = hasData && (days === null || days > BACKUP_NAG_AFTER_DAYS) && !(snoozedUntil && today() < snoozedUntil);
+  if (!due) { el.style.display = 'none'; el.innerHTML = ''; return; }
+  const msg = days === null
+    ? 'No full backup recorded on this device yet — exports are your only off-device copy.'
+    : `Last full backup: ${days} days ago — exports are your only off-device copy.`;
+  el.style.display = '';
+  el.innerHTML = `
+    <div class="reminder-bar backup">
+      <span class="reminder-text">💾 ${msg}</span>
+      <span class="reminder-actions">
+        <button class="reminder-fill" onclick="exportCSV()">Export now</button>
+        <button class="reminder-dismiss" onclick="snoozeBackupNag()" title="Snooze for 3 days">✕</button>
       </span>
     </div>`;
 }
@@ -3850,9 +3953,22 @@ function markReaction(id, winKey, value) {
   if (!entry) return;
   const targets = getBulkTargets(entries, entry);
   const nextValue = (entry.windows[winKey] === value) ? null : value;
-  targets.forEach(target => { target.windows[winKey] = nextValue; });
+  const changes = [];
+  targets.forEach(target => {
+    const cur = target.windows[winKey];
+    if (target !== entry) {
+      // Bulk fills the rest of the meal group but never overwrites a window
+      // that was already marked, and un-toggling clears only the clicked entry.
+      if (nextValue === null) return;
+      if (cur !== null && cur !== undefined) return;
+    }
+    if (cur === nextValue) return;
+    changes.push({ id: target.id, winKey, prev: cur === undefined ? null : cur });
+    target.windows[winKey] = nextValue;
+  });
   save(entries);
   render();
+  if (_bulkMode && changes.length > 1) startUndo({ type: 'bulkwin', changes }, `Marked ${changes.length} entries in this meal group`);
 }
 
 // ─── "✓ All due" bulk marking ────────────────────────────────────────────────
@@ -3863,7 +3979,12 @@ function isWindowDue(entry, winKey) {
   // window is NOT due at 7am just because the calendar flipped.
   const el = elapsedHoursSince(entry.date, entry.logTime);
   if (el !== null) return el >= WIN_GLOW_AT[winKey];
-  return entry.date < today(); // no log time: only fully-past days are safely due
+  // No log time: assume the latest possible moment of that day (23:59), so a
+  // window counts as due only once it has fully elapsed no matter when the
+  // food was actually eaten. The old date<today rule declared a 23:50 entry's
+  // 14-17h window "due" ten minutes later at midnight.
+  const worstCase = elapsedHoursSince(entry.date, '23:59');
+  return worstCase !== null && worstCase >= WIN_GLOW_AT[winKey];
 }
 
 function listDuePending() {
@@ -3935,35 +4056,9 @@ function deleteCustomSym(key) {
   renderSymptomManager();
   toast('Custom symptom removed');
 }
-function renameCustomSym(oldKey, newLabel) {
-  newLabel = (newLabel || '').trim();
-  if (!newLabel) return;
-  const newKey = 'c_' + newLabel.toLowerCase().replace(/\s+/g,'_').replace(/[^a-z0-9_]/g,'');
-  const customs = loadCustomSyms();
-  if (customs.find(s => s.key === newKey && s.key !== oldKey)) {
-    toast('A custom symptom with that name already exists');
-    return;
-  }
-  const sym = customs.find(s => s.key === oldKey);
-  if (!sym) return;
-  const oldLabel = sym.label;
-  sym.label = newLabel;
-  sym.key = newKey;
-  saveCustomSyms(customs);
-
-  const entries = loadMigrated();
-  entries.forEach(e => {
-    if (e.symptoms && Object.prototype.hasOwnProperty.call(e.symptoms, oldKey)) {
-      const val = e.symptoms[oldKey];
-      delete e.symptoms[oldKey];
-      e.symptoms[newKey] = val;
-    }
-  });
-  save(entries);
-  render();
-  renderSymptomManager();
-  toast(`Renamed "${oldLabel}" to "${newLabel}"`);
-}
+// (renameCustomSym — the key-migrating rename — had zero callers and was
+//  deleted in v53; the Symptom Manager's Rename intentionally changes the
+//  LABEL only, which keeps historical entry keys stable.)
 
 // ─── Dark / Light mode ───────────────────────────────────────────────────────
 function toggleTheme() {
@@ -4048,6 +4143,9 @@ function openEditModal(id) {
   document.getElementById('edit-food').value  = entry.food;
   document.getElementById('edit-meal').value  = entry.mealType || '';
   document.getElementById('edit-time').value  = entry.logTime || '';
+  const editDate = document.getElementById('edit-date');
+  editDate.value = entry.date || today();
+  editDate.max = today(); // a wrong date used to require delete + re-log, losing window marks
   const matchCount = entries.filter(e => e.food === entry.food).length;
   const btnAll = document.getElementById('btn-rename-all');
   const btnOne = document.getElementById('btn-rename-one');
@@ -4073,39 +4171,62 @@ function saveEdit(renameAll) {
   const newFood     = document.getElementById('edit-food').value.trim();
   const newMealType = document.getElementById('edit-meal').value;
   const newLogTime  = document.getElementById('edit-time').value;
+  const newDateRaw  = document.getElementById('edit-date').value;
+  const newDate     = /^\d{4}-\d{2}-\d{2}$/.test(newDateRaw) ? newDateRaw : null;
   if (!newFood) { document.getElementById('edit-food').focus(); return; }
-  
+
   const entries = loadMigrated();
   let changed = 0;
-  
+
   entries.forEach(e => {
     if (renameAll ? e.food === _editOriginalFood : e.id === _editId) {
       // 1. Everyone in the target group gets the new food name
       e.food = newFood;
-      
-      // 2. ONLY the specific entry you clicked "Edit" on gets the time and meal updated!
+
+      // 2. ONLY the specific entry you clicked "Edit" on gets time/meal/date updated!
       if (e.id === _editId) {
         e.mealType = newMealType;
         e.logTime = newLogTime;
+        if (newDate) e.date = newDate;
       }
-      
+
       changed++;
     }
   });
   save(entries);
 
-  // Migrate food notes to new name if it changed
+  // Migrate EVERYTHING keyed by the old food name once it's fully retired —
+  // notes were moved but status labels, bundle items and trials
+  // silently kept pointing at the dead name.
   if (newFood !== _editOriginalFood) {
-    const notes = loadFoodNotes();
-    const oldNote = notes[_editOriginalFood];
-    if (oldNote !== undefined) {
-      // Move note only if renaming all entries (old name fully retired)
-      // or if this is the last/only entry with the old name
-      const remainingOld = entries.filter(e => e.food === _editOriginalFood).length;
-      if (renameAll || remainingOld === 0) {
-        notes[newFood] = notes[newFood] || oldNote; // don't overwrite if new name already has a note
+    const remainingOld = entries.filter(e => e.food === _editOriginalFood).length;
+    if (renameAll || remainingOld === 0) {
+      const notes = loadFoodNotes();
+      const oldNote = notes[_editOriginalFood];
+      if (oldNote !== undefined) {
+        // merge rather than discard when both names carry a note
+        notes[newFood] = notes[newFood] && notes[newFood] !== oldNote
+          ? notes[newFood] + '\n———\n' + oldNote
+          : (notes[newFood] || oldNote);
         delete notes[_editOriginalFood];
         saveFoodNotes(notes);
+      }
+      const status = loadFoodStatus();
+      if (status[_editOriginalFood] !== undefined) {
+        status[newFood] = status[newFood] || status[_editOriginalFood];
+        delete status[_editOriginalFood];
+        saveFoodStatus(status);
+      }
+      const bundles = loadBundles();
+      let bundleChanged = false;
+      bundles.forEach(b => {
+        b.items = (b.items || []).map(s => { if (s === _editOriginalFood) { bundleChanged = true; return newFood; } return s; });
+      });
+      if (bundleChanged) saveBundles(bundles);
+      const exps = loadExperiments();
+      if (exps.some(x => normFood(x.food) === normFood(_editOriginalFood))) {
+        exps.forEach(x => { if (normFood(x.food) === normFood(_editOriginalFood)) x.food = newFood; });
+        saveExperiments(exps);
       }
     }
   }
@@ -4142,31 +4263,13 @@ function changeFoodStatus(food, newStatus) {
 
 // ─── Archives storage ────────────────────────────────────────────────────────
 function loadArchives() {
-  try { return JSON.parse(localStorage.getItem('fst_archives') || '[]'); }
+  // Array.isArray guard: a corrupted value that parses to a non-array used to
+  // throw inside renderDiary2 and take the whole render() down with it.
+  try { const v = JSON.parse(localStorage.getItem('fst_archives') || '[]'); return Array.isArray(v) ? v : []; }
   catch { return []; }
 }
 function saveArchives(arr) { localStorage.setItem('fst_archives', JSON.stringify(arr)); }
 
-function loadArchiveUiState() {
-  try { return JSON.parse(localStorage.getItem('fst_archive_ui_state') || '{}'); }
-  catch { return {}; }
-}
-function saveArchiveUiState(obj) { localStorage.setItem('fst_archive_ui_state', JSON.stringify(obj)); }
-function isArchiveExpanded(kind, entryId) {
-  const ui = loadArchiveUiState();
-  return !!(ui[kind] && ui[kind][entryId]);
-}
-function setArchiveExpanded(kind, entryId, expanded) {
-  const ui = loadArchiveUiState();
-  if (!ui[kind]) ui[kind] = {};
-  if (expanded) ui[kind][entryId] = true;
-  else delete ui[kind][entryId];
-  saveArchiveUiState(ui);
-}
-function toggleArchiveExpand(kind, entryId) {
-  setArchiveExpanded(kind, entryId, !isArchiveExpanded(kind, entryId));
-  renderArchives();
-}
 function normalizeArchiveEntry(ent) {
   const entry = ent && typeof ent === 'object' ? ent : {};
   if (!Array.isArray(entry.checklist)) entry.checklist = [];
@@ -4200,7 +4303,6 @@ function calcStorageMeterSnapshot() {
     checkinSyms: loadCheckinSyms(),
     checkinOrder: loadCheckinOrder(),
     archives: loadArchives(),
-    favs: loadFavs(),
     bundles: loadBundles(),
     theme: localStorage.getItem('fst_theme') || 'light',
     uiStyle: localStorage.getItem('fst_ui_style') || 'current'
@@ -4212,7 +4314,7 @@ function calcStorageMeterSnapshot() {
     notes: bytesOfJson(data.foodNotes),
     logs: bytesOfJson(data.entries), 
     checkins: bytesOfJson({ checkins: data.checkins, checkinSyms: data.checkinSyms, checkinOrder: data.checkinOrder }),
-    extras: bytesOfJson({ customSyms: data.customSyms, favs: data.favs, bundles: data.bundles, theme: data.theme, uiStyle: data.uiStyle, foodStatus: data.foodStatus })
+    extras: bytesOfJson({ customSyms: data.customSyms, bundles: data.bundles, theme: data.theme, uiStyle: data.uiStyle, foodStatus: data.foodStatus })
   };
   
   // Ground truth: every key in the store (now IndexedDB-backed via __fstKeys),
@@ -4249,7 +4351,10 @@ function refreshStorageMeterSnapshot() {
 
 // ─── Daily check-in storage ───────────────────────────────────────────────────
 function loadCheckins() {
-  try { return JSON.parse(localStorage.getItem('fst_checkins') || '{}'); }
+  try {
+    const v = JSON.parse(localStorage.getItem('fst_checkins') || '{}');
+    return v && typeof v === 'object' && !Array.isArray(v) ? v : {};
+  }
   catch { return {}; }
 }
 function saveCheckins(obj) { localStorage.setItem('fst_checkins', JSON.stringify(obj)); }
@@ -4284,7 +4389,7 @@ function moveCheckinSym(key, dir) {
   [allKeys[idx], allKeys[next]] = [allKeys[next], allKeys[idx]];
   saveCheckinOrder(allKeys);
   renderCheckin();
-  renderCorrelations();
+  renderTrends(); // legend + line colors live on the same screen
 }
 
 const CI_EMOJIS = [
@@ -4295,11 +4400,11 @@ const CI_EMOJIS = [
   // Body / physical symptoms
   '🫃','💪','🦷','👅','👁️','🧠','❤️','🫀','🫁','🦴','💀','🦵','🦶','👃','🫦','🩸','💉','🩺','🩹','🌡️','🎒','🤕',
   // Wellness / sleep
-  '😴','🌙','⚡','💤','💧','💦','🏃','🧘','🛌','🌅',
+  '🌙','⚡','💤','💧','💦','🏃','🧘','🛌','🌅',
   // Gut / digestive
   '💨','🫧','🤢','🤮','🫶','🍽️','🚽','➡️','⬇️','🗣️','🏃‍♂️',
   // Mental / head
-  '🧠','💭','🌀','🤯','😵‍💫','🫥',
+  '💭','🌀','🤯','😵‍💫','🫥',
   // Energy / mood
   '🔥','❄️','☀️','🌧️','⛈️','🌈','✨','⭐','🌟',
   // Other useful
@@ -4348,8 +4453,13 @@ function confirmCiSym() {
   const label = emoji + ' ' + name;
   const customs = loadCheckinSyms();
   if (_ciSymState.mode === 'add') {
-    const key = 'ci_' + name.toLowerCase().replace(/\s+/g,'_').replace(/[^a-z0-9_]/g,'');
-    if (CHECK_IN_SYMPTOMS.find(s => s.label === label) || customs.find(s => s.key === key)) { toast('Already exists'); return; }
+    // Reject true duplicates by LABEL; keys are internal. Deriving the key
+    // from the name meant two non-latin names both collapsed to 'ci_' and the
+    // second was rejected with a misleading "Already exists" — suffix instead.
+    if (CHECK_IN_SYMPTOMS.find(s => s.label === label) || customs.find(s => (s.label || '') === label)) { toast('Already exists'); return; }
+    const base = 'ci_' + (name.toLowerCase().replace(/\s+/g,'_').replace(/[^a-z0-9_]/g,'') || 'sym');
+    let key = base, n = 2;
+    while (customs.find(s => s.key === key) || CHECK_IN_SYMPTOMS.find(s => s.key === key)) key = base + '_' + (n++);
     customs.push({ key, label, emoji, name, desc:'1 = Severe, 5 = Good' });
     saveCheckinSyms(customs);
     const curOrder = loadCheckinOrder();
@@ -4362,7 +4472,7 @@ function confirmCiSym() {
   }
   _ciSymState = null;
   renderCheckin();
-  renderCorrelations();
+  renderTrends();
 }
 function deleteCheckinSym(key) {
   if (!confirm('Remove this symptom from all Vitals?')) return;
@@ -4373,8 +4483,14 @@ function deleteCheckinSym(key) {
   Object.values(checkins).forEach(day => { delete day[key]; });
   saveCheckins(checkins);
   if (_ciSymState && _ciSymState.key === key) _ciSymState = null;
+  // Drop the key from the persisted trends filter too — dead keys let the
+  // "keep one line on" guard be satisfied by an invisible line.
+  if (Array.isArray(_trendActive) && _trendActive.includes(key)) {
+    _trendActive = _trendActive.filter(k => k !== key);
+    try { localStorage.setItem('fst_trend_active', JSON.stringify(_trendActive)); } catch (e) {}
+  }
   renderCheckin();
-  renderCorrelations();
+  renderTrends(); // clear the deleted symptom's stale line + legend chip
   toast('Symptom removed');
 }
 
@@ -4408,17 +4524,26 @@ document.addEventListener('keydown', e => {
 
 // ─── Daily Check-In ───────────────────────────────────────────────────────────
 function setSeverity(symKey, value) {
+  // Re-resolve "today" at TAP time when the date was auto-defaulted — a PWA
+  // resumed after midnight otherwise writes the first tap into yesterday
+  // (the v42 midnight fix covered the shortcut buttons, not the score taps).
+  if (!_checkinDateManual && _checkinDate !== today()) _checkinDate = today();
   const d = _checkinDate || today();
   const checkins = loadCheckins();
   if (!checkins[d]) checkins[d] = {};
   // Toggle off if already selected
-  if (checkins[d][symKey] === value) delete checkins[d][symKey];
+  if (checkins[d][symKey] === value) {
+    delete checkins[d][symKey];
+    // Don't leave an empty {} day behind — it renders as a phantom all-dash
+    // column in Past Vitals and pads the trends day count.
+    if (!Object.keys(checkins[d]).length) delete checkins[d];
+  }
   else checkins[d][symKey] = value;
   saveCheckins(checkins);
-  
+
   renderCheckin();
-  renderTimeline(); // Updates your new timeline instantly!
   updateCheckinDot();
+  renderCheckinReminder(); // the banner must react to the check-in it nagged about
 }
 
 function saveCheckinDay() {
@@ -4428,6 +4553,7 @@ function saveCheckinDay() {
   const filled = allCheckinSymptoms().filter(s => entry[s.key] != null).length;
   if (!filled) { toast('Select at least one score first'); return; }
   updateCheckinDot();
+  renderCheckinReminder();
   toast(`Check-in for ${fmt(d)} saved ✓`);
 }
 
@@ -4437,11 +4563,11 @@ function deleteCheckin(dateStr) {
   if (!data) return;
   delete checkins[dateStr];
   saveCheckins(checkins);
-  
+
   renderCheckin();
-  renderCorrelations();
-  renderTimeline();
+  renderTrends();
   updateCheckinDot();
+  renderCheckinReminder();
   startUndo({ type: 'checkin', date: dateStr, data }, `Check-in for ${fmt(dateStr)} deleted`);
 }
 
@@ -4449,15 +4575,26 @@ function deleteCheckin(dateStr) {
 // meant "Today" saved to yesterday if the app sat open across midnight.
 function setCheckinDateOffset(offset) {
   setCheckinDate(addDays(today(), -offset));
+  // "Today" keeps tracking the real today across midnight; explicit past
+  // days stay pinned until the user changes them.
+  _checkinDateManual = offset !== 0;
 }
 function setCheckinDate(dateStr) {
-  _checkinDate = dateStr;
+  // A cleared picker used to store '' — the tab then displayed an empty day
+  // while score taps silently saved to today.
+  _checkinDate = dateStr || today();
+  _checkinDateManual = true;
   renderCheckin();
 }
 
 function renderCheckin() {
   const wrap = document.getElementById('checkin-wrap');
   if (!wrap) return;
+
+  // A re-render mid-typing (score tap, reorder…) rebuilds the custom-symptom
+  // form — snapshot the live input first so the typed name survives.
+  const liveNameInp = document.getElementById('ci-sym-name-inp');
+  if (_ciSymState && liveNameInp) _ciSymState.name = liveNameInp.value;
 
   // Use state var (updated by picker onchange and shortcut buttons)
   if (_checkinDate === null) _checkinDate = today();
@@ -4495,8 +4632,8 @@ function renderCheckin() {
     return `<div class="checkin-symptom-row" style="${rowBg}">
       <div style="display:flex;align-items:flex-start;gap:6px;flex:1;min-width:0;">
         <div style="flex:1;">
-          <div class="checkin-symptom-label">${sym.label}</div>
-          <div style="font-size:10px;color:var(--muted);margin-top:2px;">${sym.desc}</div>
+          <div class="checkin-symptom-label">${esc(sym.label)}</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px;">${esc(sym.desc || '')}</div>
         </div>
         <div class="ci-row-tools">${upBtn}${downBtn}${editBtn}${delBtn}</div>
       </div>
@@ -4560,7 +4697,7 @@ function renderCheckin() {
       }
 
       return `<div style="display:flex; align-items:center; gap:8px; margin-bottom:6px; flex-wrap:nowrap; background:var(--bg); padding:6px 10px; border-radius:10px;">
-        <div style="font-size:12px; font-weight:700; color:var(--text); width:180px; padding-right:20px; flex-shrink:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:flex; align-items:center; gap:8px;" title="${esc(name)}">
+        <div style="font-size:12px; font-weight:700; color:var(--text); width:180px; padding-right:20px; flex-shrink:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:flex; align-items:center; gap:8px;" title="${escAttr(name)}">
            <span style="font-size:16px;">${emoji}</span> ${esc(name)}
         </div>
         <div style="display:flex; gap:8px;">
@@ -4618,7 +4755,7 @@ function renderCheckin() {
         <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
           <div class="form-group" style="flex:0 0 auto;min-width:0;">
             <label>Date</label>
-            <input type="date" id="checkin-date" value="${d}" style="padding:7px 12px;font-size:14px;" onchange="setCheckinDate(this.value)">
+            <input type="date" id="checkin-date" value="${d}" max="${today()}" style="padding:7px 12px;font-size:14px;" onchange="setCheckinDate(this.value)">
           </div>
           <div style="font-size:11px;color:var(--muted);padding-top:18px;">
             1 = Very Bad &nbsp;•&nbsp; 3 = Moderate &nbsp;•&nbsp; 5 = Very Good
@@ -4636,7 +4773,7 @@ function renderCheckin() {
             <div style="font-weight:700;font-size:13px;color:var(--navy);margin-bottom:10px;">${title}</div>
             <div class="big-emoji">${st.emoji}</div>
             <div class="emoji-grid">${emojiGrid}</div>
-            <input id="ci-sym-name-inp" type="text" value="${esc(st.name)}" placeholder="Symptom name…" onkeydown="if(event.key==='Enter'){event.preventDefault();confirmCiSym();}if(event.key==='Escape')cancelCiSym();">
+            <input id="ci-sym-name-inp" type="text" value="${escAttr(st.name)}" placeholder="Symptom name…" onkeydown="if(event.key==='Enter'){event.preventDefault();confirmCiSym();}if(event.key==='Escape')cancelCiSym();">
             <div class="form-actions">
               <button class="btn-rename-one" onclick="cancelCiSym()" style="padding:8px 16px;font-size:13px;">Cancel</button>
               <button class="btn-rename-all" onclick="confirmCiSym()" style="padding:8px 16px;font-size:13px;">${btnLabel}</button>
@@ -4654,115 +4791,9 @@ function renderCheckin() {
 }
 
 // ─── Archives ─────────────────────────────────────────────────────────────────
-function renderArchives() {
-  const wrap = document.getElementById('archives-wrap');
-  if (!wrap) return;
-  const sections = loadArchives().map(sec => ({
-    ...sec,
-    entries: Array.isArray(sec.entries) ? sec.entries.map(normalizeArchiveEntry) : []
-  }));
-  const snap = loadStorageMeterSnapshot();
-
-  const sectionHTML = sections.length ? sections.map(sec => {
-    const entries = Array.isArray(sec.entries) ? sec.entries : [];
-    const rows = entries.length ? entries.map(ent => {
-      const noteExpanded = isArchiveExpanded('notes', ent.id);
-      const checklistExpanded = isArchiveExpanded('checklists', ent.id);
-      const notePreview = ent.note
-        ? `<div class="archive-entry-extras">
-            <button class="archive-inline-toggle" onclick="toggleArchiveExpand('notes','${ent.id}')">${noteExpanded ? 'Hide Notes' : 'Show Notes'}</button>
-            ${noteExpanded ? `<div class="archive-note-preview-box"><div class="archive-note-preview-text">${esc(ent.note)}</div></div>` : ''}
-          </div>`
-        : '';
-      const checklistTotal = Array.isArray(ent.checklist) ? ent.checklist.length : 0;
-      const checklistDone = checklistTotal ? ent.checklist.filter(i => i.done).length : 0;
-      const checklistPreview = checklistTotal
-        ? `<div class="archive-entry-extras">
-            <button class="archive-inline-toggle" onclick="toggleArchiveExpand('checklists','${ent.id}')">${checklistExpanded ? 'Hide Checklist' : 'Show Checklist'}</button>
-            <div class="archive-mini-meta">${checklistDone}/${checklistTotal} completed</div>
-            ${checklistExpanded ? `<div class="archive-checklist-preview-box"><div class="archive-checklist-preview-list">${ent.checklist.map(item => `<div class="archive-checkline ${item.done ? 'done' : ''}"><span>${item.done ? '☑️' : '⬜'}</span><span>${esc(item.text)}</span></div>`).join('')}</div></div>` : ''}
-          </div>`
-        : '';
-      return `
-      <div class="archive-entry-row">
-        <div class="archive-entry-main">
-          <div class="archive-entry-name">${esc(ent.name || 'Untitled')}</div>
-          ${notePreview}
-          ${checklistPreview}
-        </div>
-        <div class="archive-entry-actions">
-          <button class="notes-btn${ent.note ? ' has-note' : ''}" onclick="openArchiveNotesModal('${sec.id}','${ent.id}')">📝 ${ent.note ? 'Edit Notes' : 'Add Notes'}</button>
-          <button class="notes-btn${checklistTotal ? ' has-note' : ''}" onclick="openArchiveChecklistModal('${sec.id}','${ent.id}')">☑️ ${checklistTotal ? 'Checklist' : 'Add Checklist'}</button>
-          <button class="edit-btn" onclick="renameArchiveEntry('${sec.id}','${ent.id}')">✏️ Edit</button>
-          <button class="delete-btn" onclick="deleteArchiveEntry('${sec.id}','${ent.id}')" title="Delete entry">✕</button>
-        </div>
-      </div>
-    `;}).join('') : `<div class="archive-empty">No entries yet — add your first item to this section.</div>`;
-
-    return `
-      <div class="archive-section">
-        <div class="archive-section-head">
-          <div>
-            <div class="archive-section-title">🗂️ ${esc(sec.name || 'Untitled Section')}</div>
-            <div class="archive-section-meta">${entries.length} entr${entries.length === 1 ? 'y' : 'ies'}</div>
-          </div>
-          <div class="archive-section-actions">
-            <button class="sym-add-btn" onclick="addArchiveEntry('${sec.id}')">＋ Add Entry</button>
-            <button class="edit-btn" onclick="renameArchiveSection('${sec.id}')">✏️ Rename</button>
-            <button class="delete-btn" onclick="deleteArchiveSection('${sec.id}')" title="Delete section">✕</button>
-          </div>
-        </div>
-        ${rows}
-      </div>
-    `;
-  }).join('') : `<div class="card"><div class="empty"><span>🗂️</span>No diary sections yet.<br>Create a section like <strong>Skin Care</strong>, <strong>Sport</strong>, or anything else you want to organize.</div></div>`;
-
-  // --- UPDATED METER HTML WITH SPLIT GRIDS ---
-  const meterHTML = snap ? `
-    <div class="card storage-meter-card">
-      <div class="storage-meter-head">
-        <div>
-          <div class="storage-meter-title">Storage Snapshot</div>
-          <div class="storage-meter-sub">Lightweight cached estimate. Refreshed on export, import, and diary note/checklist saves.</div>
-        </div>
-        <div class="storage-meter-badge">${esc(snap.status)} · ${esc(formatBytes(snap.total))}</div>
-      </div>
-      <div class="storage-meter-bar"><div class="storage-meter-fill" style="width:${Math.max(2, snap.pct)}%"></div></div>
-      <div class="storage-meter-grid">
-        <div class="storage-meter-cell"><div class="storage-meter-cell-label">Diary</div><div class="storage-meter-cell-value">${esc(formatBytes(snap.parts?.diary || 0))}</div></div>
-        <div class="storage-meter-cell"><div class="storage-meter-cell-label">Food Notes</div><div class="storage-meter-cell-value">${esc(formatBytes(snap.parts?.notes || 0))}</div></div>
-        <div class="storage-meter-cell"><div class="storage-meter-cell-label">Meal Logs</div><div class="storage-meter-cell-value">${esc(formatBytes(snap.parts?.logs || 0))}</div></div>
-        <div class="storage-meter-cell"><div class="storage-meter-cell-label">Vitals</div><div class="storage-meter-cell-value">${esc(formatBytes(snap.parts?.checkins || 0))}</div></div>
-        <div class="storage-meter-cell"><div class="storage-meter-cell-label">Other App Data</div><div class="storage-meter-cell-value">${esc(formatBytes(snap.parts?.extras || 0))}</div></div>
-      </div>
-      
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-top:16px; flex-wrap:wrap; gap:10px; padding-top:12px; border-top:1px dashed var(--border);">
-        <div class="storage-meter-sub">Last updated: ${esc(new Date(snap.updatedAt).toLocaleString())}</div>
-        <button class="delete-btn" style="border:1.5px solid var(--neg); padding:6px 12px; border-radius:6px; font-size:12px; font-weight:700;" onclick="promptClearLogs()">🧹 Clear Logs & Vitals</button>
-      </div>
-    </div>
-  ` : `
-    <div class="card storage-meter-card">
-      <div class="storage-meter-title">Storage Snapshot</div>
-      <div class="storage-meter-sub" style="margin-top:8px;">No snapshot yet. Export or import once, or save a diary note/checklist, and the meter will appear here.</div>
-    </div>
-  `;
-
-  wrap.innerHTML = `
-    <div class="card">
-      <div class="archive-toolbar">
-        <div>
-          <div style="font-size:14px;font-weight:700;">Build your own diary sections</div>
-          <div style="font-size:11px;color:var(--muted);margin-top:3px;">Create custom sections and save entries with notes, checklists, products, workouts, routines, or anything else.</div>
-        </div>
-        <button class="btn-primary" style="margin-top:0;" onclick="addArchiveSection()">＋ New Section</button>
-      </div>
-    </div>
-    <p class="section-title" style="margin-top:24px;">Saved Sections</p>
-    ${sectionHTML}
-    ${meterHTML}
-  `;
-}
+// (the live Diary renderer is renderDiary2 — see the second renderArchives
+//  declaration below, which delegates to it; the old duplicate implementation
+//  that rendered into the removed #archives-wrap was deleted in v53)
 
 function addArchiveSection() {
   const name = prompt('New section name:');
@@ -4810,8 +4841,8 @@ function addArchiveEntry(sectionId) {
   if (!sec) return;
   if (!Array.isArray(sec.entries)) sec.entries = [];
   sec.entries.push({ id: uid(), name: trimmed, note: '', checklist: [] });
+  saveArchives(sections); // save FIRST — the meter reads the stored state
   refreshStorageMeterSnapshot();
-  saveArchives(sections);
   renderArchives();
   toast('Entry added ✓');
 }
@@ -4994,14 +5025,14 @@ function corrRangeControlsHTML(prefix = 'corr') {
         <button class="summary-chip-btn ${_corrRange==='custom'?'active':''}" onclick="setCorrRange('custom')">Custom</button>
       </div>
       <div class="summary-control-group" style="margin-left:auto;">
-        <input id="${prefix}-search" class="summary-search-input" type="text" placeholder="Search foods..." value="${esc(_corrSearch)}" oninput="updateCorrSearch(this, '${prefix}')">
+        <input id="${prefix}-search" class="summary-search-input" type="text" placeholder="Search foods..." value="${escAttr(_corrSearch)}" oninput="updateCorrSearch(this, '${prefix}')">
       </div>
     </div>
     <div class="summary-control-row" style="margin-top:8px;" ${customVis}>
       <div class="summary-control-group">
-        <input id="${prefix}-date-from" class="summary-inline-date" type="date" value="${esc(_corrCustomFrom)}" onchange="setCorrCustomRange(this, '${prefix}')">
+        <input id="${prefix}-date-from" class="summary-inline-date" type="date" value="${escAttr(_corrCustomFrom)}" onchange="setCorrCustomRange(this, '${prefix}')">
         <span style="font-size:12px;color:var(--muted);">to</span>
-        <input id="${prefix}-date-to" class="summary-inline-date" type="date" value="${esc(_corrCustomTo)}" onchange="setCorrCustomRange(this, '${prefix}')">
+        <input id="${prefix}-date-to" class="summary-inline-date" type="date" value="${escAttr(_corrCustomTo)}" onchange="setCorrCustomRange(this, '${prefix}')">
       </div>
     </div>
   </div>`;
@@ -5076,11 +5107,19 @@ function renderCorrelations() {
       if (e.symptoms && e.symptoms[sym.key]) dayHasLogTag[sym.key][e.date] = true;
     });
   });
+  // Days with no logged meals can't carry meal-tags — counting them as
+  // "tag-free" deflated every baseline and inflated every spike.
+  const dayHasAnyEntry = {};
+  entries.forEach(e => { dayHasAnyEntry[e.date] = true; });
 
   const results = {};
   foods.forEach(food => {
-    const eatingDates = new Set(entries.filter(e => e.food === food).map(e => e.date));
-    if (eatingDates.size < 2) return;
+    // Exposure must come from ALL entries, not range-filtered ones: food
+    // eaten just before the range start is inside the reaction window of the
+    // first range days, which were silently classified as control.
+    const eatingDates = new Set(allEntries.filter(e => e.food === food).map(e => e.date));
+    const eatingDatesInRange = new Set(entries.filter(e => e.food === food).map(e => e.date));
+    if (eatingDatesInRange.size < 2) return;
 
     // day-level exposure split for this food — the honesty metric: with < 3
     // control (unexposed) days, no comparison here can mean anything
@@ -5095,7 +5134,7 @@ function renderCorrelations() {
       isExposed ? expDays++ : ctlDays++;
     });
 
-    results[food] = { count: eatingDates.size, checkins: {}, logs: {}, expDays, ctlDays, noContrast: ctlDays < 3 };
+    results[food] = { count: eatingDatesInRange.size, checkins: {}, logs: {}, expDays, ctlDays, noContrast: ctlDays < 3 };
 
     checkinSyms.forEach(sym => {
       const exposed = [], unexposed = [];
@@ -5115,6 +5154,7 @@ function renderCorrelations() {
     logSyms.forEach(sym => {
       let exposedCount = 0, exposedHits = 0, unexposedCount = 0, unexposedHits = 0;
       checkinDates.forEach(cDate => {
+        if (!dayHasAnyEntry[cDate]) return; // no meals logged — tag absence is unknowable, not "tag-free"
         const hit = dayHasLogTag[sym.key][cDate] ? 1 : 0;
         if (exposedByDate[cDate]) { exposedCount++; exposedHits += hit; }
         else { unexposedCount++; unexposedHits += hit; }
@@ -5177,7 +5217,7 @@ const ciTableRows = Object.entries(results).map(([food, data]) => {
         </td>`;
       }).join('');
       const rowFlag = data.noContrast
-        ? `<div style="margin-top:4px;"><span class="tl-flag tl-staple" title="Eaten so often there are only ${data.ctlDays} days without it in range — comparisons are meaningless. Run a Trial instead.">📌 can't isolate</span> <button class="verdict-test-btn" onclick='startExperiment(${JSON.stringify(food)})'>🧪 Test</button></div>`
+        ? `<div style="margin-top:4px;"><span class="tl-flag tl-staple" title="Eaten so often there are only ${data.ctlDays} days without it in range — comparisons are meaningless. Run a Trial instead.">📌 can't isolate</span> <button class="verdict-test-btn" onclick="startExperiment(${escAttr(JSON.stringify(food))})">🧪 Test</button></div>`
         : '';
       return `<tr><td class="food-name">${esc(food)} <span style="font-size:10px;color:var(--muted);font-weight:normal;float:right;">${data.count}x</span>${rowFlag}</td>${cells}</tr>`;
     }).join('');
@@ -5226,11 +5266,11 @@ const ciTableRows = Object.entries(results).map(([food, data]) => {
     <p class="section-title">📊 Impact on Daily Scores (1-5)</p>
     <div class="card summary-wrap" style="padding:0; overflow-x:auto; margin-bottom:24px;">
       <table class="corr-table">
-        <thead><tr><th class="food-col" style="min-width:180px;">Food Eaten</th>${checkinSyms.map(s => { const meta = parseCiSymLabel(s); return `<th style="text-align:center; min-width:48px; cursor:help;" title="${esc(meta.name || s.label)}"><div style="font-size:20px; line-height:1;">${esc(meta.emoji || '📋')}</div></th>`; }).join('')}</tr></thead>
+        <thead><tr><th class="food-col" style="min-width:180px;">Food Eaten</th>${checkinSyms.map(s => { const meta = parseCiSymLabel(s); return `<th style="text-align:center; min-width:48px; cursor:help;" title="${escAttr(meta.name || s.label)}"><div style="font-size:20px; line-height:1;">${esc(meta.emoji || '📋')}</div></th>`; }).join('')}</tr></thead>
         <tbody>${ciTableRows}</tbody>
       </table>
     </div>
-    ${activeLogSyms.length ? `<p class="section-title">🏷️ Impact on Meal Tags (% Occurrence)</p><div class="card summary-wrap" style="padding:0; overflow-x:auto;"><table class="corr-table"><thead><tr><th class="food-col" style="min-width:180px;">Food Eaten</th>${activeLogSyms.map(s => { const chars = Array.from(s.label); const firstChar = chars[0] || '🏷️'; const isEmoji = !/[a-zA-Z0-9]/.test(firstChar); const displayEmoji = isEmoji ? firstChar : '🏷️'; const displayName = isEmoji ? chars.slice(1).join('').trim() : s.label; return `<th style="text-align:center; min-width:48px; cursor:help;" title="${esc(displayName)}"><div style="font-size:20px; line-height:1;">${displayEmoji}</div></th>`; }).join('')}</tr></thead><tbody>${logTableRows}</tbody></table></div>` : ''}
+    ${activeLogSyms.length ? `<p class="section-title">🏷️ Impact on Meal Tags (% Occurrence)</p><div class="card summary-wrap" style="padding:0; overflow-x:auto;"><table class="corr-table"><thead><tr><th class="food-col" style="min-width:180px;">Food Eaten</th>${activeLogSyms.map(s => { const chars = Array.from(s.label); const firstChar = chars[0] || '🏷️'; const isEmoji = !/[a-zA-Z0-9]/.test(firstChar); const displayEmoji = isEmoji ? firstChar : '🏷️'; const displayName = isEmoji ? chars.slice(1).join('').trim() : s.label; return `<th style="text-align:center; min-width:48px; cursor:help;" title="${escAttr(displayName)}"><div style="font-size:20px; line-height:1;">${displayEmoji}</div></th>`; }).join('')}</tr></thead><tbody>${logTableRows}</tbody></table></div>` : ''}
   `;
 }
 
@@ -5340,8 +5380,11 @@ function renderBucketLoad() {
 // --- UPDATED COLOR LOGIC FOR BUCKET LOAD (Generous Positive Threshold) ---
   const getColor = (val, label) => {
     if (val === null) return 'background:transparent; color:var(--muted); border:1px dashed var(--border);';
-    
-    const isPositive = isPositiveLabel(label);
+
+    // The inverted branch is a TAG-occurrence scale (1 = present). Check-in
+    // metrics are always 1=worst..5=best, so a custom check-in named
+    // "Calm"/"Focused" must NOT invert.
+    const isPositive = isLogTag && isPositiveLabel(label);
 
     if (isPositive) {
       // Logic for Positive metrics:
@@ -5387,9 +5430,12 @@ function renderBucketLoad() {
     if (q && !food.toLowerCase().includes(q)) return; 
     
     const stats = streakStats[food];
-    const totalEaten = stats[1].length + stats[2].length + stats[3].length + stats[4].length;
-    
-    if (totalEaten < 2) return; 
+    // Badge + gate on distinct EATEN days — the old sum counted only
+    // streak-cells that also had this metric scored, so a 10-day food with
+    // one scored day showed "Logged 1x" and vanished per-metric.
+    const totalEaten = Object.keys(foodDayScores[food]).length;
+
+    if (totalEaten < 2) return;
 
     rows.push({
       food,
@@ -5398,7 +5444,7 @@ function renderBucketLoad() {
         <tr>
           <td class="food-name" style="padding-top:12px; padding-bottom:12px; min-width:180px;">
              <div style="margin-bottom:6px; white-space:nowrap;">${esc(food)}</div>
-             <span style="font-size:10px;color:var(--muted);background:var(--bg);padding:2px 6px;border-radius:4px;">Logged ${totalEaten}x</span>
+             <span style="font-size:10px;color:var(--muted);background:var(--bg);padding:2px 6px;border-radius:4px;">Eaten ${totalEaten} day${totalEaten===1?'':'s'}</span>
           </td>
           <td style="text-align:center; padding:8px 6px;">${getAvgHTML(stats[1])}</td>
           <td style="text-align:center; padding:8px 6px; background:var(--bg);">${getAvgHTML(stats[2])}</td>
@@ -5434,7 +5480,7 @@ function renderBucketLoad() {
             ${selectHtml}
           </div>
           <input id="Exp-search" class="summary-search-input" type="text" placeholder="Search foods..." 
-                 value="${esc(window._ExpSearch)}" oninput="window.updateExpSearch(this)" 
+                 value="${escAttr(window._ExpSearch)}" oninput="window.updateExpSearch(this)" 
                  style="width: 220px; margin:0;">
         </div>
 
@@ -5709,8 +5755,16 @@ function renderHeatmap() {
 
       if (isLogTag) {
           if (dayHasAnyEntry[dateStr]) {
-              score = dayHasLogTag[dateStr] ? 1 : 5;
-              displayScore = dayHasLogTag[dateStr] ? 'Symptom Present' : 'Symptom Free';
+              // Positive tags (Energetic, Good Sleep, Calm…) must not paint
+              // good days red: present = green, absent = neutral. Negative
+              // tags keep present = red / absent = green.
+              if (isPositiveLabel(selectedSym.label)) {
+                score = dayHasLogTag[dateStr] ? 5 : 3;
+                displayScore = dayHasLogTag[dateStr] ? 'Tag present' : 'No tag that day';
+              } else {
+                score = dayHasLogTag[dateStr] ? 1 : 5;
+                displayScore = dayHasLogTag[dateStr] ? 'Symptom Present' : 'Symptom Free';
+              }
           }
       } else {
           score = checkins[dateStr]?.[symKey];
@@ -5831,6 +5885,10 @@ function renderTimeline() {
   data.sort((a,b) => b.drop - a.drop || b.count - a.count);
 
   if (!data.length) {
+    // Clear the previous metric's baseline sentence too — it used to sit
+    // stranded above "No timeline data available." after a metric switch.
+    const staleNote = document.getElementById('Timeline-note');
+    if (staleNote) staleNote.innerHTML = '';
     tbody.innerHTML = `<tr><td colspan="7"><div class="empty">No timeline data available.</div></td></tr>`;
     return;
   }
@@ -5847,13 +5905,16 @@ function renderTimeline() {
     baseline = vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
   }
   const totalDays = new Set(rangedEntries.map(e => e.date)).size || 1;
-  const isPos = isPositiveLabel(selectedSym.label);
+  // Positive-inversion applies to TAG metrics only (1 = present). Check-ins
+  // are always 1=worst..5=best — a custom check-in named "Calm" must not
+  // have its colors/story flipped.
+  const isPos = isLogTag && isPositiveLabel(selectedSym.label);
   const noteEl = document.getElementById('Timeline-note');
 
   // --- COLOR LOGIC (legacy view only) ---
   const getColor = (val, label) => {
     if (val === null) return 'background:transparent; color:var(--muted); border:1px solid var(--border);';
-    const isPositive = isPositiveLabel(label);
+    const isPositive = isLogTag && isPositiveLabel(label);
     if (isPositive) {
       if (val <= 1.5) return 'background:#4ADE80;';
       if (val <= 3.4) return 'background:#A7F3D0;';
@@ -5943,7 +6004,7 @@ function renderTimeline() {
       }).join('');
 
       return `<tr>
-        <td class="food-name" title="${esc(r.food)}" style="max-width: 180px; padding: 12px 8px;">
+        <td class="food-name" title="${escAttr(r.food)}" style="max-width: 180px; padding: 12px 8px;">
           <div style="margin-bottom:6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-weight:700;">${esc(r.food)}</div>
           <div style="display:flex; gap:6px; align-items:center;">
             <span style="font-size:10px; color:var(--muted); background:var(--bg); padding:2px 6px; border-radius:4px;">Logged ${r.count}x</span>
@@ -6033,11 +6094,11 @@ function renderTimeline() {
     else summary = 'Stays close to your usual — no clear reaction.';
 
     return `<tr${r.lowN ? ' style="opacity:0.72;"' : ''}>
-      <td class="food-name" title="${esc(r.food)}" style="max-width: 190px; padding: 12px 8px;">
+      <td class="food-name" title="${escAttr(r.food)}" style="max-width: 190px; padding: 12px 8px;">
         <div style="margin-bottom:6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-weight:700;">${esc(r.food)}</div>
         <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
           <span style="font-size:10px; color:var(--muted); background:var(--bg); padding:2px 6px; border-radius:4px;">${r.count}× eaten</span>
-          <button class="verdict-test-btn" title="Run a controlled elimination trial on this food" onclick='startExperiment(${JSON.stringify(r.food)})'>🧪 Test</button>
+          <button class="verdict-test-btn" title="Run a controlled elimination trial on this food" onclick="startExperiment(${escAttr(JSON.stringify(r.food))})">🧪 Test</button>
           ${flag}
         </div>
         <div style="font-size:10.5px; color:var(--muted); margin-top:5px; line-height:1.4;">${summary}</div>
@@ -6047,14 +6108,6 @@ function renderTimeline() {
   }).join('');
 }
 
-function lagSelectHTML(selected) {
-  const opts = [[1,'Same day + 1 day after'],[2,'Same day + 2 days after'],[3,'Same day + 3 days after (default)'],[4,'Same day + 4 days after'],[5,'Same day + 5 days after']];
-  return `<select id="corr-lag" onchange="renderCorrelations()" style="padding:6px 10px;border-radius:6px;border:1.5px solid var(--border);font-size:13px;font-family:inherit;">
-    ${opts.map(([v,l]) => `<option value="${v}" ${selected===v?'selected':''}>${l}</option>`).join('')}
-  </select>`;
-}
-
-// ─── History time filter ──────────────────────────────────────────────────────
 function setHistFilter(filter, btn) {
   _histFilter = filter;
   document.querySelectorAll('#hist-filter-row .tf-btn').forEach(b => b.classList.remove('active'));
@@ -6084,12 +6137,6 @@ function dateInFilter(dateStr, filter) {
   return true;
 }
 
-// ─── Favorites ───────────────────────────────────────────────────────────────
-function loadFavs() {
-  try { return JSON.parse(localStorage.getItem('fst_favs') || '[]'); } catch { return []; }
-}
-function saveFavs(arr) { localStorage.setItem('fst_favs', JSON.stringify(arr)); }
-
 function loadBundles() {
   try { return JSON.parse(localStorage.getItem('fst_bundles') || '[]'); } catch { return []; }
 }
@@ -6099,54 +6146,6 @@ function normalizeBundleItems(items) {
   return (Array.isArray(items) ? items : [])
     .map(v => String(v || '').trim())
     .filter(v => v && !seen.has(v.toLowerCase()) && seen.add(v.toLowerCase()));
-}
-
-function isFav(food, mealType) {
-  return loadFavs().some(f => f.food === food && f.mealType === mealType);
-}
-
-function toggleFavById(entryId) {
-  const entry = loadMigrated().find(e => e.id === entryId);
-  if (!entry) return;
-  const favs = loadFavs();
-  const idx = favs.findIndex(f => f.food === entry.food && f.mealType === entry.mealType);
-  if (idx >= 0) { favs.splice(idx, 1); toast('Removed from favorites'); }
-  else { favs.unshift({ food: entry.food, mealType: entry.mealType }); toast('⭐ Saved to favorites'); }
-  saveFavs(favs);
-  render();
-}
-
-function removeFavByIdx(idx) {
-  const favs = loadFavs();
-  favs.splice(idx, 1);
-  saveFavs(favs);
-  toast('Removed from favorites');
-  render();
-}
-
-// ─── Favorites ───────────────────────────────────────────────────────────────
-function quickLogFav(idx) {
-  const f = loadFavs()[idx];
-  if (!f) return;
-  
-  const entries = loadMigrated();
-  
-  // Grab the date and time directly from your form
-  const d = document.getElementById('inp-date').value || today();
-  const timeInput = document.getElementById('inp-time').value;
-  const n = new Date();
-  const logTime = timeInput || `${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}`;
-  
-  // Use the favorite's meal type, or fallback to the form's meal type
-  const mealType = f.mealType || document.getElementById('inp-meal').value || loadLastMealType();
-  
-  // Instantly log it without needing the Add Entry button!
-  entries.unshift({ id:uid(), date: d, mealType, food: f.food, logTime, windows:{w1:null,w2:null,w3:null,w4:null}, symptoms:blankSymptoms() });
-  save(entries);
-  saveLastMealType(mealType);
-  
-  toast(`⚡ Instant Log: ${f.food}`);
-  render();
 }
 
 // ─── Quick log: repeat yesterday + bundle shortcuts ──────────────────────────
@@ -6163,9 +6162,13 @@ function repeatYesterdayMeal(mealKey) {
   const fresh = src.filter(e => !already.has(e.food));
   if (!fresh.length) { toast(`Yesterday's ${label} already logged today ✓`); return; }
   if (!confirm(`Log ${fresh.length} item(s) from yesterday's ${label}?`)) return;
+  // stamp NOW, not yesterday's clock time — copying it produced "future-dated"
+  // entries all morning and shifted every reaction window
+  const n = new Date();
+  const nowTime = `${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}`;
   for (let i = fresh.length - 1; i >= 0; i--) {
     const s = fresh[i];
-    entries.unshift({ id: uid(), date: t, mealType: s.mealType || '', food: s.food, logTime: s.logTime || '', windows: { w1: null, w2: null, w3: null, w4: null }, symptoms: blankSymptoms() });
+    entries.unshift({ id: uid(), date: t, mealType: s.mealType || '', food: s.food, logTime: nowTime, windows: { w1: null, w2: null, w3: null, w4: null }, symptoms: blankSymptoms() });
   }
   save(entries);
   toast(`Logged ${fresh.length} from yesterday ✓`);
@@ -6214,46 +6217,6 @@ function renderQuickLog() {
 
   card.style.display = html ? '' : 'none';
   card.innerHTML = html;
-}
-
-function renderFavs() {
-  const el = document.getElementById('favs-section');
-  if (!el) return;
-  
-  const favs = loadFavs();
-  
-  // If there are no favorites, make the section completely disappear
-  if (!favs.length) { 
-    el.innerHTML = ''; 
-    return; 
-  }
-  
-  const mealIcon = m => ({ breakfast:'🌅', lunch:'☀️', snack:'🍎', dinner:'🌙' }[m] || '🍽️');
-  
-  const chips = favs.map((f, i) =>
-    `<div style="background:var(--bg); border:1.5px solid var(--border); border-radius:10px; padding:10px 14px; display:flex; align-items:center; justify-content:space-between; gap:10px; cursor:pointer; transition:all 0.2s; box-shadow:0 2px 4px rgba(0,0,0,0.02);" onclick="quickLogFav(${i})" onmouseover="this.style.borderColor='#D97706'; this.style.transform='translateY(-2px)';" onmouseout="this.style.borderColor='var(--border)'; this.style.transform='none';">
-      <div style="display:flex; align-items:center; gap:10px; min-width:0; overflow:hidden;">
-        <span style="font-size:18px; filter:drop-shadow(0 2px 2px rgba(0,0,0,0.1));">${mealIcon(f.mealType)}</span>
-        <span style="font-weight:700; font-size:13px; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${esc(f.food)}">${esc(f.food)}</span>
-      </div>
-      <span onclick="event.stopPropagation();removeFavByIdx(${i})" title="Remove" style="padding:4px; font-size:10px; color:var(--muted); background:var(--card); border:1px solid var(--border); border-radius:50%; width:22px; height:22px; display:flex; align-items:center; justify-content:center; flex-shrink:0; transition: color 0.15s;" onmouseover="this.style.color='var(--neg)';">✕</span>
-    </div>`
-  ).join('');
-  
-  // Render the sleek favorites card
-  el.innerHTML = `
-    <div style="background:var(--card); border:1px solid var(--border); border-top:4px solid #D97706; border-radius:12px; padding:24px; box-shadow:0 10px 30px rgba(0,0,0,0.03); margin-bottom:24px;">
-      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;">
-         <div style="display:flex; align-items:center; gap:8px;">
-           <span style="font-size:18px;">⭐</span>
-           <span style="font-weight:800; font-size:15px; color:var(--text); letter-spacing:0.2px;">Quick-Log Favorites</span>
-         </div>
-         <span style="font-size:10px; color:#D97706; background:rgba(217, 119, 6, 0.1); padding:4px 8px; border-radius:6px; font-weight:800; text-transform:uppercase;">1-Click Add</span>
-      </div>
-      <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(200px, 1fr)); gap:12px;">
-        ${chips}
-      </div>
-    </div>`;
 }
 
 // ─── Bundles ──────────────────────────────────────────────────────────────────
@@ -6382,7 +6345,10 @@ function logBundle(id) {
   const bundle = loadBundles().find(b => b.id === id);
   if (!bundle || !Array.isArray(bundle.items) || !bundle.items.length) return;
   const date = document.getElementById('inp-date').value || today();
-  const logTime = (bundle.logTime || document.getElementById('inp-time').value || '').trim();
+  // live clock first — a bundle's stored logTime is whenever it was created,
+  // and re-logging "my usual breakfast" at 20:00 stamped 08:00, shifting all
+  // reaction windows. The bundle's mealType stays: that's its identity.
+  const logTime = (document.getElementById('inp-time').value || bundle.logTime || '').trim();
   const mealType = (bundle.mealType || document.getElementById('inp-meal').value || '').trim();
   const entries = loadMigrated();
   bundle.items.slice().reverse().forEach(food => {
@@ -6478,12 +6444,12 @@ function renderWeekGlance() {
     const cells = days.map(d => {
       const v = checkins[d]?.[sym.key];
       if (!v) return `<td class="wag-dot-cell"><span style="font-size:11px;color:var(--border);font-weight:700;line-height:1;">–</span></td>`;
-      return `<td class="wag-dot-cell"><span class="wag-dot" style="background:${sevColors[v]};color:${sevText[v]};" title="${esc(sym.label)}: ${v} – ${sevLabel[v]}">${v}</span></td>`;
+      return `<td class="wag-dot-cell"><span class="wag-dot" style="background:${sevColors[v]};color:${sevText[v]};" title="${escAttr(sym.label)}: ${v} – ${sevLabel[v]}">${v}</span></td>`;
     }).join('');
     // Strip leading emoji char for compact label
     const labelNoEmoji = sym.label.replace(/^[\p{Emoji}\s]+/u, '').trim() || sym.label;
     return `<tr>
-      <td class="wag-label-cell" title="${esc(sym.label)}">${esc(sym.label.split(' ')[0])} <span style="font-size:10px;color:var(--text);">${esc(labelNoEmoji)}</span></td>
+      <td class="wag-label-cell" title="${escAttr(sym.label)}">${esc(sym.label.split(' ')[0])} <span style="font-size:10px;color:var(--text);">${esc(labelNoEmoji)}</span></td>
       ${cells}
     </tr>`;
   }).join('');
@@ -6693,12 +6659,18 @@ function renderFactors() {
     
   const results = [];
   // foods we can't honestly judge here: eaten so often there are no control
-  // days (staples), or too few exposed days to mean anything
-  let hiddenNoContrast = 0, hiddenThin = 0;
+  // days (staples), too few exposed days to mean anything, or (relative mode)
+  // an effect too small to rank — the last group must be COUNTED, not silently
+  // dropped, or "no results" reads as "no data" when it really means "all clean".
+  let hiddenNoContrast = 0, hiddenThin = 0, hiddenNoEffect = 0;
 
   foodsToAnalyze.forEach(food => {
-    const eatingDates = [...new Set(entries.filter(e => e.food === food).map(e => e.date))];
-    if (eatingDates.length < 2) return;
+    const eatingDatesInRange = [...new Set(entries.filter(e => e.food === food).map(e => e.date))];
+    if (eatingDatesInRange.length < 2) return;
+    // Exposure lookup uses ALL entries: food eaten just before the range
+    // start still sits inside the reaction window of the first range days —
+    // those days must not be classified as control.
+    const eatingDates = new Set(allEntries.filter(e => e.food === food).map(e => e.date));
 
     const exposedScores = [];
     const unexposedScores = [];
@@ -6708,7 +6680,7 @@ function renderFactors() {
       let score = isLogTag ? (dayHasLogTag[cDate] ? 100 : 0) : allCheckins[cDate][symKey];
       const dateEaten = addDays(cDate, -lagDays);
 
-      if (eatingDates.includes(dateEaten)) exposedScores.push(score);
+      if (eatingDates.has(dateEaten)) exposedScores.push(score);
       else unexposedScores.push(score);
     });
 
@@ -6733,24 +6705,32 @@ function renderFactors() {
         hiddenThin++;
       } else if (Math.abs(impactPct) > 5) {
         results.push({ food, impactPct, expAvg, baseAvg, count: expN, ctlN, thin });
+      } else {
+        hiddenNoEffect++; // well-sampled, effect within ±5% — that's a finding, not missing data
       }
     } else if (calcMode !== 'absolute' && exposedScores.length > 0) {
       hiddenThin++;
     }
   });
 
-  const hiddenNote = (calcMode === 'relative' && (hiddenNoContrast || hiddenThin)) ? `
+  const hiddenNote = (calcMode === 'relative' && (hiddenNoContrast || hiddenThin || hiddenNoEffect)) ? `
     <div style="font-size:11px; color:var(--muted); background:var(--bg); border-radius:8px; padding:9px 12px; margin-bottom:12px; line-height:1.5;">
       ${hiddenNoContrast ? `🔇 <b>${hiddenNoContrast}</b> food${hiddenNoContrast===1?'':'s'} hidden — eaten so often there are almost no comparison days (staples). Only a 🧪 Trial can judge those.` : ''}
       ${hiddenNoContrast && hiddenThin ? '<br>' : ''}
       ${hiddenThin ? `⚠️ <b>${hiddenThin}</b> hidden — fewer than 3 usable days of data.` : ''}
+      ${(hiddenNoContrast || hiddenThin) && hiddenNoEffect ? '<br>' : ''}
+      ${hiddenNoEffect ? `✓ <b>${hiddenNoEffect}</b> tested clean — effect within ±5% of your baseline.` : ''}
     </div>` : '';
 
   if (!results.length) {
-    let msg = selectedFood !== 'all' 
+    let msg = selectedFood !== 'all'
       ? `Not enough repeating data to calculate how <strong>${esc(selectedFood)}</strong> impacts this metric.`
       : `Not enough repeating data. Try widening the date filter or switching the Mode toggle.`;
-    wrap.innerHTML = `<div class="card"><div class="empty"><span>🔍</span>${msg}</div></div>`;
+    // "All foods within ±5%" is an answer, not an error — say so.
+    if (calcMode === 'relative' && hiddenNoEffect && selectedFood === 'all') {
+      msg = `No food moved this metric by more than ±5%. <b>${hiddenNoEffect}</b> food${hiddenNoEffect===1?'':'s'} tested clean in this range.`;
+    }
+    wrap.innerHTML = `<div class="card">${hiddenNote}<div class="empty"><span>🔍</span>${msg}</div></div>`;
     return;
   }
 
@@ -6825,11 +6805,11 @@ function renderFactors() {
             <div style="font-size:15px; font-weight:800; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
               <span>${esc(r.food)}</span>
               ${r.thin ? '<span class="tl-flag tl-thin" title="Fewer than 5 exposed or control days — treat as a weak hint">⚠️ thin data</span>' : ''}
-              <button class="verdict-test-btn" title="Run a controlled elimination trial on this food" onclick='startExperiment(${JSON.stringify(r.food)})'>🧪 Test</button>
+              <button class="verdict-test-btn" title="Run a controlled elimination trial on this food" onclick="startExperiment(${escAttr(JSON.stringify(r.food))})">🧪 Test</button>
             </div>
             <div style="font-size:10px; color:var(--muted); margin-top:4px;">${subtext}</div>
           </div>
-          <div style="font-size:17px; font-weight:800; color:${barColor}; background:${barColor}1a; padding:4px 10px; border-radius:8px;">
+          <div style="font-size:17px; font-weight:800; color:${barColor}; background:color-mix(in srgb, ${barColor} 12%, transparent); padding:4px 10px; border-radius:8px;">
             ${mainText}
           </div>
         </div>
@@ -6849,35 +6829,30 @@ function renderFactors() {
 
 // ─── Data Management (Fresh Start with Memory) ───────────────────────────────
 window.promptClearLogs = function() {
-  const confirmation = prompt("⚠️ WARNING: This will permanently delete your daily history, but KEEP your food names saved for autocomplete.\n\nYour custom symptoms, bundles, favorites, and diary sections will also be kept safe.\n\nTo proceed, make a backup file that stores all data from the previous year so that you can always import it if you ever need to look back on old data, when you are ready type the word DELETE exactly as shown:");
+  const confirmation = prompt("⚠️ WARNING: This will permanently delete your daily history, but KEEP your food names saved for autocomplete.\n\nYour custom symptoms, bundles, and diary sections will also be kept safe.\n\nTo proceed, make a backup file that stores all data from the previous year so that you can always import it if you ever need to look back on old data, when you are ready type the word DELETE exactly as shown:");
   
   if (confirmation === "DELETE") {
     const entries = loadMigrated();
-    
-    // 1. Find every unique food name you've ever logged
+
+    // 1. Keep every unique food name for autocomplete — as a plain name list.
+    //    (The old approach wrote year-2000 "ghost entries" with no windows
+    //    object, which crashed every render on the next boot, and each ghost
+    //    counted as a phantom eating day in All-Time analytics.)
     const uniqueFoods = [...new Set(entries.map(e => e.food))];
-    
-    // 2. Create one neutral "Ghost Log" for each food in the year 2000
-    const ghostLogs = uniqueFoods.map((foodName, index) => ({
-        id: 'legacy-' + Date.now() + '-' + index,
-        date: '2000-01-01',
-        time: '12:00',
-        food: foodName,
-        symptoms: {}, // Wipes all Yes/No symptom tags
-        notes: ''     // Wipes any specific notes
-    }));
-    
-    // 3. Save ONLY the ghost logs (wiping all real history)
-    save(ghostLogs); 
-    
-    // 4. Wipe all 1-5 Daily Symptom check-ins
-    saveCheckins({}); 
-    
-    // 5. Reset the UI state
-    _checkinDate = today(); 
+    let dict = [];
+    try { dict = JSON.parse(localStorage.getItem('fst_food_dictionary') || '[]'); } catch (e) {}
+    localStorage.setItem('fst_food_dictionary', JSON.stringify([...new Set([...dict, ...uniqueFoods])]));
+
+    // 2. Wipe history + daily check-ins
+    save([]);
+    saveCheckins({});
+
+    // 3. Reset the UI state
+    _checkinDate = today();
+    _checkinDateManual = false;
     if (typeof refreshStorageMeterSnapshot === 'function') refreshStorageMeterSnapshot();
     if (typeof render === 'function') render();
-    
+
     toast("History cleared! 🧹 Your food names were kept for autocomplete.");
   } else if (confirmation !== null) {
     toast("Deletion cancelled.");
@@ -6975,11 +6950,16 @@ function openDiary2ListModal(secId, entId) {
   document.getElementById('diary2-list-modal-bg').style.display = 'flex';
   renderDiary2ListModalContent();
 }
-function closeDiary2ListModal() { 
-  document.getElementById('diary2-list-modal-bg').style.display = 'none'; 
+function closeDiary2ListModal() {
+  document.getElementById('diary2-list-modal-bg').style.display = 'none';
   _currentListModalSec = null;
   _currentListModalEnt = null;
 }
+
+// Backdrop-tap closes the diary read/checklist modals like every other modal
+// (they used to close only via the ✕ button).
+document.getElementById('diary2-read-modal-bg').addEventListener('click', function (e) { if (e.target === this) closeDiary2ReadModal(); });
+document.getElementById('diary2-list-modal-bg').addEventListener('click', function (e) { if (e.target === this) closeDiary2ListModal(); });
 
 function renderDiary2ListModalContent() {
   if (!_currentListModalSec || !_currentListModalEnt) return;
@@ -7149,19 +7129,13 @@ function renderDiary2() {
 }
 
 // ─── LAB / DISCOVERY LOGIC ───────────────────────────────────────────────────
-
-const originalRenderLabHook = render;
-render = function() {
-    originalRenderLabHook();
-    if (typeof renderLab === 'function' && document.getElementById('tab-lab').classList.contains('active')) {
-        renderLab();
-    }
-};
+// (dispatched from render()'s per-tab map like every other tab — the old
+// monkey-patch wrapper around render is gone)
 
 function renderLab() {
   renderSafeBaseline();
   renderVelocity();
-  renderSafeFoodList(); // Add this new line!
+  renderSafeFoodList();
 }
 
 // ── Feature 1: Safe Baseline ──
@@ -7362,7 +7336,7 @@ function renderVelocity() {
         </div>
         <div style="display:flex; flex-direction:column; gap:6px;">
           ${group.items.length ? group.items.map(i => `
-            <div class="lab-velocity-tag" title="${esc(i.food)}" style="cursor: pointer;">
+            <div class="lab-velocity-tag" title="${escAttr(i.food)}" style="cursor: pointer;">
               <span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${esc(i.food)}</span>
               <span style="color:var(--neg); font-size:10px;">${Math.round((i.count/i.total)*100)}%</span>
             </div>
@@ -7381,118 +7355,11 @@ function renderVelocity() {
 }
 
 // ── Feature 3: Guided Reintroduction ──
-function startReintro() {
-  const name = prompt("What variable/food are you testing? (e.g., Sourdough, Whey Protein)");
-  if (!name || !name.trim()) return;
-  const reintros = loadReintros();
-  reintros.unshift({ id: uid(), name: name.trim(), startDate: today(), status: 'active' });
-  saveReintros(reintros);
-  renderReintro();
-}
+// (v53: deleted the unreachable Lab reintroduction feature — its #lab-reintro
+//  container never existed and loadReintros/saveReintros were never defined;
+//  superseded by Trials.)
 
-function resolveReintro(id, result) {
-  const reintros = loadReintros();
-  const idx = reintros.findIndex(r => r.id === id);
-  if (idx >= 0) {
-    reintros[idx].status = result; // 'passed' or 'failed'
-    saveReintros(reintros);
-    renderReintro();
-  }
-}
-
-function deleteReintro(id) {
-  if(!confirm("Delete this test?")) return;
-  const reintros = loadReintros();
-  saveReintros(reintros.filter(r => r.id !== id));
-  renderReintro();
-}
-
-function renderReintro() {
-  const wrap = document.getElementById('lab-reintro');
-  if (!wrap) return;
-
-  const reintros = loadReintros();
-  
-  const headerHtml = `
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
-      <div style="font-size:12px; color:var(--muted); line-height:1.5; max-width:70%;">
-        Test a new food scientifically. The app isolates it for 3 days: Small dose, Medium dose, Large dose. 
-      </div>
-      <button class="btn-primary" style="margin:0; padding:6px 12px; font-size:12px;" onclick="startReintro()">＋ Start Test</button>
-    </div>
-  `;
-
-  if (!reintros.length) {
-    wrap.innerHTML = headerHtml + `<div class="empty" style="padding:10px; border:1px dashed var(--border); border-radius:10px;">No active tests. Click Start Test to begin.</div>`;
-    return;
-  }
-
-  const now = new Date(today() + 'T00:00:00');
-
-  const testsHtml = reintros.map(r => {
-    const start = new Date(r.startDate + 'T00:00:00');
-    const daysDiff = Math.round((now - start) / 86400000); // round, not floor — DST days are 23/25h
-    
-    const isDay1 = r.status === 'active' && daysDiff === 0;
-    const isDay2 = r.status === 'active' && daysDiff === 1;
-    const isDay3 = r.status === 'active' && daysDiff === 2;
-    const isReady = r.status === 'active' && daysDiff >= 3;
-
-    let stepsHtml = '';
-    if (r.status === 'active') {
-      stepsHtml = `
-        <div class="lab-reintro-progress">
-          <div class="lab-reintro-step ${isDay1 ? 'current' : (daysDiff > 0 ? 'done' : '')}">Day 1<br><span style="font-weight:normal;">Small Dose</span></div>
-          <div class="lab-reintro-step ${isDay2 ? 'current' : (daysDiff > 1 ? 'done' : '')}">Day 2<br><span style="font-weight:normal;">Double Dose</span></div>
-          <div class="lab-reintro-step ${isDay3 ? 'current' : (daysDiff > 2 ? 'done' : '')}">Day 3<br><span style="font-weight:normal;">Triple Dose</span></div>
-        </div>
-      `;
-    } else if (r.status === 'passed') {
-      stepsHtml = `<div style="color:var(--pos); font-weight:700; font-size:13px; margin-bottom:12px;">✅ Variable successfully reintroduced and tolerated.</div>`;
-    } else if (r.status === 'failed') {
-      stepsHtml = `<div style="color:var(--neg); font-weight:700; font-size:13px; margin-bottom:12px;">❌ Variable caused reactions and failed the test.</div>`;
-    }
-
-    let actionsHtml = '';
-    if (isReady) {
-      actionsHtml = `
-        <div style="background:#FFFBEB; border:1px solid #FCD34D; padding:10px; border-radius:8px; margin-bottom:12px;">
-          <div style="font-size:12px; font-weight:700; color:#B45309; margin-bottom:8px;">Test Complete! What were the results?</div>
-          <div style="display:flex; gap:8px;">
-            <button class="bundle-secondary-btn" style="flex:1; border-color:var(--pos); color:var(--pos);" onclick="resolveReintro('${r.id}', 'passed')">Pass ✅</button>
-            <button class="bundle-secondary-btn" style="flex:1; border-color:var(--neg); color:var(--neg);" onclick="resolveReintro('${r.id}', 'failed')">Fail ❌</button>
-          </div>
-        </div>
-      `;
-    }
-
-    return `
-      <div class="lab-reintro-card ${r.status}">
-        <div class="lab-reintro-header">
-          <div>
-            <div class="lab-reintro-title">${esc(r.name)}</div>
-            <div style="font-size:11px; color:var(--muted); margin-top:2px;">Started ${fmt(r.startDate)}</div>
-          </div>
-          <div style="display:flex; align-items:center; gap:8px;">
-            <span class="lab-reintro-status ${r.status}">${r.status === 'active' ? (isReady ? 'Evaluation' : 'Testing') : r.status}</span>
-            <button class="delete-btn" style="font-size:12px; padding:2px 6px;" onclick="deleteReintro('${r.id}')">✕</button>
-          </div>
-        </div>
-        ${stepsHtml}
-        ${actionsHtml}
-      </div>
-    `;
-  }).join('');
-
-  wrap.innerHTML = headerHtml + testsHtml;
-}
-
-// ─── Render all ───────────────────────────────────────────────────────────────
-// ─── Weekly report ───────────────────────────────────────────────────────────
-// Rolling 7-day window vs the 7 days before it. Higher check-in score = better
-// (all check-in scales are "1 = severe, 5 = good").
-let _weekOffset = 0;
-
+let _weekOffset = 0; // 0 = current week (declaration restored — it sat inside the deleted reintro block)
 function shiftWeek(dir) {
   _weekOffset = Math.max(0, _weekOffset + dir);
   renderWeekly();
@@ -7539,10 +7406,12 @@ function computeWeekly(offset) {
   const entries = loadMigrated();
   const cur = entries.filter(e => inRange(e.date, curFrom, curTo));
   const prev = entries.filter(e => inRange(e.date, prevFrom, prevTo));
-  const curFoods = new Set(cur.map(e => e.food));
-  const prevFoods = new Set(prev.map(e => e.food));
-  const added = [...curFoods].filter(f => !prevFoods.has(f));
-  const dropped = [...prevFoods].filter(f => !curFoods.has(f));
+  // case-insensitive compare — "Oat milk"→"oat milk" used to show as one
+  // Added plus one Removed
+  const curFoodMap = new Map(); cur.forEach(e => { if (!curFoodMap.has(normFood(e.food))) curFoodMap.set(normFood(e.food), e.food); });
+  const prevFoodMap = new Map(); prev.forEach(e => { if (!prevFoodMap.has(normFood(e.food))) prevFoodMap.set(normFood(e.food), e.food); });
+  const added = [...curFoodMap.keys()].filter(k => !prevFoodMap.has(k)).map(k => curFoodMap.get(k));
+  const dropped = [...prevFoodMap.keys()].filter(k => !curFoodMap.has(k)).map(k => prevFoodMap.get(k));
 
   let scored = 0, pending = 0;
   cur.forEach(e => WINDOWS.forEach(w => {
@@ -7573,13 +7442,29 @@ function computeWeekly(offset) {
       }
     });
   });
+  // all-time per-food window counts for this week's foods, so each food's
+  // baseline can EXCLUDE its own windows ("same as Verdicts" — previously
+  // claimed by the comment but not done, understating staple deltas)
+  const allByFood = {};
+  entries.forEach(e => {
+    if (!byFood[e.food]) return;
+    const f = allByFood[e.food] || (allByFood[e.food] = {});
+    WINDOWS.forEach(w => {
+      const v = e.windows[w.key];
+      if (v === true || v === false) {
+        const s = f[w.key] || (f[w.key] = { p: 0, n: 0 });
+        v === true ? s.p++ : s.n++;
+      }
+    });
+  });
   const suspects = [];
   Object.keys(byFood).forEach(food => {
     WINDOWS.forEach(w => {
       const s = byFood[food][w.key];
       if (!s || s.n < 3) return;
       const tot = s.p + s.n;
-      const base = (baseWin[w.key].n + 1) / (baseWin[w.key].p + baseWin[w.key].n + 2);
+      const own = (allByFood[food] && allByFood[food][w.key]) || { p: 0, n: 0 };
+      const base = (baseWin[w.key].n - own.n + 1) / (baseWin[w.key].p - own.p + baseWin[w.key].n - own.n + 2);
       const bayes = (s.n + 2 * base) / (tot + 2); // shrink toward baseline, same as Verdicts
       const delta = bayes - base;
       if (delta >= 0.15) suspects.push({ food, win: w.label, n: s.n, tot, rate: s.n / tot, base, delta });
@@ -7636,11 +7521,12 @@ function renderWeekly() {
       <div class="card weekly-stat"><div class="weekly-stat-num">${W.best ? W.best.avg.toFixed(1) : '—'}</div><div class="weekly-stat-lbl">best day ${W.best ? '· ' + fmtDayShort(W.best.date) : ''}</div></div>
       <div class="card weekly-stat"><div class="weekly-stat-num">${W.worst && (!W.best || W.worst.date !== W.best.date) ? W.worst.avg.toFixed(1) : '—'}</div><div class="weekly-stat-lbl">worst day ${W.worst && (!W.best || W.worst.date !== W.best.date) ? '· ' + fmtDayShort(W.worst.date) : '· needs 2+ scored days'}</div></div>
     </div>
-    ${W.suspects.length ? `
     <div class="card" style="margin-bottom:16px;">
-      <div class="quick-log-title">🔺 New reaction patterns this week</div>
-      ${W.suspects.map(s => `<div class="verdict-why">• ${esc(s.food)} — ${s.win}: ${s.n} of ${s.tot} ✕ (${Math.round(s.rate * 100)}% vs ${Math.round(s.base * 100)}% baseline)</div>`).join('')}
-    </div>` : ''}
+      <div class="quick-log-title">🔺 Reaction patterns this week</div>
+      ${W.suspects.length
+        ? W.suspects.map(s => `<div class="verdict-why">• ${esc(s.food)} — ${s.win}: ${s.n} of ${s.tot} ✕ (${Math.round(s.rate * 100)}% vs ${Math.round(s.base * 100)}% baseline)</div>`).join('')
+        : `<div class="verdict-why" style="color:var(--muted);">None — no food rose clearly above your baseline this week (needs 3+ ✕ in one window). A clean week is a result too.</div>`}
+    </div>
     ${(W.added.length || W.dropped.length) ? `
     <div class="card">
       <div class="quick-log-title">🔄 Diet changes vs previous week</div>
@@ -7728,8 +7614,7 @@ function computeVerdicts() {
   const totalDays = new Set(entries.map(e => e.date)).size || 1;
   const totalEntries = entries.length || 1;
 
-  const isPosSym = s => /calm|energetic|flat belly|focused|good sleep/i.test(s.label || '');
-  const negSyms = allSymptoms().filter(s => !isPosSym(s));
+  const negSyms = allSymptoms().filter(s => !isPositiveLabel(s.label)); // shared predicate — was a drifting copy of the regex
   const baseCounts = {};
   negSyms.forEach(s => { baseCounts[s.key] = 0; });
   entries.forEach(e => negSyms.forEach(s => { if (e.symptoms && e.symptoms[s.key]) baseCounts[s.key]++; }));
@@ -7802,9 +7687,12 @@ function computeVerdicts() {
       const c = f.symCounts[s.key] || 0;
       if (c < 3) return;
       const foodRate = c / f.logs;
-      // base rate excluding this food's own entries (same self-inclusion trap)
+      // base rate excluding this food's own entries (same self-inclusion trap).
+      // Smoothed (+0.5/+1): a symptom occurring EXCLUSIVELY on this food gave
+      // bRate 0 and the old bRate>0 gate silently dropped the strongest
+      // possible signal.
       const restEntries = totalEntries - f.logs;
-      const bRate = restEntries > 0 ? (baseCounts[s.key] - c) / restEntries : 0;
+      const bRate = restEntries > 0 ? (baseCounts[s.key] - c + 0.5) / (restEntries + 1) : 0;
       if (bRate > 0 && foodRate / bRate >= 1.5 && foodRate >= 0.15) {
         lifts.push({ label: s.label, lift: foodRate / bRate, c });
       }
@@ -7820,13 +7708,25 @@ function computeVerdicts() {
     } else if (worst && worst.n >= 3 && worst.delta >= 0.15) {
       verdict = 'suspect';
       why.push(`${worst.label}: ${worst.n} of ${worst.tot} ✕ (${pct(worst.rate)}) vs your ${pct(worst.base)} baseline`);
+    } else if (scored >= 6 && overallDelta >= 0.15) {
+      // Diffuse reactor: ✕ spread across windows with no single window
+      // reaching 3 — the old logic filed these under "typical" and even
+      // claimed they were "close to baseline".
+      verdict = 'suspect';
+      why.push(`${pct(neg / scored)} ✕ overall vs ~${pct(expRate)} expected — reactions spread across windows rather than concentrated in one`);
     } else if (scored >= 8 && overallDelta <= -0.15 && (!worst || worst.delta < 0.1)) {
       verdict = 'gentler';
       why.push(`${pct(neg / scored)} ✕ overall vs ~${pct(expRate)} expected at your baseline`);
       if (best && best.delta <= -0.15) why.push(`${best.label}: ${best.p} of ${best.tot} clear (${pct(1 - best.rate)}) vs ${pct(1 - best.base)} baseline`);
     } else {
       verdict = 'typical';
-      why.push(`${pct(neg / scored)} ✕ overall — close to the ~${pct(expRate)} your baseline predicts`);
+      const rawRate = neg / scored;
+      // Only claim "close to" when it actually is — a big raw gap on few
+      // windows stays typical (shrinkage), but the text must not assert
+      // closeness that isn't there.
+      why.push(Math.abs(rawRate - expRate) <= 0.10
+        ? `${pct(rawRate)} ✕ overall — close to the ~${pct(expRate)} your baseline predicts`
+        : `${pct(rawRate)} ✕ overall vs ~${pct(expRate)} expected — too few windows for this gap to be conclusive`);
       if (worst && worst.delta >= 0.08 && worst.n >= 2) why.push(`Slightly elevated in ${worst.label}: ${worst.n} of ${worst.tot} ✕ (${pct(worst.rate)} vs ${pct(worst.base)})`);
     }
     if (verdict !== 'unclear' && lifts.length) {
@@ -7834,19 +7734,19 @@ function computeVerdicts() {
       if (verdict === 'gentler' && lifts[0].lift >= 2) { verdict = 'typical'; why.push('Windows look better than baseline, but the symptom pattern above holds it at Typical'); }
     }
 
-    const conf = scored >= 24 ? 'High' : scored >= 12 ? 'Medium' : 'Low';
+    const conf = evidenceConf(scored);
 
     let experiment = null;
     if (staple && (verdict === 'typical' || verdict === 'unclear')) {
       experiment = `Eaten on ${Math.round(eatenShare * 100)}% of days — there are almost no days without it to compare. Skip it for 4–5 days and watch your check-in scores.`;
-    } else if (verdict === 'suspect' && conf !== 'High') {
+    } else if (verdict === 'suspect' && conf.key !== 'high') {
       experiment = 'Avoid for a week to confirm — if that window stays clean without it, this was likely the trigger.';
     }
 
     return { food: f.food, logs: f.logs, daysEaten: f.days.size, eatenShare, staple, scored, pos, neg, worst, overallDelta, verdict, conf, why, lifts, experiment };
   });
 
-  return { list, totalDays, baseRate };
+  return { list, totalDays, baseRate, baseWin };
 }
 
 const VERDICT_META = {
@@ -7855,9 +7755,7 @@ const VERDICT_META = {
   gentler: { label: 'Easier on you', icon: '🟢', order: 2, hint: 'Reacts LESS than your typical food — your safer choices' },
   unclear: { label: 'Unclear', icon: '❔', order: 3, hint: 'Not enough marked reaction windows to judge yet' }
 };
-// Neutral wording for the evidence chip — never implies the food is good/bad,
-// only how much data backs the verdict.
-const CONF_LABEL = { high: 'strong evidence', medium: 'some evidence', low: 'weak evidence' };
+// (evidence-chip wording lives in evidenceConf() — the one shared scale)
 
 function setVerdictSearch(v) { _verdictSearch = (v || '').toLowerCase(); renderVerdicts(); }
 function setVerdictRange(r, btn) {
@@ -7874,7 +7772,7 @@ function renderVerdicts() {
   const chipsEl = document.getElementById('verdict-filter-chips');
   if (!listEl) return;
 
-  const { list, baseRate } = computeVerdicts();
+  const { list, baseRate, baseWin } = computeVerdicts();
   let items = list;
   if (!_verdictShowRare) items = items.filter(i => i.logs >= 3);
   if (_verdictSearch) items = items.filter(i => i.food.toLowerCase().includes(_verdictSearch));
@@ -7915,10 +7813,15 @@ function renderVerdicts() {
     unclear: (a, b) => b.logs - a.logs
   };
 
-  const baseLine = WINDOWS.map(w => `${w.label}: ${Math.round(baseRate[w.key] * 100)}%`).join(' · ');
+  // A window with zero scored data has no baseline — the +1/+2 smoothing used
+  // to print a fabricated "50%" for it.
+  const baseLine = WINDOWS.map(w => {
+    const b = baseWin[w.key];
+    return `${w.label}: ${(b.p + b.n) > 0 ? Math.round(baseRate[w.key] * 100) + '%' : 'n/a'}`;
+  }).join(' · ');
   const baseEl = `<div class="verdict-baseline"><b>Your baseline</b> — across all foods you mark a reaction (✕) this often per window: ${baseLine}. Every verdict below is measured against this, not against zero.</div>`;
 
-  listEl.innerHTML = baseEl + sections.map(k => {
+  listEl.innerHTML = baseEl + (sections.map(k => {
     const group = shown.filter(i => i.verdict === k).sort(sorters[k]);
     return `
       <div class="verdict-section-head v-${k}">
@@ -7932,8 +7835,8 @@ function renderVerdicts() {
               <span class="verdict-food">${esc(i.food)}</span>
               <span class="verdict-badges">
                 ${i.staple ? '<span class="verdict-tag staple" title="Eaten on 70%+ of tracked days — day-comparison analyses cannot isolate it">📌 staple</span>' : ''}
-                <span class="verdict-tag conf-neutral" title="Backed by ${i.scored} scored reaction windows — more windows means a more trustworthy verdict">${CONF_LABEL[i.conf.toLowerCase()] || i.conf}</span>
-                <button class="verdict-test-btn" title="Run a controlled elimination trial on this food" onclick='startExperiment(${JSON.stringify(i.food)})'>🧪 Test</button>
+                <span class="verdict-tag conf-neutral" title="Backed by ${i.scored} scored reaction windows — more windows means a more trustworthy verdict">${i.conf.evidence}</span>
+                <button class="verdict-test-btn" title="Run a controlled elimination trial on this food" onclick="startExperiment(${escAttr(JSON.stringify(i.food))})">🧪 Test</button>
               </span>
             </div>
             <div class="verdict-meta">${i.logs} logs · ${i.daysEaten} days · ${i.scored} windows scored (${i.pos}✓ / ${i.neg}✕)</div>
@@ -7941,7 +7844,9 @@ function renderVerdicts() {
             ${i.experiment && _verdictFilter !== 'all' ? `<div class="verdict-why verdict-why-exp">🔬 ${i.experiment}</div>` : ''}
           </div>`).join('')}
       </div>`;
-  }).join('') || `<div class="card"><div class="empty"><span>🔍</span>No foods match.</div></div>`;
+  // + binds before || — without the parens the fallback was unreachable
+  // because baseEl is always non-empty.
+  }).join('') || `<div class="card"><div class="empty"><span>🔍</span>No foods match.</div></div>`);
 }
 
 // ─── Trials (n-of-1 elimination experiments) ─────────────────────────────────
@@ -7981,7 +7886,13 @@ function pickTargetSyms(food) {
   const verdict = computeVerdicts().list.find(v => v.food === food);
   if (verdict && verdict.lifts) {
     verdict.lifts.forEach(l => {
-      const m = syms.find(s => !picked.includes(s.key) && normFood(s.label) && normFood(l.label).includes(normFood(s.name || s.label)));
+      // compare on the emoji-stripped name — the raw label ('🔴 Skin
+      // Reactions') almost never substring-matched a lift label.
+      const m = syms.find(s => {
+        if (picked.includes(s.key)) return false;
+        const nm = normFood(parseCiSymLabel(s).name || s.label);
+        return nm && normFood(l.label).includes(nm);
+      });
       if (m) picked.push(m.key);
     });
   }
@@ -8023,15 +7934,19 @@ function computeExperiment(exp) {
   const baseFrom = addDays(exp.elimStart, -EXP_BASELINE_DAYS);
   const elimEnd = addDays(exp.elimStart, exp.elimDays - 1);
   const measFrom = addDays(exp.elimStart, exp.washoutDays);   // post-washout
-  const measTo = elimEnd;
+  // "Finish now" caps the measurement window — days after the user stopped
+  // avoiding must not be averaged into the avoidance mean. Same when
+  // reintroduction starts early: its first day can't also count as avoidance.
+  let measTo = (exp.endedAt && exp.endedAt < elimEnd) ? exp.endedAt : elimEnd;
+  if (exp.reintroStart && exp.reintroStart <= measTo) measTo = addDays(exp.reintroStart, -1);
 
   const t = today();
   const elimDayNum = Math.min(exp.elimDays, Math.max(0, Math.round((parseYMD(t) - parseYMD(exp.elimStart)) / 86400000) + 1));
 
-  // adherence: did the food appear during the elimination window?
+  // adherence: did the food appear during the (possibly truncated) window?
   const slipDays = new Set();
   entries.forEach(e => {
-    if (e.date >= exp.elimStart && e.date <= elimEnd && normFood(e.food) === target) slipDays.add(e.date);
+    if (e.date >= exp.elimStart && e.date <= measTo && normFood(e.food) === target) slipDays.add(e.date);
   });
 
   // per-symptom baseline vs measured elimination
@@ -8061,14 +7976,32 @@ function computeExperiment(exp) {
   } else {
     const improved = rows.filter(r => r.delta != null && r.delta >= 0.4).length;
     const worsened = rows.filter(r => r.delta != null && r.delta <= -0.4).length;
-    const od = overallRow ? overallRow.delta : null;
-    if (od != null && od >= 0.5 && improved >= worsened) { verdict = 'helped'; headline = 'Scores improved while avoiding it — a likely trigger.'; }
-    else if (od != null && od <= -0.5) { verdict = 'worse'; headline = 'Scores were worse while avoiding it — probably not this food (or something else was going on).'; }
+    // The headline score: the explicit "Overall" check-in when one exists,
+    // otherwise the MEAN delta across target symptoms — the old code silently
+    // used rows[0] (whichever symptom happened to be first). Either way it
+    // needs a real baseline (≥2 pre-trial check-ins), or the old code declared
+    // "likely not a major trigger" off zero comparison data.
+    const hasOverall = overallKey && overallRow && overallRow.delta != null && overallRow.base.n >= 2;
+    const validRows = rows.filter(r => r.delta != null && r.base.n >= 2);
+    const od = hasOverall ? overallRow.delta
+             : (validRows.length ? validRows.reduce((a, b) => a + b.delta, 0) / validRows.length : null);
+    if (od == null) {
+      verdict = 'collecting';
+      headline = 'No usable pre-trial baseline — needs at least 2 check-ins in the 7 days before the trial started, so this trial can only be judged by eye.';
+    }
+    else if (od >= 0.5 && improved >= worsened) { verdict = 'helped'; headline = 'Scores improved while avoiding it — a likely trigger.'; }
+    else if (od <= -0.5) { verdict = 'worse'; headline = 'Scores were worse while avoiding it — probably not this food (or something else was going on).'; }
     else { verdict = 'nochange'; headline = 'No clear change while avoiding it — likely not a major trigger.'; }
 
-    // reintroduction confirmation
-    if (exp.reintroStart && overallRow && overallRow.reintro && overallRow.reintro.avg != null) {
-      const relapse = overallRow.reintro.avg - (overallRow.elim.avg != null ? overallRow.elim.avg : overallRow.base.avg);
+    // reintroduction confirmation — same rule: real Overall if present, else
+    // the mean relapse across target symptoms.
+    const relRows = hasOverall ? [overallRow] : rows;
+    const rel = relRows
+      .map(r => (r.reintro && r.reintro.avg != null && (r.elim.avg != null || r.base.avg != null))
+        ? r.reintro.avg - (r.elim.avg != null ? r.elim.avg : r.base.avg) : null)
+      .filter(v => v != null);
+    if (exp.reintroStart && rel.length) {
+      const relapse = rel.reduce((a, b) => a + b, 0) / rel.length;
       if (verdict === 'helped' && relapse <= -0.5) headline = '✅ Confirmed: improved off it, worsened when reintroduced — strong evidence it\'s a trigger.';
       else if (verdict === 'helped' && relapse > -0.2) headline = 'Improved while avoiding it, but reintroducing didn\'t bring symptoms back — treat as unconfirmed.';
     }
@@ -8086,6 +8019,10 @@ function foodsForDatalist() {
 function startExperiment(food) {
   food = String(food || '').trim();
   if (!food) { toast('Pick a food to test'); return; }
+  // A typo'd food would start a trial whose adherence check can never match.
+  if (!loadMigrated().some(e => normFood(e.food) === normFood(food))) {
+    if (!confirm(`No logs match "${food}" — the app won't be able to verify adherence from your meal history. Start the trial anyway?`)) return;
+  }
   const exps = loadExperiments();
   if (exps.some(e => normFood(e.food) === normFood(food) && (e.status === 'eliminating' || e.status === 'reintroducing'))) {
     toast('A trial for this food is already running');
@@ -8118,11 +8055,14 @@ function beginReintro(id) {
   saveExperiments(exps);
   render();
 }
-function finishExperiment(id, skipReintro) {
+function finishExperiment(id) {
   const exps = loadExperiments();
   const e = exps.find(x => x.id === id);
   if (!e) return;
   e.status = 'done';
+  // Cap the measurement window at the finish tap — check-ins after the user
+  // resumed eating must not count as "avoidance" days.
+  if (!e.endedAt) e.endedAt = today();
   saveExperiments(exps);
   render();
 }
@@ -8136,7 +8076,7 @@ function renderExperiments() {
   const listEl = document.getElementById('experiments-list');
   const dl = document.getElementById('exp-food-list');
   if (!listEl) return;
-  if (dl) dl.innerHTML = foodsForDatalist().slice(0, 200).map(f => `<option value="${esc(f)}"></option>`).join('');
+  if (dl) dl.innerHTML = foodsForDatalist().slice(0, 200).map(f => `<option value="${escAttr(f)}"></option>`).join('');
 
   const exps = loadExperiments();
   if (!exps.length) {
@@ -8238,19 +8178,26 @@ function learnedData() {
     if (dir === 'safe') safe.push({ src: 'you', strength: 2, text: `You labeled it ${lbl}` });
     const v = verdicts[food];
     if (v) {
-      const s = v.conf === 'High' ? 1.5 : v.conf === 'Medium' ? 1 : 0.5;
-      if (v.verdict === 'suspect') avoid.push({ src: 'verdict', strength: s, text: `Reacts more than your baseline (${v.conf.toLowerCase()} evidence)` });
-      if (v.verdict === 'gentler') safe.push({ src: 'verdict', strength: s, text: `Easier than your baseline (${v.conf.toLowerCase()} evidence)` });
+      const s = v.conf.key === 'high' ? 1.5 : v.conf.key === 'medium' ? 1 : 0.5;
+      if (v.verdict === 'suspect') avoid.push({ src: 'verdict', strength: s, text: `Reacts more than your baseline (${v.conf.evidence})` });
+      if (v.verdict === 'gentler') safe.push({ src: 'verdict', strength: s, text: `Easier than your baseline (${v.conf.evidence})` });
     }
     const t = trials[food];
-    if (t) {
+    // Only CONCLUSIVE trials count — a trial finished while still
+    // 'collecting' used to permanently claim the "🧪 tested" badge (hiding
+    // the Test button) while contributing no evidence at all.
+    const conclusive = t && (t.verdict === 'helped' || t.verdict === 'worse' || t.verdict === 'nochange');
+    if (conclusive) {
       if (t.verdict === 'helped') avoid.push({ src: 'trial', strength: 3, text: '🧪 Trial: you improved while avoiding it (likely trigger)' });
-      if (t.verdict === 'worse') safe.push({ src: 'trial', strength: 3, text: '🧪 Trial: avoiding it made you worse (probably fine)' });
+      // "Worse while avoiding" usually means something ELSE flared that week —
+      // weak evidence of safety, not trial-proof (was strength 3, able to
+      // outrank the user's own 🚩 label).
+      if (t.verdict === 'worse') safe.push({ src: 'trial', strength: 1.5, text: '🧪 Trial: avoiding it made you worse (weak evidence it\'s fine — something else may have been going on)' });
       if (t.verdict === 'nochange') safe.push({ src: 'trial', strength: 1.5, text: '🧪 Trial: no change while avoiding it (probably not a trigger)' });
     }
     if (!avoid.length && !safe.length) return;
     const maxStr = Math.max(0, ...avoid.map(x => x.strength), ...safe.map(x => x.strength));
-    items.push({ food, avoid, safe, conflict: avoid.length > 0 && safe.length > 0, maxStr, hasTrial: !!t, label: lbl || 'N/A' });
+    items.push({ food, avoid, safe, conflict: avoid.length > 0 && safe.length > 0, maxStr, hasTrial: conclusive, label: lbl || 'N/A' });
   });
   return items;
 }
@@ -8259,13 +8206,13 @@ function learnedRow(i, kind) {
   const reasons = kind === 'avoid' ? i.avoid : kind === 'safe' ? i.safe : [...i.avoid, ...i.safe];
   const reasonHtml = reasons.map(r => `<div class="learned-reason">• ${r.text}</div>`).join('');
   const testBtn = i.hasTrial ? '<span class="learned-tag proven">🧪 tested</span>'
-    : `<button class="verdict-test-btn" title="Prove it with a controlled Trial" onclick='startExperiment(${JSON.stringify(i.food)})'>🧪 Test</button>`;
+    : `<button class="verdict-test-btn" title="Prove it with a controlled Trial" onclick="startExperiment(${escAttr(JSON.stringify(i.food))})">🧪 Test</button>`;
   const cur = i.label || 'N/A';
-  const relabel = `<select class="learned-relabel status-badge-select ${LEARNED_STATUS_CLS[cur] || 'status-na'}" title="Change this food's label" onchange='learnedSetStatus(${JSON.stringify(i.food)}, this.value)'>${LEARNED_STATUS_OPTS.map(o => `<option value="${o}" ${o === cur ? 'selected' : ''}>${o}</option>`).join('')}</select>`;
+  const relabel = `<select class="learned-relabel status-badge-select ${LEARNED_STATUS_CLS[cur] || 'status-na'}" title="Change this food's label" onchange="learnedSetStatus(${escAttr(JSON.stringify(i.food))}, this.value)">${LEARNED_STATUS_OPTS.map(o => `<option value="${o}" ${o === cur ? 'selected' : ''}>${o}</option>`).join('')}</select>`;
   const resolve = i.conflict ? `<div class="learned-actions">
       <span style="font-size:11px;color:var(--muted);">Quick resolve:</span>
-      <button class="learned-resolve safe" onclick='learnedSetStatus(${JSON.stringify(i.food)},"✅ Safe")'>Mark Safe</button>
-      <button class="learned-resolve avoid" onclick='learnedSetStatus(${JSON.stringify(i.food)},"🚩 Suspect")'>Mark Avoid</button>
+      <button class="learned-resolve safe" onclick="learnedSetStatus(${escAttr(JSON.stringify(i.food))},'✅ Safe')">Mark Safe</button>
+      <button class="learned-resolve avoid" onclick="learnedSetStatus(${escAttr(JSON.stringify(i.food))},'🚩 Suspect')">Mark Avoid</button>
     </div>` : '';
   return `<div class="learned-row ${kind}">
     <div class="learned-row-top">
@@ -8350,12 +8297,41 @@ function copyLearnedText() {
 }
 
 function render() {
-  renderPending(); renderHistory(); renderSummary(); renderCheckin();
-  renderCorrelations(); renderBucketLoad(); renderTimeline(); renderFactors();
-  renderHeatmap(); renderArchives(); renderQuickLog(); renderFavs(); renderBundles();
-  renderVerdicts(); renderExperiments(); renderLearned(); renderWeekly(); renderTrends(); updateCheckinDot();
+  // Always-on chrome (nav dot + reminder + backup nag)
+  updateCheckinDot();
   renderCheckinReminder();
+  renderBackupNag();
+  // Render ONLY the visible tab. Rendering all ~19 sections on every tap
+  // rebuilt the entire app per interaction — the main source of mobile jank.
+  // Every tab switch routes through showTab() → render(), so a newly-opened
+  // tab always renders fresh from storage.
+  const byTab = {
+    'tab-log':         [renderPending, renderQuickLog, renderBundles],
+    'tab-history':     [renderHistory],
+    'tab-checkin':     [renderCheckin, renderTrends],
+    'tab-Timeline':    [renderTimeline],
+    'tab-factors':     [renderFactors],
+    'tab-archives2':   [renderArchives],
+    'tab-analysis':    [renderHeatmap, renderSummary],
+    'tab-summary':     [renderSummary],
+    'tab-verdicts':    [renderVerdicts],
+    'tab-experiments': [renderExperiments],
+    'tab-learned':     [renderLearned],
+    'tab-weekly':      [renderWeekly],
+    'tab-corr':        [renderCorrelations],
+    'tab-Exp':         [renderBucketLoad],
+    'tab-lab':         [renderLab],
+  };
+  const active = document.querySelector('.tab-content.active');
+  (byTab[active ? active.id : ''] || []).forEach(fn => fn());
 }
+
+// Another open instance (PWA window + tab) wrote a change — the shim already
+// updated the in-memory store; refresh whatever is on screen.
+window.__fstExternalChange = function (key) {
+  if (!key || !String(key).startsWith('fst_')) return;
+  try { render(); } catch (e) {}
+};
 
 // ─── Symptom buttons HTML ─────────────────────────────────────────────────────
 function symptomsHTML(entry) {
@@ -8384,7 +8360,7 @@ function symptomsHTML(entry) {
   // If expanded, build all the symptom chips
   const btns = syms.map(s => {
     const on = entry.symptoms && entry.symptoms[s.key];
-    return `<button class="sym-btn${on?' active':''}" onclick="markSymptom('${entry.id}','${s.key}')" title="${esc(s.label)}">${esc(s.label)}</button>`;
+    return `<button class="sym-btn${on?' active':''}" onclick="markSymptom('${entry.id}','${s.key}')" title="${escAttr(s.label)}">${esc(s.label)}</button>`;
   }).join('');
 
   return toggleBtn + `<div class="symptoms-row" style="margin-top: 8px; padding-top: 0; border-top: none; justify-content: center;">
@@ -8539,11 +8515,11 @@ function renderPending() {
     dueBtn.textContent = `✓ All due (${dueCount})`;
   }
   if (!container) return;
-  let entries = loadMigrated().filter(hasPending);
+  let entries = sortEntriesNewest(loadMigrated().filter(hasPending)); // chronological, not storage order
   if (_pendingMealFilter) entries = entries.filter(e => (e.mealType || '') === _pendingMealFilter);
   if (hint) {
     hint.innerHTML = _bulkMode
-      ? `<div class="bulk-mode-hint"><strong>Bulk edit is on.</strong> Clicking a reaction or symptom inside a meal section will apply the same change to all currently pending items in that meal group.</div>`
+      ? `<div class="bulk-mode-hint"><strong>Bulk edit is on.</strong> Clicking a reaction or symptom applies it to every item of that <em>same meal on the same day</em> — already-marked windows on other items are left untouched.</div>`
       : '';
   }
   if (!entries.length) {
@@ -8571,10 +8547,8 @@ function renderPending() {
     firstSection = false;
     html += `<div class="meal-section-header">${mealLabels[mealKey]}</div>`;
     html += group.map(e => {
-      const faved = isFav(e.food, e.mealType);
-      const timeTag = e.logTime ? `<span style="font-size:11px;color:var(--muted);font-weight:600;">🕐 ${e.logTime}</span>` : '';
       const agoTag = hoursAgoLabel(e.date, e.logTime);
-      const suspectTag = suspectFoods.has(e.food) ? `<span class="suspect-flag" style="margin:0;" title="Historically 50%+ negative reactions (Associated with "X" negative result previously!)">⚠️</span>` : '';
+      const suspectTag = suspectFoods.has(e.food) ? `<span class="suspect-flag" style="margin:0;" title="Historically 50%+ negative reactions on this food">⚠️</span>` : '';
       
 return `
       <div class="pending-entry">
@@ -8584,7 +8558,6 @@ return `
           <div class="entry-actions" style="margin:0; flex:0 0 120px; display:flex; flex-direction:column; align-items:flex-start; gap:6px;">
             <button class="edit-btn" onclick="deleteEntry('${e.id}')">❌ Remove</button>
             <button class="edit-btn" onclick="openEditModal('${e.id}')">✏️ Edit</button>
-            <button class="edit-btn" onclick="toggleFavById('${e.id}')">${faved ? '⭐ Starred' : '⭐ Star'}</button>
           </div>
 
           <div style="flex:1 1 360px; display:flex; flex-direction:column; align-items:center; padding:0 12px; min-width:0;">
@@ -8597,13 +8570,14 @@ return `
           </div>
 
           <div style="flex:0 0 120px; display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
+            ${e.date !== today() ? `<div style="font-size:11.5px; font-weight:700; color:var(--w3); letter-spacing:.5px;">📅 ${fmt(e.date)}</div>` : ''}
             ${e.logTime ? `<div style="font-size:11.5px; font-weight:700; color:var(--muted); letter-spacing:.5px;">🕐 ${e.logTime}</div>` : ''}
             ${agoTag ? `<div style="font-size:11.5px; font-weight:700; color:var(--muted); letter-spacing:.5px;">⏳ ${agoTag}</div>` : ''}
             ${e.mealType ? `<div style="font-size:11.5px; font-weight:700; color:var(--muted); letter-spacing:.5px; text-transform:capitalize;">${{'breakfast':'🌅','lunch':'☀️','snack':'🍎','dinner':'🌙'}[e.mealType]||'🍽️'} ${e.mealType}</div>` : ''}
           </div>
-          
+
         </div>
-        
+
       </div>`;
     }).join('');
   });
@@ -8615,7 +8589,7 @@ function renderHistory() {
   const container = document.getElementById('history-list');
   if (!container) return;
   const q = (document.getElementById('history-search')?.value || '').toLowerCase();
-  let entries = loadMigrated();
+  let entries = sortEntriesNewest(loadMigrated()); // chronological — backfilled entries used to float by insertion order
   // Apply date filter
   entries = entries.filter(e => dateInFilter(e.date, _histFilter));
   if (q) entries = entries.filter(e => e.food.toLowerCase().includes(q) || (e.notes||'').toLowerCase().includes(q));
@@ -8627,8 +8601,6 @@ function renderHistory() {
     return;
   }
   container.innerHTML = entries.map(e => {
-      const faved = isFav(e.food, e.mealType);
-      const timeTag = e.logTime ? `<span style="font-size:11px;color:var(--muted);font-weight:600;">🕐 ${e.logTime}</span>` : '';
       const agoTag = hoursAgoLabel(e.date, e.logTime);
       const chips = WINDOWS.map(w => {
         const v = e.windows[w.key];
@@ -8644,7 +8616,6 @@ function renderHistory() {
           <div class="entry-actions" style="margin:0; flex:0 0 120px; display:flex; flex-direction:column; align-items:flex-start; gap:6px;">
             <button class="edit-btn" onclick="deleteEntry('${e.id}')">❌ Remove</button>
             <button class="edit-btn" onclick="openEditModal('${e.id}')">✏️ Edit</button>
-            <button class="edit-btn" onclick="toggleFavById('${e.id}')">${faved ? '⭐ Starred' : '⭐ Star'}</button>
           </div>
 
           <div style="flex:1 1 360px; display:flex; flex-direction:column; align-items:center; padding:0 12px; min-width:0;">
@@ -8707,10 +8678,15 @@ function inSummaryRange(entry) {
 function summaryRangeLabel() {
   return ({all:'All time', '7d':'Last 7 days', '30d':'Last 30 days', '60d':'Last 60 days', '90d':'Last 90 days', '365d':'Last 365 days', custom:'Custom range'})[_summaryRange] || 'All time';
 }
-function confidenceForCount(n) {
-  if (n >= 6) return { label:'High', cls:'high' };
-  if (n >= 3) return { label:'Medium', cls:'medium' };
-  return { label:'Low', cls:'low' };
+// ─── Evidence confidence — ONE shared scale ──────────────────────────────────
+// Confidence = scored reaction windows, same thresholds everywhere. Summary
+// used to say "High" at 6 windows while Verdicts demanded 24 — the same food
+// could read trustworthy on one tab and thin on the next.
+function evidenceConf(scoredWindows) {
+  const n = scoredWindows || 0;
+  if (n >= 24) return { key:'high',   cls:'high',   label:'High',   evidence:'strong evidence' };
+  if (n >= 12) return { key:'medium', cls:'medium', label:'Medium', evidence:'some evidence' };
+  return { key:'low', cls:'low', label:'Low', evidence:'weak evidence' };
 }
 function setSummaryRange(range, btn) {
   _summaryRange = range;
@@ -8774,9 +8750,9 @@ function summaryControlsHTML(totalEntries, shownEntries) {
     </div>
     <div class="summary-control-row" style="margin-top:10px;">
       <div class="summary-control-group" ${_summaryRange==='custom' ? '' : 'style="visibility:hidden;"'}>
-        <input id="summary-date-from" class="summary-inline-date" type="date" value="${esc(_summaryCustomFrom)}" onchange="setSummaryCustomRange()">
+        <input id="summary-date-from" class="summary-inline-date" type="date" value="${escAttr(_summaryCustomFrom)}" onchange="setSummaryCustomRange()">
         <span style="font-size:12px;color:var(--muted);">to</span>
-        <input id="summary-date-to" class="summary-inline-date" type="date" value="${esc(_summaryCustomTo)}" onchange="setSummaryCustomRange()">
+        <input id="summary-date-to" class="summary-inline-date" type="date" value="${escAttr(_summaryCustomTo)}" onchange="setSummaryCustomRange()">
       </div>
       <div class="summary-control-group" style="margin-left:auto;">
         <input class="summary-search-input" type="text" placeholder="Search foods..." value="${escAttr(_summarySearch)}" oninput="setSummarySearch(this.value)">
@@ -8795,7 +8771,7 @@ function renderSummaryInsights(stats) {
   const makeList = (items, kind) => items.length ? `<div class="summary-stat-list">${items.map(item => `
     <div class="summary-stat-item">
       <div style="min-width:0;">
-        <div class="summary-stat-name" title="${esc(item.food)}">${esc(item.food)}</div>
+        <div class="summary-stat-name" title="${escAttr(item.food)}">${esc(item.food)}</div>
         <div class="summary-stat-meta">${statLabel(item.logs, 'log', 'logs')} • ${formatRatedLabel(item.scoredWindows)} • ${item.conf.label} conf</div>
       </div>
       ${item.worstWindow ? `<div class="summary-suspect-stack"><span class="summary-suspect-window">${item.worstWindow.label}</span><span class="summary-suspect-pct ${kind === 'good' ? 'good' : 'bad'}">${Math.round(((kind === 'good' ? item.worstWindow.posRate : item.worstWindow.negRate) || 0) * 100)}% ${kind === 'good' ? '+' : '−'}</span></div>` : `<span class="summary-badge ${kind}">${item.label}</span>`}
@@ -8803,7 +8779,7 @@ function renderSummaryInsights(stats) {
   const makeSuspects = (items) => items.length ? `<div class="summary-stat-list">${items.map(item => `
     <div class="summary-stat-item">
       <div style="min-width:0;">
-        <div class="summary-stat-name" title="${esc(item.food)}">${esc(item.food)}</div>
+        <div class="summary-stat-name" title="${escAttr(item.food)}">${esc(item.food)}</div>
         <div class="summary-stat-meta">${item.logs} logs • repeated negatives in ${item.windows.length} window${item.windows.length===1?'':'s'}</div>
       </div>
       <div class="summary-suspect-stack">
@@ -8855,7 +8831,7 @@ function renderSymptomSpecificAnalysis(foodStats, syms) {
   const listHTML = (items, kind) => items.length ? `<div class="summary-mini-list">${items.map(item => `
     <div class="summary-mini-row">
       <div style="min-width:0;">
-        <div class="summary-mini-name" title="${esc(item.food)}">${esc(item.food)}</div>
+        <div class="summary-mini-name" title="${escAttr(item.food)}">${esc(item.food)}</div>
         <div class="summary-mini-meta">${item.hits} hit${item.hits===1?'':'s'} • ${statLabel(item.logs, 'log', 'logs')}</div>
       </div>
       <span class="summary-mini-badge ${kind}">${item.rate}%</span>
@@ -8891,10 +8867,13 @@ function renderFoodCompare(foodStats, syms) {
     const p = item?.ws?.[w.key]?.p || 0;
     const n = item?.ws?.[w.key]?.n || 0;
     const total = p+n;
-    return total ? `${Math.max(Math.round((p/total)*100), Math.round((n/total)*100))}%` : '—';
+    if (!total) return '—';
+    // signed like the Overall row — 3✓/1✕ and 1✓/3✕ both used to display an
+    // identical bare "75%", hiding which side dominated
+    return p >= n ? `${Math.round((p/total)*100)}% +` : `${Math.round((n/total)*100)}% −`;
   };
   const card = item => item ? `<div class="compare-card">
-      <h4 title="${esc(item.food)}">${esc(item.food)}</h4>
+      <h4 title="${escAttr(item.food)}">${esc(item.food)}</h4>
       <div class="compare-metric-row"><span class="compare-metric-label">Logs</span><strong>${item.logs}</strong></div>
       <div class="compare-metric-row"><span class="compare-metric-label">Times rated</span><strong>${item.scoredWindows}</strong></div>
       <div class="compare-metric-row"><span class="compare-metric-label">Confidence</span><strong>${item.conf.label}</strong></div>
@@ -9033,7 +9012,8 @@ function renderSummary() {
       const negRate = scored ? ws.totalNeg / scored : null;
       const posRate = scored ? ws.totalPos / scored : null;
       const bayesNegRate = (ws.totalNeg + 1) / (scored + 2);
-      const conf = confidenceForCount(Math.min(ws.logs, ws.scoredWindows || 0));
+      // windows are the evidence unit — logs without scored windows carry none
+      const conf = evidenceConf(ws.scoredWindows || 0);
       const meaningfulMin = Math.max(2, minLogs);
       const windowStats = WINDOWS.map(w => {
         const p = ws[w.key].p, n = ws[w.key].n, total = p+n;
@@ -9075,11 +9055,13 @@ function renderSummary() {
     if (a.scored === 0 && b.scored === 0) return a.food.localeCompare(b.food);
     if (a.scored === 0) return 1;
     if (b.scored === 0) return -1;
-    if ((a.worstWindow?.bayesNegRate ?? 1) !== (b.worstWindow?.bayesNegRate ?? 1)) {
-      return (a.worstWindow?.bayesNegRate ?? 1) - (b.worstWindow?.bayesNegRate ?? 1);
+    // unknown windows sort NEUTRAL (0.5) — "?? 1" ranked a food with one ✓
+    // rating as riskier than a proven 9✕ offender
+    if ((a.worstWindow?.bayesNegRate ?? 0.5) !== (b.worstWindow?.bayesNegRate ?? 0.5)) {
+      return (a.worstWindow?.bayesNegRate ?? 0.5) - (b.worstWindow?.bayesNegRate ?? 0.5);
     }
-    if ((a.bestWindow?.bayesNegRate ?? 1) !== (b.bestWindow?.bayesNegRate ?? 1)) {
-      return (a.bestWindow?.bayesNegRate ?? 1) - (b.bestWindow?.bayesNegRate ?? 1);
+    if ((a.bestWindow?.bayesNegRate ?? 0.5) !== (b.bestWindow?.bayesNegRate ?? 0.5)) {
+      return (a.bestWindow?.bayesNegRate ?? 0.5) - (b.bestWindow?.bayesNegRate ?? 0.5);
     }
     if (a.bayesNegRate !== b.bayesNegRate) return a.bayesNegRate - b.bayesNegRate;
     if (b.logs !== a.logs) return b.logs - a.logs;
@@ -9180,7 +9162,7 @@ function renderSummary() {
     const hiddenSyms = activeSyms.slice(2);
     const symCellTitle = activeSyms.map(s => `${s.label} ${ws.symptoms[s.key]}`).join(' • ');
     const symCell = activeSyms.length
-      ? `<div class="summary-symptoms-wrap" title="${esc(symCellTitle)}">${visibleSyms.map(s => `<span class="sym-pill">${esc(s.label)} ${ws.symptoms[s.key]}</span>`).join('')}${hiddenSyms.length ? `<span class="sym-pill">+${hiddenSyms.length} more</span>` : ''}</div>`
+      ? `<div class="summary-symptoms-wrap" title="${escAttr(symCellTitle)}">${visibleSyms.map(s => `<span class="sym-pill">${esc(s.label)} ${ws.symptoms[s.key]}</span>`).join('')}${hiddenSyms.length ? `<span class="sym-pill">+${hiddenSyms.length} more</span>` : ''}</div>`
       : '<span style="color:var(--muted)">—</span>';
     const hasNote = !!foodNotes[food];
     
@@ -9197,7 +9179,7 @@ function renderSummary() {
         ${statusSelect}
       </div>
     </td>`;
-    const foodCell = `<td class="food-name" title="${esc(food)}"><div class="food-cell-wrap"><span>${esc(food)}</span><span class="food-submeta">${statLabel(logs, 'log', 'logs')} • ${formatRatedLabel(scoredWindows)}</span></div></td>`;
+    const foodCell = `<td class="food-name" title="${escAttr(food)}"><div class="food-cell-wrap"><span>${esc(food)}</span><span class="food-submeta">${statLabel(logs, 'log', 'logs')} • ${formatRatedLabel(scoredWindows)}</span></div></td>`;
     const confCell = `<td><span class="confidence-badge ${conf.cls}">${conf.label}</span></td>`;
     return `<tr>${foodCell}${winCells}${confCell}<td class="summary-symptoms-cell">${symCell}</td>${notesCell}</tr>`;
   }).join('');
@@ -9223,7 +9205,7 @@ function renderSummary() {
 function exportCSV() {
   const backup = {
     app: 'Food & Symptom Tracker',
-    version: 'v37-full-backup',
+    version: 'v53-full-backup',
     exportedAt: new Date().toISOString(),
     data: {
       entries: loadMigrated(),
@@ -9234,8 +9216,8 @@ function exportCSV() {
       checkinSyms: loadCheckinSyms(),
       checkinOrder: loadCheckinOrder(),
       archives: loadArchives(),
-      favs: loadFavs(),
       bundles: loadBundles(),
+      experiments: loadExperiments(), // was missing — trials silently vanished from every backup
       theme: localStorage.getItem('fst_theme') || 'light',
       uiStyle: localStorage.getItem('fst_ui_style') || 'current'
     }
@@ -9257,8 +9239,10 @@ function exportCSV() {
   
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  localStorage.setItem('fst_last_backup', String(Date.now()));
   refreshStorageMeterSnapshot();
   renderArchives();
+  renderBackupNag();
   toast('Full backup exported ✓');
 }
 
@@ -9305,14 +9289,19 @@ function normalizeImportedBackupData(rawData) {
           clone.id = String(clone.id || uid());
           clone.date = typeof clone.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(clone.date) ? clone.date : today();
           clone.food = String(clone.food || clone.logName || clone.name || `Imported item ${i+1}`);
-          clone.mealType = typeof clone.mealType === 'string' ? clone.mealType : '';
+          // whitelist — an arbitrary string here was rendered unescaped into
+          // the autocomplete dropdown (stored XSS via crafted backup)
+          clone.mealType = ['breakfast','lunch','snack','dinner'].includes(clone.mealType) ? clone.mealType : '';
           clone.logTime = typeof clone.logTime === 'string' ? clone.logTime : '';
           clone.notes = typeof clone.notes === 'string' ? clone.notes : '';
+          // coerce to strict booleans — a hand-edited "true" string survives
+          // storage but fails every === true check downstream
+          const wv = v => v === true ? true : v === false ? false : null;
           clone.windows = {
-            w1: clone.windows && Object.prototype.hasOwnProperty.call(clone.windows, 'w1') ? clone.windows.w1 : null,
-            w2: clone.windows && Object.prototype.hasOwnProperty.call(clone.windows, 'w2') ? clone.windows.w2 : null,
-            w3: clone.windows && Object.prototype.hasOwnProperty.call(clone.windows, 'w3') ? clone.windows.w3 : null,
-            w4: clone.windows && Object.prototype.hasOwnProperty.call(clone.windows, 'w4') ? clone.windows.w4 : null
+            w1: wv(clone.windows && clone.windows.w1),
+            w2: wv(clone.windows && clone.windows.w2),
+            w3: wv(clone.windows && clone.windows.w3),
+            w4: wv(clone.windows && clone.windows.w4)
           };
           clone.symptoms = clone.symptoms && typeof clone.symptoms === 'object' ? clone.symptoms : {};
           BUILTIN_SYMPTOMS.forEach(sym => {
@@ -9363,21 +9352,41 @@ function normalizeImportedBackupData(rawData) {
     ? data.checkinOrder.map(v => String(v || '').trim()).filter(Boolean)
     : loadCheckinOrder();
 
+  // ids are interpolated into inline onclick attributes by the diary
+  // renderers — sanitize them (a crafted id in a backup was a stored XSS)
+  const safeId = (v, fallback) => (String(v || '').replace(/[^A-Za-z0-9_-]/g, '') || fallback);
   const normArchives = Array.isArray(data.archives)
     ? data.archives.filter(s => s && typeof s === 'object').map((s, i) => ({
-        id: String(s.id || ('arch_' + i)),
+        id: safeId(s.id, 'arch_' + i),
         name: String(s.name || `Section ${i+1}`),
         entries: Array.isArray(s.entries)
           ? s.entries.filter(e => e && typeof e === 'object').map((e, j) => ({
-              id: String(e.id || (`arch_${i}_entry_${j}`)),
+              id: safeId(e.id, `arch_${i}_entry_${j}`),
               name: String(e.name || `Entry ${j+1}`),
               note: String(e.note || ''),
-              checklist: Array.isArray(e.checklist) ? e.checklist.filter(c => c && typeof c === 'object').map((c, k) => ({ id: String(c.id || `arch_${i}_entry_${j}_check_${k}`), text: String(c.text || '').trim(), done: !!c.done })).filter(c => c.text) : []
+              checklist: Array.isArray(e.checklist) ? e.checklist.filter(c => c && typeof c === 'object').map((c, k) => ({ id: safeId(c.id, `arch_${i}_entry_${j}_check_${k}`), text: String(c.text || '').trim(), done: !!c.done })).filter(c => c.text) : []
             }))
           : []
       }))
     : [];
-  const normFavs = Array.isArray(data.favs) ? data.favs.filter(v => v && typeof v === 'object').map(v => ({ food: String(v.food || ''), mealType: String(v.mealType || '') })).filter(v => v.food) : [];
+  // Trials were silently dropped from every backup before v53 (exported but
+  // never restored — actually never exported either).
+  const normExperiments = Array.isArray(data.experiments)
+    ? data.experiments.filter(x => x && typeof x === 'object' && x.food).map((x, i) => ({
+        id: safeId(x.id, 'exp_' + i),
+        food: String(x.food),
+        status: ['eliminating','reintroducing','done'].includes(x.status) ? x.status : 'done',
+        elimStart: /^\d{4}-\d{2}-\d{2}$/.test(x.elimStart || '') ? x.elimStart : today(),
+        elimDays: Number.isFinite(Number(x.elimDays)) ? Number(x.elimDays) : EXP_ELIM_DAYS,
+        washoutDays: Number.isFinite(Number(x.washoutDays)) ? Number(x.washoutDays) : EXP_WASHOUT_DAYS,
+        reintroStart: /^\d{4}-\d{2}-\d{2}$/.test(x.reintroStart || '') ? x.reintroStart : null,
+        reintroDays: Number.isFinite(Number(x.reintroDays)) ? Number(x.reintroDays) : EXP_REINTRO_DAYS,
+        endedAt: /^\d{4}-\d{2}-\d{2}$/.test(x.endedAt || '') ? x.endedAt : null,
+        targetSyms: Array.isArray(x.targetSyms) ? x.targetSyms.map(String) : [],
+        createdAt: typeof x.createdAt === 'string' ? x.createdAt : ''
+      }))
+    : [];
+  // (favorites feature removed in v54 — favs in old backups are ignored)
   const normBundles = Array.isArray(data.bundles)
     ? data.bundles.filter(v => v && typeof v === 'object').map((v, i) => ({
         id: String(v.id || ('bundle_' + i)),
@@ -9401,8 +9410,8 @@ function normalizeImportedBackupData(rawData) {
     checkinSyms: normCheckinSyms,
     checkinOrder: normCheckinOrder,
     archives: normArchives,
-    favs: normFavs,
     bundles: normBundles,
+    experiments: normExperiments,
     theme: normTheme,
     uiStyle: normUiStyle
   };
@@ -9425,14 +9434,18 @@ function importFullBackup(text, inputEl) {
     return;
   }
 
-  const hasRecognizedData = ['entries','customSyms','foodNotes','checkins','checkinSyms','checkinOrder','archives','favs','bundles'].some(k => Object.prototype.hasOwnProperty.call(rawData, k));
+  const hasRecognizedData = ['entries','customSyms','foodNotes','checkins','checkinSyms','checkinOrder','archives','bundles'].some(k => Object.prototype.hasOwnProperty.call(rawData, k));
   if (!hasRecognizedData) {
     toast('No app data found in backup');
     inputEl.value = '';
     return;
   }
 
-  if (!confirm('Replace current tracker data with this full backup?')) {
+  // Blind "Replace?" was easy to fat-finger — show what's being traded.
+  const curEntries = loadMigrated().length, curCheckins = Object.keys(loadCheckins()).length;
+  const inEntries = Array.isArray(rawData.entries) ? rawData.entries.length : 0;
+  const inCheckins = rawData.checkins && typeof rawData.checkins === 'object' ? Object.keys(rawData.checkins).length : 0;
+  if (!confirm(`Replace current tracker data with this full backup?\n\nYou have now: ${curEntries} logs, ${curCheckins} check-in days.\nThe backup holds: ${inEntries} logs, ${inCheckins} check-in days.`)) {
     inputEl.value = '';
     return;
   }
@@ -9447,8 +9460,8 @@ function importFullBackup(text, inputEl) {
     saveCheckins(data.checkins);
     saveCheckinOrder(data.checkinOrder);
     saveArchives(data.archives);
-    saveFavs(data.favs);
     saveBundles(data.bundles || []);
+    saveExperiments(data.experiments || []); // restore trials (and clear stale ones when the backup has none)
     localStorage.setItem('fst_theme', data.theme);
     applyVisualTheme(data.uiStyle);
 
@@ -9463,8 +9476,12 @@ function importFullBackup(text, inputEl) {
     }
 
     document.getElementById('inp-meal').value = loadLastMealType();
-    _checkinDate = Object.keys(data.checkins).sort().slice(-1)[0] || today();
+    // Land on TODAY, not the newest imported day — first score taps after a
+    // restore used to silently write into an old date.
+    _checkinDate = today();
+    _checkinDateManual = false;
     _trendActive = null;
+    try { localStorage.removeItem('fst_trend_active'); } catch (e) {} // the old filter resurrected on next reload
     inputEl.value = '';
     refreshStorageMeterSnapshot();
     render();
@@ -9505,10 +9522,14 @@ function importLegacyCSV(text, inputEl) {
 
     const w3p = get('9-13h+') || get('8-13h+');
     const w3n = get('9-13h-') || get('8-13h-');
+    const rawDate = get('Date');
+    const rawMeal = get('Meal Type');
     imported.push({
       id: uid(),
-      date:     get('Date'),
-      mealType: get('Meal Type'),
+      // same validation as the JSON path — a malformed date silently broke
+      // history grouping and sorting
+      date:     /^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? rawDate : today(),
+      mealType: ['breakfast','lunch','snack','dinner'].includes(rawMeal) ? rawMeal : '',
       food,
       notes: get('Notes').replace(/^"|"$/g,'').replace(/""/g,'"'),
       windows: {
@@ -9576,13 +9597,21 @@ function parseCSVLine(line) {
         });
       }
     });
+    // Fresh Start parks retired food names here (a plain name list — the old
+    // year-2000 "ghost entries" crashed renders and polluted analytics).
+    try {
+      JSON.parse(localStorage.getItem('fst_food_dictionary') || '[]').forEach(name => {
+        const k = String(name).toLowerCase();
+        if (k && !seen.has(k)) seen.set(k, { food: String(name), notes: '', mealsToday: [] });
+      });
+    } catch (e) {}
     const all = Array.from(seen.values());
     return q ? all.filter(f => f.food.toLowerCase().includes(q.toLowerCase())) : all;
   }
   function mealFlagsHTML(meals) {
     if (!meals || !meals.length) return '';
     const labels = { breakfast:'BF', lunch:'LU', snack:'SN', dinner:'DI' };
-    return `<div class="ac-meals">${meals.map(m => `<span class="ac-meal-flag ${m}" title="Already logged today for ${m}">${labels[m] || m.slice(0,2).toUpperCase()}</span>`).join('')}</div>`;
+    return `<div class="ac-meals">${meals.map(m => `<span class="ac-meal-flag ${escAttr(m)}" title="Already logged today for ${escAttr(m)}">${esc(labels[m] || m.slice(0,2).toUpperCase())}</span>`).join('')}</div>`;
   }
   function openDrop(items) {
     acItems = items; hiIdx = -1;
@@ -9615,12 +9644,32 @@ function parseCSVLine(line) {
 
 // ─── Auto-refresh glow every 60 s ────────────────────────────────────────────
 setInterval(() => {
-  if (document.getElementById('tab-log').classList.contains('active') ||
-      document.getElementById('tab-history').classList.contains('active')) {
-    renderPending();
-    renderHistory();
-  }
+  // Don't yank a live input out from under the user — the inline "+ Custom"
+  // symptom field lives inside these lists and a re-render wiped mid-typing.
+  const ae = document.activeElement;
+  if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.tagName === 'SELECT')) return;
+  if (document.getElementById('tab-log').classList.contains('active')) renderPending();
+  if (document.getElementById('tab-history').classList.contains('active')) renderHistory();
 }, 60000);
+
+// ─── PWA resume: refresh "now"-dependent UI ──────────────────────────────────
+// A tab restored hours later kept last night's clock in the log form (wrong
+// logTime shifts every reaction window), yesterday's date in Vitals, and a
+// stale reminder banner.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible') return;
+  const foodInp = document.getElementById('inp-food');
+  if (foodInp && !foodInp.value.trim()) { // same guard as showTab: never clobber a draft
+    const n = new Date();
+    const t = document.getElementById('inp-time'), dt = document.getElementById('inp-date');
+    if (t) t.value = `${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}`;
+    if (dt) dt.value = today();
+  }
+  const hdr = document.getElementById('header-date');
+  if (hdr) hdr.textContent = fmt(today());
+  if (!_checkinDateManual && _checkinDate !== null && _checkinDate !== today()) _checkinDate = today();
+  render(); // gated: refreshes only the visible tab + dot & banner
+});
 
 // ─── INIT (SAFE BOOT AT THE END OF THE FILE) ───
 document.addEventListener("DOMContentLoaded", async () => {
@@ -9847,6 +9896,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   async function takeSnapshot(auto) {
+    // Serializing before the IndexedDB reconcile finishes would snapshot a
+    // store that's missing every overflowed key — 40 such daily snapshots
+    // would eventually evict all complete ones.
+    await window.__fstStorageReady;
     const db = await openSnapDB();
     const data = window.__fstSerialize();
     const ts = Date.now();
@@ -9871,6 +9924,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   async function autoSnapshotIfDue() {
     try {
+      await window.__fstStorageReady; // never snapshot a pre-reconcile store
       const db = await openSnapDB();
       const all = await snapAll(db);
       db.close();
