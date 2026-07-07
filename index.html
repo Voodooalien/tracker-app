@@ -2520,7 +2520,8 @@ try {
   <div class="header-right">
     <button class="theme-select" id="visual-theme-toggle" onclick="toggleVisualTheme()" title="Toggle visual theme">🎨</button>
     <button class="btn-theme" id="theme-toggle" onclick="toggleTheme()" title="Toggle dark/light mode">🌙</button>
-    <button class="btn-export" onclick="exportCSV()" title="Export full backup">💾</button>
+    <button class="btn-export" onclick="exportCSV()" title="Export full backup (file download)">💾</button>
+    <button class="btn-export" id="btn-share-backup" onclick="shareBackup()" title="Share full backup (Drive, Gmail, …)" style="display:none;">📤</button>
     <label class="btn-export" style="cursor:pointer;" title="Import backup or legacy CSV">📦<input type="file" accept=".json,.csv" onchange="importCSV(event)" style="display:none"></label>
     <span style="font-size:12px;opacity:.6;" id="header-date"></span>
   </div>
@@ -2542,7 +2543,7 @@ try {
   </div>
 
   <div style="margin-left: auto; display: flex; align-items: center; gap: 4px;">
-    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v55</span>
+    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v56</span>
   </div>
 
   <div id="nav-more-tray" style="display:none; flex-basis:100%; flex-wrap:wrap; gap:4px; padding-top:6px; margin-top:4px; border-top:1px dashed rgba(255,255,255,0.18);">
@@ -3854,7 +3855,8 @@ function renderBackupNag() {
     <div class="reminder-bar backup">
       <span class="reminder-text">💾 ${msg}</span>
       <span class="reminder-actions">
-        <button class="reminder-fill" onclick="exportCSV()">Export now</button>
+        ${canShareBackup() ? `<button class="reminder-fill" onclick="shareBackup()">📤 Share…</button>` : ''}
+        <button class="reminder-fill" onclick="exportCSV()">Export</button>
         <button class="reminder-dismiss" onclick="snoozeBackupNag()" title="Snooze for 3 days">✕</button>
       </span>
     </div>`;
@@ -9447,10 +9449,12 @@ function renderSummary() {
 }
 
 // ─── Full backup export / import ─────────────────────────────────────────────
-function exportCSV() {
+// One builder for both paths (download + native share) — the export payload
+// must never drift between them.
+function buildBackupJSON() {
   const backup = {
     app: 'Food & Symptom Tracker',
-    version: 'v53-full-backup',
+    version: 'v56-full-backup',
     exportedAt: new Date().toISOString(),
     data: {
       entries: loadMigrated(),
@@ -9462,32 +9466,56 @@ function exportCSV() {
       checkinOrder: loadCheckinOrder(),
       archives: loadArchives(),
       bundles: loadBundles(),
-      experiments: loadExperiments(), // was missing — trials silently vanished from every backup
+      experiments: loadExperiments(),
       theme: localStorage.getItem('fst_theme') || 'light',
       uiStyle: localStorage.getItem('fst_ui_style') || 'current'
     }
   };
-  const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  
-  // Date and Time formatting
-  const _td = new Date(); 
-  const _dd = String(_td.getDate()).padStart(2,'0'); 
-  const _mm = String(_td.getMonth()+1).padStart(2,'0'); 
-  const _yyyy = _td.getFullYear();
-  const _hh = String(_td.getHours()).padStart(2,'0');
-  const _min = String(_td.getMinutes()).padStart(2,'0');
-  
-  // Filename output: tracker-data-backup-DD-MM-YYYY_HH-MM.json
-  a.download = `tracker-data-backup-${_dd}-${_mm}-${_yyyy}_${_hh}-${_min}.json`;
-  
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  const d = new Date();
+  const p = n => String(n).padStart(2, '0');
+  return {
+    json: JSON.stringify(backup, null, 2),
+    filename: `tracker-data-backup-${p(d.getDate())}-${p(d.getMonth()+1)}-${d.getFullYear()}_${p(d.getHours())}-${p(d.getMinutes())}.json`
+  };
+}
+function markBackupDone(msg) {
   localStorage.setItem('fst_last_backup', String(Date.now()));
   renderArchives();
   renderBackupNag();
-  toast('Full backup exported ✓');
+  toast(msg);
+}
+
+function exportCSV() {
+  const b = buildBackupJSON();
+  const blob = new Blob([b.json], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = b.filename;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  markBackupDone('Full backup exported ✓');
+}
+
+// ─── Share backup (native share sheet → Drive, Gmail, Telegram, …) ──────────
+// On the phone a download just lands in Downloads; the share sheet makes an
+// OFF-DEVICE copy a two-tap habit. Only offered where file-sharing works.
+function canShareBackup() {
+  try {
+    return !!(navigator.canShare && navigator.canShare({ files: [new File(['x'], 'test.json', { type: 'application/json' })] }));
+  } catch (e) { return false; }
+}
+async function shareBackup() {
+  const b = buildBackupJSON();
+  const file = new File([b.json], b.filename, { type: 'application/json' });
+  try {
+    await navigator.share({ files: [file], title: 'Tracker backup', text: 'Food & Symptom Tracker full backup' });
+    // reached only after a successful hand-off to the chosen app
+    markBackupDone('Backup shared ✓');
+  } catch (e) {
+    if (e && e.name === 'AbortError') return; // user closed the sheet — not a backup
+    console.warn('Share failed, falling back to download', e);
+    exportCSV();
+  }
 }
 
 // ─── Import backup or legacy CSV ─────────────────────────────────────────────
@@ -9954,6 +9982,10 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // The most important part: draw the page ONLY after everything is ready!
     render();
+
+    // Share-backup button only where the OS can actually share files
+    // (Android/iOS share sheet, Windows share — hidden on plain file:// use).
+    if (canShareBackup()) document.getElementById('btn-share-backup').style.display = '';
 
     // Trial suggestion (heavy: full verdicts pass) — once, off the boot path.
     setTimeout(() => { computeTrialSuggestion(); renderTrialNudge(); }, 400);
