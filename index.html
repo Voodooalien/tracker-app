@@ -333,13 +333,20 @@
   .summary-table { width: 100%; border-collapse: collapse; font-size: 13px; }
   .summary-table th {
     background: var(--navy); color: #fff; font-size: 11px; font-weight: 700;
-    text-transform: uppercase; letter-spacing: .5px; padding: 9px 12px; text-align: center;
+    text-transform: uppercase; letter-spacing: .5px; padding: 9px 8px; text-align: center;
   }
-  .summary-table th.food-col { text-align: left; }
-  .summary-table td { padding: 9px 12px; border-bottom: 1px solid var(--border); text-align: center; vertical-align: middle; }
-  .summary-table td.food-name { text-align: left; font-weight: 600; vertical-align: middle; }
+  .summary-table th.food-col { text-align: left; padding-left: 12px; }
+  .summary-table td { padding: 9px 8px; border-bottom: 1px solid var(--border); text-align: center; vertical-align: middle; }
+  .summary-table td.food-name { text-align: left; font-weight: 600; vertical-align: middle; padding-left: 12px; }
   .summary-table tr:last-child td { border-bottom: none; }
   .summary-table tr:hover td { background: var(--bg); }
+  /* NOTES column pinned to the right edge of the scroller — it was the last
+     column of a wide table and got clipped at narrower windows; now the rest
+     of the table scrolls underneath it and it is always fully visible. */
+  .summary-table th:last-child, .summary-table td:last-child { position: sticky; right: 0; z-index: 2; }
+  .summary-table td:last-child { background: var(--card); box-shadow: -6px 0 8px -6px rgba(0,0,0,0.22); }
+  .summary-table th:last-child { box-shadow: -6px 0 8px -6px rgba(0,0,0,0.35); }
+  .summary-table tr:hover td:last-child { background: var(--bg); }
   .tally-pair { display: flex; justify-content: center; align-items: center; gap: 6px; }
   .tally-pos { color: var(--pos); font-weight: 700; }
   .tally-neg { color: var(--neg); font-weight: 700; }
@@ -2329,6 +2336,27 @@ body.dark .reminder-text, body.dark .reminder-dismiss { color: #F5A78F; }
 .reminder-bar.backup .reminder-dismiss { color: #854F0B; }
 body.dark .reminder-bar.backup { background: rgba(239,159,39,0.12); border-color: rgba(239,159,39,0.3); }
 body.dark .reminder-bar.backup .reminder-text, body.dark .reminder-bar.backup .reminder-dismiss { color: #FAC775; }
+/* Today strip on Vitals */
+.today-strip { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px; }
+.today-chip {
+  display:inline-flex; align-items:center; gap:5px; font-family:inherit;
+  font-size:12px; font-weight:700; padding:6px 12px; border-radius:999px;
+  background: var(--card); border: 1.5px solid var(--border); color: var(--text); cursor: default;
+}
+button.today-chip { cursor:pointer; }
+button.today-chip:hover { border-color: var(--navy); }
+.today-chip.good { background:#E8F8EE; border-color:#9FE1CB; color:#1E8449; }
+.today-chip.warn { background:#FAEEDA; border-color:#FAC775; color:#854F0B; }
+.today-chip.muted { color: var(--muted); }
+body.dark .today-chip.good { background:rgba(30,132,73,0.15); color:#7DDBA3; }
+body.dark .today-chip.warn { background:rgba(239,159,39,0.12); color:#FAC775; }
+/* teal variant: trial nudges */
+.reminder-bar.trial { background: #E1F5EE; border-color: #9FE1CB; }
+.reminder-bar.trial .reminder-text { color: #085041; }
+.reminder-bar.trial .reminder-fill { background: #0F6E56; }
+.reminder-bar.trial .reminder-dismiss { color: #085041; }
+body.dark .reminder-bar.trial { background: rgba(29,158,117,0.13); border-color: rgba(29,158,117,0.3); }
+body.dark .reminder-bar.trial .reminder-text, body.dark .reminder-bar.trial .reminder-dismiss { color: #9FE1CB; }
 @media (max-width: 640px) {
   .reminder-bar { margin: 8px 10px 0; flex-wrap: wrap; }
 }
@@ -2477,6 +2505,15 @@ body.dark.visual-theme-ocean { --muted: #7FB5D1; }
 
 </head>
 <body>
+<script>
+// Apply the saved theme BEFORE first paint — the main script sits at the end
+// of the body, so dark-mode users could catch a white flash on slow loads.
+try {
+  if (localStorage.getItem('fst_theme') === 'dark') document.body.classList.add('dark');
+  var _fstStyle = localStorage.getItem('fst_ui_style');
+  if (_fstStyle && _fstStyle !== 'current' && /^[a-z_]+$/.test(_fstStyle)) document.body.classList.add('visual-theme-' + _fstStyle);
+} catch (e) {}
+</script>
 
 <header>
   <h1>🥗 Food &amp; Symptom Tracker</h1>
@@ -2505,7 +2542,7 @@ body.dark.visual-theme-ocean { --muted: #7FB5D1; }
   </div>
 
   <div style="margin-left: auto; display: flex; align-items: center; gap: 4px;">
-    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v54</span>
+    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v55</span>
   </div>
 
   <div id="nav-more-tray" style="display:none; flex-basis:100%; flex-wrap:wrap; gap:4px; padding-top:6px; margin-top:4px; border-top:1px dashed rgba(255,255,255,0.18);">
@@ -2524,6 +2561,8 @@ body.dark.visual-theme-ocean { --muted: #7FB5D1; }
 <div id="checkin-reminder" style="display:none;"></div>
 <!-- Backup-age nag (filled by renderBackupNag) -->
 <div id="backup-nag" style="display:none;"></div>
+<!-- Trial phase nudges + suggestions (filled by renderTrialNudge) -->
+<div id="trial-nudge" style="display:none;"></div>
 
 <!-- ═══ LOG TAB ═══ -->
 <div id="tab-log" class="tab-content">
@@ -2685,7 +2724,7 @@ html body select.status-badge-select.status-blacklist {
       
       <div class="form-group" style="margin:0; flex:1; overflow:visible;">
         <div class="autocomplete-wrap" style="width:100%; height:100%; position:relative; overflow:visible;">
-          <input type="text" id="inp-food" class="elegant-log-input" placeholder="Type a food, meal, or event..." autocomplete="off" style="border-radius:8px; font-size:14px; font-weight:600; padding:10px 14px; text-align:left; box-shadow:inset 0 2px 6px rgba(0,0,0,0.02); width:100%; height:100%; box-sizing:border-box;">
+          <input type="text" id="inp-food" class="elegant-log-input" placeholder="Type a food, meal, or event… use ; to log several" autocomplete="off" style="border-radius:8px; font-size:14px; font-weight:600; padding:10px 14px; text-align:left; box-shadow:inset 0 2px 6px rgba(0,0,0,0.02); width:100%; height:100%; box-sizing:border-box;">
           
           <div class="autocomplete-dropdown" id="ac-dropdown" style="position:absolute; top:calc(100% + 4px); left:0; right:0; z-index:999999; background:var(--card); border:1px solid var(--border); border-radius:8px; box-shadow:0 12px 32px rgba(0,0,0,0.15); max-height:250px; overflow-y:auto; text-align:left;"></div>
         </div>
@@ -2765,6 +2804,7 @@ html body select.status-badge-select.status-blacklist {
         <button class="tf-btn" onclick="shiftWeek(1)" title="Earlier week">‹</button>
         <div id="weekly-label" style="font-size:13.5px; font-weight:700;"></div>
         <button class="tf-btn" id="weekly-next-btn" onclick="shiftWeek(-1)" title="Later week">›</button>
+        <button class="tf-btn" id="weekly-now-btn" onclick="jumpToCurrentWeek()" title="Back to the current week" style="display:none;">⤒ Now</button>
       </div>
       <button class="btn-primary" onclick="copyWeeklyText()" style="padding:8px 14px; font-size:12.5px;">📋 Copy as text</button>
     </div>
@@ -2824,7 +2864,7 @@ html body select.status-badge-select.status-blacklist {
   </div>
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
     <p class="section-title" style="margin-bottom:0" id="hist-count-label">All Entries</p>
-    <input type="text" id="history-search" placeholder="Search food..." style="width:200px;font-size:13px;padding:6px 10px;border:1.5px solid var(--border);border-radius:7px;" oninput="renderHistory()">
+    <input type="text" id="history-search" placeholder="Search food..." style="width:200px;font-size:13px;padding:6px 10px;border:1.5px solid var(--border);border-radius:7px;" oninput="_histShown=50;renderHistory()">
   </div>
   <div id="history-list"></div>
 </main>
@@ -2937,11 +2977,14 @@ html body select.status-badge-select.status-blacklist {
         </div>
         <div id="Timeline-symptom-container" class="lag-selector" style="margin-bottom:0; display:flex; align-items:center; gap:8px;">
           </div>
-        <input id="Timeline-search" class="summary-search-input" type="text" placeholder="Search foods..." oninput="renderTimeline()" style="width:220px;">
       </div>
 
     </div>
   </div>
+
+  <!-- shared range chips + search — the SAME range/search used by Correlations
+       and Factors (this tab was silently obeying a control on other tabs) -->
+  <div id="Timeline-filter-container"></div>
 
   <div style="height:10px;"></div>
 
@@ -3110,11 +3153,11 @@ html body select.status-badge-select.status-blacklist {
 
   <div class="card" style="margin-bottom: 24px; padding: 20px 16px;">
     <div style="font-size:11px; color:var(--muted); margin-bottom:16px; line-height:1.5; border-bottom:1px dashed var(--border); padding-bottom:12px;">
-      <strong>Statistical Analysis:</strong> 
-      <br><em>• This tab calculates <strong>"Probability"</strong> by comparing days you ate a food vs. days you didn't.</em>
-      <br><em>• To see one-time strong reactions: Use the <strong>Timeline</strong> tab.</em> 
-      <br><em>• Factors tab is for "Probability" (e.g., eating X makes me 30% more likely to Y), whereas the Timeline tab is for "Absolute Impact".
-      <br><em>• It Requires at least 2 logs to establish a pattern.</em>
+      <strong>Statistical Analysis:</strong>
+      <br><em>• Compares check-ins on days <strong>exactly N days after</strong> you ate a food vs. all other days. (The Correlations tab instead uses a cumulative "day 0 to +N" window.)</em>
+      <br><em>• For 1–5 scores the % is a scale-shift, not a probability; for meal tags it is a probability change.</em>
+      <br><em>• Relative mode needs at least <strong>3 exposed and 3 control days</strong>; foods that can't meet that are counted in the note below, not silently dropped.</em>
+      <br><em>• The <strong>Timeline</strong> tab shows the day-by-day shape of the days after a food instead.</em>
     </div>
 
     <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 15px; font-weight: 700; justify-content: flex-start; color: var(--muted);">
@@ -3528,9 +3571,26 @@ function migrate(entry) {
 function loadMigrated() {
   const raw = localStorage.getItem('fst_entries') || '[]';
   if (_entriesMemo !== null && raw === _entriesMemoRaw) return _entriesMemo;
-  _entriesMemo = load().map(migrate);
+  const parsed = load();
+  // ONE food identity: "Banana" and "banana" are the same food. Every engine
+  // keys on e.food, so canonicalize each entry's casing to the food's most
+  // recently used spelling at load time (the array is newest-first). This
+  // persists on the next save — the case variants were the bug, not data.
+  const canon = {};
+  parsed.forEach(e => { const k = normFood(e.food || ''); if (k && !(k in canon)) canon[k] = e.food; });
+  parsed.forEach(e => { const k = normFood(e.food || ''); if (k) e.food = canon[k]; });
+  _entriesMemo = parsed.map(migrate);
   _entriesMemoRaw = raw;
   return _entriesMemo;
+}
+
+// Prefer the casing already in the log for the same food — a newly typed
+// "banana" must not split from (or re-case) an existing "Banana".
+function canonicalFoodName(name) {
+  const t = normFood(name || '');
+  if (!t) return name;
+  const hit = loadMigrated().find(e => normFood(e.food) === t);
+  return hit ? hit.food : name;
 }
 
 // ─── All symptoms (builtin + custom) ─────────────────────────────────────────
@@ -3579,6 +3639,7 @@ function saveLastMealType(mealType) {
 
 // ─── State variables (must be declared before render()) ──────────────────────
 let _histFilter  = 'today';
+let _histShown   = 50; // history pager: how many entry cards are rendered
 let _editId      = null, _editOriginalFood = null;
 let _trendActive = null; // guarded: a corrupted value here used to kill the whole boot
 try { _trendActive = JSON.parse(localStorage.getItem('fst_trend_active')) || null; } catch (e) {}
@@ -3799,6 +3860,77 @@ function renderBackupNag() {
     </div>`;
 }
 
+// ─── Trials nudge strip ──────────────────────────────────────────────────────
+// A trial used to reach its reintroduction/finish day silently — nothing told
+// the user unless they happened to visit the Trials tab.
+function trialNudgeInfo() {
+  const exps = loadExperiments();
+  for (const exp of exps) {
+    if (exp.status === 'eliminating') {
+      const c = computeExperiment(exp);
+      if (c.elimDayNum >= exp.elimDays) return { id: exp.id, food: exp.food, kind: 'reintro' };
+    } else if (exp.status === 'reintroducing' && exp.reintroStart) {
+      const dayNum = Math.round((parseYMD(today()) - parseYMD(exp.reintroStart)) / 86400000) + 1;
+      if (dayNum > exp.reintroDays) return { id: exp.id, food: exp.food, kind: 'finish' };
+    }
+  }
+  return null;
+}
+let _trialSuggestion = null; // computed once per boot (computeVerdicts is too heavy for every render)
+function computeTrialSuggestion() {
+  try {
+    const exps = loadExperiments();
+    if (exps.some(e => e.status === 'eliminating' || e.status === 'reintroducing')) { _trialSuggestion = null; return; }
+    const tested = new Set(exps.map(e => normFood(e.food)));
+    const cand = computeVerdicts().list
+      .filter(i => i.verdict === 'suspect' && i.conf.key === 'high' && !i.staple && !tested.has(normFood(i.food)))
+      .sort((a, b) => ((b.worst ? b.worst.delta : b.overallDelta) || 0) - ((a.worst ? a.worst.delta : a.overallDelta) || 0))[0];
+    _trialSuggestion = cand ? { food: cand.food } : null;
+  } catch (e) { _trialSuggestion = null; }
+}
+function dismissTrialNudge(key) {
+  localStorage.setItem('fst_trial_nudge_dismissed', key + '|' + today());
+  renderTrialNudge();
+}
+function openTrialsTab() {
+  showTab('experiments', document.querySelector('nav button[onclick*="experiments"]'));
+  window.scrollTo(0, 0);
+}
+function renderTrialNudge() {
+  const el = document.getElementById('trial-nudge');
+  if (!el) return;
+  const dismissed = localStorage.getItem('fst_trial_nudge_dismissed') || '';
+  const info = trialNudgeInfo();
+  let key = null, text = '', btnLabel = '', btnAction = '';
+  if (info) {
+    key = info.kind + ':' + info.id;
+    text = info.kind === 'reintro'
+      ? `🧪 Avoidance phase for <b>${esc(info.food)}</b> is complete — reintroduce it now to confirm (or finish the trial).`
+      : `🧪 Reintroduction of <b>${esc(info.food)}</b> is done — finish the trial to lock in the verdict.`;
+    btnLabel = 'Open Trials';
+    btnAction = 'openTrialsTab()';
+  } else if (_trialSuggestion) {
+    key = 'suggest:' + normFood(_trialSuggestion.food);
+    text = `🔬 <b>${esc(_trialSuggestion.food)}</b> is a strong-evidence Suspect and has never been tested — a 5-day trial would settle it.`;
+    btnLabel = 'Start trial';
+    btnAction = `startExperiment(${escAttr(JSON.stringify(_trialSuggestion.food))})`;
+  }
+  if (!key || dismissed === key + '|' + today()) {
+    el.style.display = 'none';
+    el.innerHTML = '';
+    return;
+  }
+  el.style.display = '';
+  el.innerHTML = `
+    <div class="reminder-bar trial">
+      <span class="reminder-text">${text}</span>
+      <span class="reminder-actions">
+        <button class="reminder-fill" onclick="${btnAction}">${btnLabel}</button>
+        <button class="reminder-dismiss" onclick="dismissTrialNudge('${escAttr(key)}')" title="Hide for today">✕</button>
+      </span>
+    </div>`;
+}
+
 // ─── Check-in missing dot ────────────────────────────────────────────────────
 function updateCheckinDot() {
   const dot = document.getElementById('checkin-dot');
@@ -3908,19 +4040,13 @@ function inCorrRange(dateStr) {
 
 function setCorrRange(range) {
   _corrRange = range;
-  renderCorrelations();
-  renderBucketLoad();
-  renderTimeline();
-  renderFactors();
+  render(); // gated: only the visible analysis tab recomputes
 }
 
 function setCorrCustomRange(el, prefix) {
   _corrCustomFrom = document.getElementById(`${prefix}-date-from`)?.value || '';
   _corrCustomTo   = document.getElementById(`${prefix}-date-to`)?.value   || '';
-  renderCorrelations();
-  renderBucketLoad();
-  renderTimeline();
-  renderFactors();
+  render();
 }
 
 function corrRangeLabel() {
@@ -3932,17 +4058,23 @@ function addEntry() {
   const date     = document.getElementById('inp-date').value;
   const logTime  = document.getElementById('inp-time').value;
   const mealType = document.getElementById('inp-meal').value;
-  const food     = document.getElementById('inp-food').value.trim();
-  if (!food) { document.getElementById('inp-food').focus(); return; }
+  const raw      = document.getElementById('inp-food').value.trim();
+  if (!raw) { document.getElementById('inp-food').focus(); return; }
+  // Multi-add: "eggs; spinach; rice waffle" logs three entries in one tap.
+  // ';' is the separator because real food names contain commas.
+  const foods = raw.split(';').map(s => canonicalFoodName(s.trim())).filter(Boolean);
+  if (!foods.length) { document.getElementById('inp-food').focus(); return; }
   const entries = loadMigrated();
-  entries.unshift({ id:uid(), date, mealType, food, logTime, windows:{w1:null,w2:null,w3:null,w4:null}, symptoms:blankSymptoms() });
+  for (let i = foods.length - 1; i >= 0; i--) {
+    entries.unshift({ id:uid(), date, mealType, food: foods[i], logTime, windows:{w1:null,w2:null,w3:null,w4:null}, symptoms:blankSymptoms() });
+  }
   save(entries);
   saveLastMealType(mealType);
   document.getElementById('inp-food').value = '';
   document.getElementById('inp-date').value = today();
   const n = new Date();
   document.getElementById('inp-time').value = `${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}`;
-  toast('Entry added ✓');
+  toast(foods.length > 1 ? `${foods.length} entries added ✓` : 'Entry added ✓');
   render();
 }
 
@@ -4168,7 +4300,10 @@ function closeEditModal() {
 }
 
 function saveEdit(renameAll) {
-  const newFood     = document.getElementById('edit-food').value.trim();
+  let newFood       = document.getElementById('edit-food').value.trim();
+  // Renaming to a DIFFERENT existing food adopts its casing; re-casing the
+  // SAME food keeps the user's new spelling (that's the point of the edit).
+  if (normFood(newFood) !== normFood(_editOriginalFood)) newFood = canonicalFoodName(newFood);
   const newMealType = document.getElementById('edit-meal').value;
   const newLogTime  = document.getElementById('edit-time').value;
   const newDateRaw  = document.getElementById('edit-date').value;
@@ -4252,12 +4387,27 @@ function loadFoodStatus() {
 }
 function saveFoodStatus(obj) { localStorage.setItem('fst_food_status', JSON.stringify(obj)); }
 
+// Case-insensitive helpers for the raw-keyed notes/status maps: entries are
+// canonicalized at load, but these maps may hold keys written under an old
+// casing. Reads fall back across casings; writes self-heal duplicates.
+function ciLookup(map, food) {
+  if (map[food] !== undefined) return map[food];
+  const t = normFood(food);
+  for (const k in map) if (normFood(k) === t) return map[k];
+  return undefined;
+}
+function ciWrite(map, food, value) {
+  const t = normFood(food);
+  for (const k in map) if (k !== food && normFood(k) === t) delete map[k];
+  if (value === undefined) delete map[food];
+  else map[food] = value;
+}
+
 function changeFoodStatus(food, newStatus) {
   const statuses = loadFoodStatus();
-  if (newStatus === 'N/A') delete statuses[food];
-  else statuses[food] = newStatus;
+  ciWrite(statuses, food, newStatus === 'N/A' ? undefined : newStatus);
   saveFoodStatus(statuses);
-  renderSummary(); 
+  renderSummary();
   toast(`Status updated: ${newStatus}`);
 }
 
@@ -4281,72 +4431,32 @@ function normalizeArchiveEntry(ent) {
   if (typeof entry.note !== 'string') entry.note = '';
   return entry;
 }
-function bytesOfJson(value) {
-  // localStorage quota is charged in UTF-16 code units (2 bytes per char),
-  // not UTF-8 — the old Blob-based measure under-reported real usage ~2×.
-  try { return JSON.stringify(value).length * 2; }
-  catch { return 0; }
+// ─── Storage meter (live) ────────────────────────────────────────────────────
+// Sizes come straight from the raw stored strings (UTF-16 → 2 bytes/char) —
+// no re-serialization, no cached snapshot to go stale. The old snapshot
+// machinery (bytesOfJson/calcStorageMeterSnapshot/refresh…) is gone.
+function storedBytes(key) {
+  const v = localStorage.getItem(key);
+  return v ? v.length * 2 : 0;
 }
 function formatBytes(num) {
-  if (!Number.isFinite(num) || num < 1024) return `${Math.max(0, Math.round(num || 0))} B`;
-  if (num < 1024 * 1024) return `${(num / 1024).toFixed(num < 10240 ? 1 : 0)} KB`;
-  return `${(num / (1024 * 1024)).toFixed(num < 10 * 1024 * 1024 ? 2 : 1)} MB`;
+  if (!num || num <= 0) return '0 KB';
+  if (num < 1024) return Math.round(num) + ' B';
+  if (num < 1048576) return (num / 1024).toFixed(1) + ' KB';
+  return (num / 1048576).toFixed(2) + ' MB';
 }
-
-function calcStorageMeterSnapshot() {
-  const data = {
-    entries: loadMigrated(),
-    customSyms: loadCustomSyms(),
-    foodNotes: loadFoodNotes(),
-    foodStatus: loadFoodStatus(),
-    checkins: loadCheckins(),
-    checkinSyms: loadCheckinSyms(),
-    checkinOrder: loadCheckinOrder(),
-    archives: loadArchives(),
-    bundles: loadBundles(),
-    theme: localStorage.getItem('fst_theme') || 'light',
-    uiStyle: localStorage.getItem('fst_ui_style') || 'current'
-  };
-  
-  // Splitting Logs and Check-ins into their own separate calculations
+function calcStorageMeterLive() {
   const parts = {
-    diary: bytesOfJson(data.archives),
-    notes: bytesOfJson(data.foodNotes),
-    logs: bytesOfJson(data.entries), 
-    checkins: bytesOfJson({ checkins: data.checkins, checkinSyms: data.checkinSyms, checkinOrder: data.checkinOrder }),
-    extras: bytesOfJson({ customSyms: data.customSyms, bundles: data.bundles, theme: data.theme, uiStyle: data.uiStyle, foodStatus: data.foodStatus })
+    logs: storedBytes('fst_entries'),
+    checkins: storedBytes('fst_checkins') + storedBytes('fst_checkin_syms') + storedBytes('fst_checkin_order'),
+    diary: storedBytes('fst_archives'),
+    notes: storedBytes('fst_food_notes'),
   };
-  
-  // Ground truth: every key in the store (now IndexedDB-backed via __fstKeys),
-  // keys included — catches stray keys the part-list doesn't know about.
-  let actual = 0;
-  const _allKeys = (typeof window.__fstKeys === 'function') ? window.__fstKeys() : (function(){ const a=[]; for(let i=0;i<localStorage.length;i++) a.push(localStorage.key(i)); return a; })();
-  for (const k of _allKeys) {
-    actual += (k.length + (localStorage.getItem(k) || '').length) * 2;
-  }
-  const partsTotal = Object.values(parts).reduce((a,b) => a+b, 0);
-  const total = Math.max(actual, partsTotal);
-  parts.other = Math.max(0, total - partsTotal);
-
-  const softLimit = 4 * 1024 * 1024; // browsers allow ~5MB (UTF-16); warn early
-  const pct = Math.max(0, Math.min(100, (total / softLimit) * 100));
-  const status = total < 1024 * 1024 ? 'Low' : total < 3 * 1024 * 1024 ? 'Moderate' : total < softLimit ? 'Heavy' : 'Very Heavy';
-
-  return { total, parts, softLimit, pct, status, updatedAt: new Date().toISOString() };
-}
-
-function saveStorageMeterSnapshot(snapshot) { localStorage.setItem('fst_storage_meter_snapshot', JSON.stringify(snapshot)); }
-function loadStorageMeterSnapshot() {
-  try {
-    const parsed = JSON.parse(localStorage.getItem('fst_storage_meter_snapshot') || 'null');
-    if (parsed && typeof parsed === 'object') return parsed;
-  } catch {}
-  return null;
-}
-function refreshStorageMeterSnapshot() {
-  const snap = calcStorageMeterSnapshot();
-  saveStorageMeterSnapshot(snap);
-  return snap;
+  let total = 0;
+  const keys = (typeof window.__fstKeys === 'function') ? window.__fstKeys() : [];
+  keys.forEach(k => { total += storedBytes(k); });
+  parts.extras = Math.max(0, total - parts.logs - parts.checkins - parts.diary - parts.notes);
+  return { total, parts };
 }
 
 // ─── Daily check-in storage ───────────────────────────────────────────────────
@@ -4498,7 +4608,7 @@ function openNotesModal(food) {
   _notesFood = food;
   const notes = loadFoodNotes();
   document.getElementById('notes-modal-food').textContent = food;
-  document.getElementById('notes-textarea').value = notes[food] || '';
+  document.getElementById('notes-textarea').value = ciLookup(notes, food) || '';
   document.getElementById('notes-modal-bg').classList.add('open');
   setTimeout(() => document.getElementById('notes-textarea').focus(), 50);
 }
@@ -4510,8 +4620,7 @@ function saveNotesModal() {
   if (!_notesFood) return;
   const notes = loadFoodNotes();
   const val = document.getElementById('notes-textarea').value.trim();
-  if (val) notes[_notesFood] = val;
-  else delete notes[_notesFood];
+  ciWrite(notes, _notesFood, val || undefined); // also heals case-duplicate keys
   saveFoodNotes(notes);
   closeNotesModal();
   toast('Notes saved ✓');
@@ -4527,6 +4636,7 @@ function setSeverity(symKey, value) {
   // Re-resolve "today" at TAP time when the date was auto-defaulted — a PWA
   // resumed after midnight otherwise writes the first tap into yesterday
   // (the v42 midnight fix covered the shortcut buttons, not the score taps).
+  const dateRolled = !_checkinDateManual && _checkinDate !== null && _checkinDate !== today();
   if (!_checkinDateManual && _checkinDate !== today()) _checkinDate = today();
   const d = _checkinDate || today();
   const checkins = loadCheckins();
@@ -4541,7 +4651,28 @@ function setSeverity(symKey, value) {
   else checkins[d][symKey] = value;
   saveCheckins(checkins);
 
-  renderCheckin();
+  // Fast path: patch just the tapped row + the matrix cell + the Today strip —
+  // a full tab rebuild reset the scroll position on every tap. Falls back to a
+  // full render when the day's matrix column doesn't exist yet (first score of
+  // a new day), when the day was just emptied (column must vanish), or after a
+  // midnight rollover (whole header is stale).
+  const row = document.getElementById('ci-row-' + symKey);
+  const cell = document.getElementById(`hist-cell-${symKey}-${d}`);
+  if (row && cell && checkins[d] && !dateRolled) {
+    const existingNow = checkins[d];
+    const allCiSyms = allCheckinSymptoms();
+    const sym = allCiSyms.find(s => s.key === symKey);
+    if (sym) row.outerHTML = ciRowHTML(sym, d, existingNow, allCiSyms.map(s => s.key));
+    cell.innerHTML = histDotHTML(existingNow[symKey]);
+    const chip = document.querySelector('.today-strip .today-chip');
+    if (chip && d === today()) {
+      const filled = Object.keys(checkins[today()] || {}).filter(k => k !== 'note').length;
+      chip.className = 'today-chip ' + (filled ? 'good' : 'warn');
+      chip.innerHTML = `💓 ${filled ? `${filled} score${filled === 1 ? '' : 's'} today` : 'no check-in yet'}`;
+    }
+  } else {
+    renderCheckin();
+  }
   updateCheckinDot();
   renderCheckinReminder(); // the banner must react to the check-in it nagged about
 }
@@ -4587,6 +4718,49 @@ function setCheckinDate(dateStr) {
   renderCheckin();
 }
 
+// One severity row — extracted so a score tap can re-render JUST its row
+// instead of rebuilding the whole tab (which reset the scroll position).
+function ciRowHTML(sym, d, existing, allCiKeys) {
+  const sevColors = { 1:'#F87171', 2:'#FECACA', 3:'#FDE68A', 4:'#A7F3D0', 5:'#4ADE80' };
+  const sevLabel  = { 1:'Very Bad', 2:'Bad', 3:'Moderate', 4:'Good', 5:'Very Good' };
+  const cur = existing[sym.key] != null ? existing[sym.key] : null;
+  const btns = [1,2,3,4,5].map(v => {
+    const sel = cur === v;
+    return `<button class="sev-btn${sel?' sel-'+v:''}" data-sev="${v}"
+      style="background:${sevColors[v]};color:#1A2533;"
+      onclick="setSeverity('${sym.key}',${v})"
+      title="${v} – ${sevLabel[v]}">${v}</button>`;
+  }).join('');
+  const selVal = cur ? `<span style="font-size:11px;color:#1A2533;font-weight:700;margin-left:8px;padding:3px 10px;background:rgba(0,0,0,0.07);border-radius:12px;">${sevLabel[cur]}</span>` : '';
+  const trend = getSevenDayTrend(sym.key, d);
+  const trendHtml = trend ? `<span class="trend-chip ${trend.dir}" title="Compared with the average of your previous ${trend.n} check-ins (not necessarily consecutive days)">${trend.arrow} prev avg ${trend.avg}</span>` : '';
+  const isCustom = !CHECK_IN_SYMPTOMS.find(b => b.key === sym.key);
+  const isEditing = _ciSymState && _ciSymState.mode === 'edit' && _ciSymState.key === sym.key;
+  const rowBg = isEditing ? 'background:rgba(46,64,87,0.05);outline:2px solid var(--navy);' : '';
+  const idx = allCiKeys.indexOf(sym.key);
+  const upBtn = `<button class="ci-move-btn" onclick="moveCheckinSym('${sym.key}',-1)" title="Move up" ${idx===0?'disabled':''}>↑</button>`;
+  const downBtn = `<button class="ci-move-btn" onclick="moveCheckinSym('${sym.key}',1)" title="Move down" ${idx===allCiKeys.length-1?'disabled':''}>↓</button>`;
+  const editBtn = isCustom ? `<button class="edit-btn" onclick="openEditCheckinSym('${sym.key}')" title="Edit name & emoji" style="font-size:11px;padding:3px 7px;flex-shrink:0;">✏️ Edit</button>` : '';
+  const delBtn  = isCustom ? `<button class="delete-btn" onclick="deleteCheckinSym('${sym.key}')" title="Remove" style="flex-shrink:0;">✕</button>` : '';
+  return `<div class="checkin-symptom-row" id="ci-row-${sym.key}" style="${rowBg}">
+    <div style="display:flex;align-items:flex-start;gap:6px;flex:1;min-width:0;">
+      <div style="flex:1;">
+        <div class="checkin-symptom-label">${esc(sym.label)}</div>
+        <div style="font-size:10px;color:var(--muted);margin-top:2px;">${esc(sym.desc || '')}</div>
+      </div>
+      <div class="ci-row-tools">${upBtn}${downBtn}${editBtn}${delBtn}</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end;">
+      <div class="severity-scale">${btns}</div>${selVal}${trendHtml}
+    </div>
+  </div>`;
+}
+
+function histDotHTML(v) {
+  return v ? `<span class="sev-dot sev-dot-${v}" style="margin:0; width:34px; height:28px; border-radius:8px;">${v}</span>`
+           : `<span class="sev-dot" style="margin:0; width:34px; height:28px; border-radius:8px; background: rgba(0, 0, 0, 0.03); border:1.5px dashed var(--border); color:var(--muted) !important;">—</span>`;
+}
+
 function renderCheckin() {
   const wrap = document.getElementById('checkin-wrap');
   if (!wrap) return;
@@ -4609,39 +4783,7 @@ function renderCheckin() {
 
   const allCiSyms = allCheckinSymptoms();
   const allCiKeys = allCiSyms.map(s => s.key);
-  const symptomRows = allCiSyms.map(sym => {
-    const cur = existing[sym.key] != null ? existing[sym.key] : null;
-    const btns = [1,2,3,4,5].map(v => {
-      const sel = cur === v;
-      return `<button class="sev-btn${sel?' sel-'+v:''}" data-sev="${v}"
-        style="background:${sevColors[v]};color:${sevText[v]};"
-        onclick="setSeverity('${sym.key}',${v})"
-        title="${v} – ${sevLabel[v]}">${v}</button>`;
-    }).join('');
-    const selVal = cur ? `<span style="font-size:11px;color:#1A2533;font-weight:700;margin-left:8px;padding:3px 10px;background:rgba(0,0,0,0.07);border-radius:12px;">${sevLabel[cur]}</span>` : '';
-    const trend = getSevenDayTrend(sym.key, d);
-    const trendHtml = trend ? `<span class="trend-chip ${trend.dir}" title="Compared with the average of your previous ${trend.n} check-ins (not necessarily consecutive days)">${trend.arrow} prev avg ${trend.avg}</span>` : '';
-    const isCustom = !CHECK_IN_SYMPTOMS.find(b => b.key === sym.key);
-    const isEditing = _ciSymState && _ciSymState.mode === 'edit' && _ciSymState.key === sym.key;
-    const rowBg = isEditing ? 'background:rgba(46,64,87,0.05);outline:2px solid var(--navy);' : '';
-    const idx = allCiKeys.indexOf(sym.key);
-    const upBtn = `<button class="ci-move-btn" onclick="moveCheckinSym('${sym.key}',-1)" title="Move up" ${idx===0?'disabled':''}>↑</button>`;
-    const downBtn = `<button class="ci-move-btn" onclick="moveCheckinSym('${sym.key}',1)" title="Move down" ${idx===allCiKeys.length-1?'disabled':''}>↓</button>`;
-    const editBtn = isCustom ? `<button class="edit-btn" onclick="openEditCheckinSym('${sym.key}')" title="Edit name & emoji" style="font-size:11px;padding:3px 7px;flex-shrink:0;">✏️ Edit</button>` : '';
-    const delBtn  = isCustom ? `<button class="delete-btn" onclick="deleteCheckinSym('${sym.key}')" title="Remove" style="flex-shrink:0;">✕</button>` : '';
-    return `<div class="checkin-symptom-row" style="${rowBg}">
-      <div style="display:flex;align-items:flex-start;gap:6px;flex:1;min-width:0;">
-        <div style="flex:1;">
-          <div class="checkin-symptom-label">${esc(sym.label)}</div>
-          <div style="font-size:10px;color:var(--muted);margin-top:2px;">${esc(sym.desc || '')}</div>
-        </div>
-        <div class="ci-row-tools">${upBtn}${downBtn}${editBtn}${delBtn}</div>
-      </div>
-      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end;">
-        <div class="severity-scale">${btns}</div>${selVal}${trendHtml}
-      </div>
-    </div>`;
-  }).join('');
+  const symptomRows = allCiSyms.map(sym => ciRowHTML(sym, d, existing, allCiKeys)).join('');
 
   // ─── Build history matrix (Left-to-Right reading, up to 14 days) ───
   const histDates = Object.keys(checkins).sort().slice(-14);
@@ -4666,8 +4808,7 @@ function renderCheckin() {
       
       const dots = histDates.map(hd => {
         const v = checkins[hd][sym.key];
-        const scoreHtml = v ? `<span class="sev-dot sev-dot-${v}" style="margin:0; width:34px; height:28px; border-radius:8px;">${v}</span>` : `<span class="sev-dot" style="margin:0; width:34px; height:28px; border-radius:8px; background: rgba(0, 0, 0, 0.03); border:1.5px dashed var(--border); color:var(--muted) !important;">—</span>`;
-        return `<div style="display:flex; justify-content:center; align-items:center; min-width:36px;">${scoreHtml}</div>`;
+        return `<div id="hist-cell-${sym.key}-${hd}" style="display:flex; justify-content:center; align-items:center; min-width:36px;">${histDotHTML(v)}</div>`;
       }).join('');
 
       // Trend Calculation Logic: Latest Score vs 3-Day Rolling Baseline
@@ -4742,7 +4883,34 @@ function renderCheckin() {
     histHTML = `<div class="empty"><span>📅</span>No Vitals yet — fill in today's scores above and press Save!</div>`;
   }
 
+  // ─── Today strip: one glance at what needs you right now ───
+  const todayData = checkins[today()] || {};
+  const ciFilled = allCiSyms.filter(s => todayData[s.key] != null).length;
+  const dueCount = listDuePending().length;
+  const activeExp = loadExperiments().find(x => x.status === 'eliminating' || x.status === 'reintroducing');
+  let trialChip = '';
+  if (activeExp) {
+    const dayNum = Math.min(
+      activeExp.status === 'eliminating' ? activeExp.elimDays : activeExp.reintroDays,
+      Math.max(1, Math.round((parseYMD(today()) - parseYMD(activeExp.status === 'eliminating' ? activeExp.elimStart : activeExp.reintroStart)) / 86400000) + 1));
+    const ofDays = activeExp.status === 'eliminating' ? activeExp.elimDays : activeExp.reintroDays;
+    const verb = activeExp.status === 'eliminating' ? 'avoiding' : 'reintroducing';
+    trialChip = `<button class="today-chip" onclick="openTrialsTab()" title="Open the trial">🧪 Day ${dayNum}/${ofDays} ${verb} ${esc(activeExp.food)}</button>`;
+  }
+  const backupDays = daysSinceLastBackup();
+  const backupChip = backupDays === null
+    ? `<span class="today-chip muted" title="Export a full backup from the History tab">💾 no backup yet</span>`
+    : `<span class="today-chip ${backupDays > BACKUP_NAG_AFTER_DAYS ? 'warn' : 'muted'}">💾 backup ${backupDays === 0 ? 'today' : backupDays + 'd ago'}</span>`;
+  const todayStrip = `
+    <div class="today-strip">
+      <span class="today-chip ${ciFilled ? 'good' : 'warn'}">💓 ${ciFilled ? `${ciFilled} score${ciFilled === 1 ? '' : 's'} today` : 'no check-in yet'}</span>
+      <button class="today-chip ${dueCount ? 'warn' : 'good'}" onclick="showTab('log', document.querySelector('nav button[onclick*=&quot;log&quot;]'))" title="Open Logs to mark them">${dueCount ? `⏳ ${dueCount} window${dueCount === 1 ? '' : 's'} due` : '✅ all windows marked'}</button>
+      ${trialChip}
+      ${backupChip}
+    </div>`;
+
   wrap.innerHTML = `
+    ${todayStrip}
     <div class="card">
       <div style="margin-bottom:16px;">
         <div class="time-filter-row" style="margin-bottom:10px;">
@@ -4803,7 +4971,6 @@ function addArchiveSection() {
   const sections = loadArchives();
   sections.push({ id: uid(), name: trimmed, entries: [] });
   saveArchives(sections);
-  refreshStorageMeterSnapshot();
   renderArchives();
   toast('Section added ✓');
 }
@@ -4817,7 +4984,6 @@ function renameArchiveSection(sectionId) {
   if (!trimmed) { toast('Enter a section name'); return; }
   sec.name = trimmed;
   saveArchives(sections);
-  refreshStorageMeterSnapshot();
   renderArchives();
   toast('Section renamed ✓');
 }
@@ -4827,7 +4993,6 @@ function deleteArchiveSection(sectionId) {
   if (!sec) return;
   if (!confirm(`Delete section "${sec.name}" and all its entries?`)) return;
   saveArchives(sections.filter(s => s.id !== sectionId));
-  refreshStorageMeterSnapshot();
   renderArchives();
   toast('Section deleted');
 }
@@ -4842,7 +5007,6 @@ function addArchiveEntry(sectionId) {
   if (!Array.isArray(sec.entries)) sec.entries = [];
   sec.entries.push({ id: uid(), name: trimmed, note: '', checklist: [] });
   saveArchives(sections); // save FIRST — the meter reads the stored state
-  refreshStorageMeterSnapshot();
   renderArchives();
   toast('Entry added ✓');
 }
@@ -4857,7 +5021,6 @@ function renameArchiveEntry(sectionId, entryId) {
   if (!trimmed) { toast('Enter an entry name'); return; }
   ent.name = trimmed;
   saveArchives(sections);
-  refreshStorageMeterSnapshot();
   renderArchives();
   toast('Entry renamed ✓');
 }
@@ -4869,7 +5032,6 @@ function deleteArchiveEntry(sectionId, entryId) {
   if (!confirm(`Delete entry "${ent.name}"?`)) return;
   sec.entries = sec.entries.filter(e => e.id !== entryId);
   saveArchives(sections);
-  refreshStorageMeterSnapshot();
   renderArchives();
   toast('Entry deleted');
 }
@@ -4896,7 +5058,6 @@ function saveArchiveNotesModal() {
   if (!sec || !ent) return;
   ent.note = document.getElementById('archive-notes-textarea').value.trim();
   saveArchives(sections);
-  refreshStorageMeterSnapshot();
   closeArchiveNotesModal();
   renderArchives();
   toast('Notes saved ✓');
@@ -4966,7 +5127,6 @@ function saveArchiveChecklistModal() {
   if (!sec || !ent) return;
   ent.checklist = _archiveChecklistDraft.map(item => ({ id: String(item.id || uid()), text: String(item.text || '').trim(), done: !!item.done })).filter(item => item.text);
   saveArchives(sections);
-  refreshStorageMeterSnapshot();
   closeArchiveChecklistModal();
   renderArchives();
   toast('Checklist saved ✓');
@@ -4996,19 +5156,22 @@ function setPendingMealFilter(mealType, btn) {
   renderPending();
 }
 
+let _corrSearchTimer = null;
 function updateCorrSearch(el, prefix) {
+  // ONE search shared by Correlations, Factors, and Timeline; debounced so a
+  // fast typist doesn't recompute a full analysis per keystroke.
   _corrSearch = el.value || '';
   const start = typeof el.selectionStart === 'number' ? el.selectionStart : _corrSearch.length;
   const end = typeof el.selectionEnd === 'number' ? el.selectionEnd : start;
-  renderCorrelations();
-  renderBucketLoad();
-  renderTimeline();
-  renderFactors();
-  const next = document.getElementById(`${prefix}-search`);
-  if (next) {
-    next.focus();
-    try { next.setSelectionRange(start, end); } catch (e) {}
-  }
+  clearTimeout(_corrSearchTimer);
+  _corrSearchTimer = setTimeout(() => {
+    render(); // gated: only the visible tab
+    const next = document.getElementById(`${prefix}-search`);
+    if (next) {
+      next.focus();
+      try { next.setSelectionRange(start, end); } catch (e) {}
+    }
+  }, 180);
 }
 
 
@@ -5253,7 +5416,7 @@ const ciTableRows = Object.entries(results).map(([food, data]) => {
     
   wrap.innerHTML = `
     ${corrRangeControlsHTML()}
-    <div class="lag-selector" style="margin-bottom:20px;">
+    <div class="lag-selector" style="margin-bottom:6px;">
       <label style="font-weight:600;">Average Reaction Window:</label>
       <select id="corr-lag" onchange="renderCorrelations()" style="padding:6px 10px;border-radius:6px;border:1.5px solid var(--border);font-size:13px;font-family:inherit;">
         <option value="1" ${lagDays===1?'selected':''}>Day 0 to Day +1 (48hr window)</option>
@@ -5263,6 +5426,7 @@ const ciTableRows = Object.entries(results).map(([food, data]) => {
         <option value="5" ${lagDays===5?'selected':''}>Day 0 to Day +5 (144hr window)</option>
       </select>
     </div>
+    <div style="font-size:11px; color:var(--muted); margin-bottom:20px;">How this tab counts days: a check-in day is "exposed" if you ate the food <b>that day or up to N days before</b> (a cumulative window). The Factors tab instead compares <b>exactly N days after</b> eating.</div>
     <p class="section-title">📊 Impact on Daily Scores (1-5)</p>
     <div class="card summary-wrap" style="padding:0; overflow-x:auto; margin-bottom:24px;">
       <table class="corr-table">
@@ -5802,8 +5966,11 @@ function setTimelineView(v) {
 function renderTimeline() {
   const tbody = document.getElementById('Timeline-tbody');
   const container = document.getElementById('Timeline-symptom-container');
-  const searchInput = document.getElementById('Timeline-search');
-  if (!tbody || !container || !searchInput) return;
+  if (!tbody || !container) return;
+  // Shared range chips + search — same _corrRange/_corrSearch as
+  // Correlations and Factors, now finally VISIBLE on this tab too.
+  const filterContainer = document.getElementById('Timeline-filter-container');
+  if (filterContainer) filterContainer.innerHTML = corrRangeControlsHTML('Timeline');
   document.querySelectorAll('#Timeline-view-toggle .tf-btn').forEach(b => b.classList.toggle('active', b.dataset.v === _timelineView));
 
   const checkinSyms = allCheckinSymptoms();
@@ -5833,7 +6000,7 @@ function renderTimeline() {
   const symKey = document.getElementById('Timeline-symptom').value;
   const selectedSym = combinedSyms.find(s => s.key === symKey);
   const isLogTag = selectedSym && selectedSym._source === 'log';
-  const q = searchInput.value.trim().toLowerCase();
+  const q = (_corrSearch || '').trim().toLowerCase();
 
   // --- DATA PROCESSING ---
   // Apply the selected date range to ENTRIES too — previously only check-ins
@@ -5847,9 +6014,17 @@ function renderTimeline() {
   const foods = [...new Set(rangedEntries.map(e => e.food))];
   const data = [];
 
-  const dayHasLogTag = {};
-  const dayHasAnyEntry = {};
+  // Two sets of tag maps: ALL days for the Day+k lookups (a food eaten near
+  // the range end used to lose its +3..+5 columns because the check-ins just
+  // past the edge were clipped), in-range days for baselines.
+  const allEntriesTl = loadMigrated();
+  const dayHasLogTagAll = {}, dayHasAnyEntryAll = {};
+  const dayHasLogTag = {}, dayHasAnyEntry = {};
   if (isLogTag) {
+    allEntriesTl.forEach(e => {
+        dayHasAnyEntryAll[e.date] = true;
+        if (e.symptoms && e.symptoms[symKey]) dayHasLogTagAll[e.date] = true;
+    });
     rangedEntries.forEach(e => {
         dayHasAnyEntry[e.date] = true;
         if (e.symptoms && e.symptoms[symKey]) dayHasLogTag[e.date] = true;
@@ -5866,19 +6041,35 @@ function renderTimeline() {
         const targetDate = addDays(date, lag);
         let score = null;
         if (isLogTag) {
-            if (dayHasAnyEntry[targetDate]) score = dayHasLogTag[targetDate] ? 1 : 5; 
+            if (dayHasAnyEntryAll[targetDate]) score = dayHasLogTagAll[targetDate] ? 1 : 5;
         } else {
-            score = checkins[targetDate]?.[symKey];
+            score = allCheckins[targetDate]?.[symKey];
         }
         if (score !== null && score !== undefined) lagScores[lag].push(score);
       }
     });
 
+    // Self-excluded baseline: days inside this food's own exposure window
+    // (day 0..+5 after eating it) must not drag the reference toward the
+    // food's own effect — a frequent trigger otherwise reads safer than it is.
+    const excluded = new Set();
+    eatingDates.forEach(date => { for (let lag = 0; lag <= 5; lag++) excluded.add(addDays(date, lag)); });
+    let foodBase = null, foodBaseN = 0;
+    if (isLogTag) {
+      const days = Object.keys(dayHasAnyEntry).filter(d => !excluded.has(d));
+      foodBaseN = days.length;
+      foodBase = days.length ? days.filter(d => dayHasLogTag[d]).length / days.length : null;
+    } else {
+      const vals = Object.keys(checkins).filter(d => !excluded.has(d)).map(d => checkins[d][symKey]).filter(v => v != null);
+      foodBaseN = vals.length;
+      foodBase = vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+    }
+
     const avgs = lagScores.map(arr => arr.length ? (arr.reduce((a,b)=>a+b,0)/arr.length) : null);
     if (eatingDates.length > 1 && avgs.some(v => v !== null)) {
       const valid = avgs.filter(v => v !== null);
       const drop = valid.length >= 2 ? Math.max(...valid) - Math.min(...valid) : 0;
-      data.push({ food, avgs, count: eatingDates.length, drop });
+      data.push({ food, avgs, count: eatingDates.length, drop, foodBase, foodBaseN });
     }
   });
 
@@ -6032,19 +6223,21 @@ function renderTimeline() {
   }
   if (noteEl) {
     noteEl.innerHTML = isLogTag
-      ? `<b>Your usual:</b> you log “${esc(selectedSym.label)}” on <b>${Math.round(baseline * 100)}%</b> of days. Cells show how much more (+) or less (−) often after a food. <b style="color:var(--pos);">Green = better for you</b>, <b style="color:var(--neg);">red = worse</b>.`
-      : `<b>Your usual ${esc(selectedSym.label)}:</b> <b>${baseline.toFixed(1)} / 5</b>. Cells show each day’s average <b>minus</b> your usual. <b style="color:var(--pos);">Green/+ = better than usual</b>, <b style="color:var(--neg);">red/− = worse</b>.`;
+      ? `<b>Your usual:</b> you log “${esc(selectedSym.label)}” on <b>${Math.round(baseline * 100)}%</b> of days. Each food is compared against your days <b>without</b> it (its own after-effect days are excluded). <b style="color:var(--pos);">Green = better for you</b>, <b style="color:var(--neg);">red = worse</b>.`
+      : `<b>Your usual ${esc(selectedSym.label)}:</b> <b>${baseline.toFixed(1)} / 5</b> across this range. Each food is compared against your days <b>without</b> it (its own after-effect days are excluded). <b style="color:var(--pos);">Green/+ = better</b>, <b style="color:var(--neg);">red/− = worse</b>.`;
   }
 
-  // betterness: positive = better than your usual (green), negative = worse (red)
-  const betterness = (val) => {
+  // betterness: positive = better than the reference (green), negative = worse
+  // (red). base = the food's SELF-EXCLUDED baseline when it has enough
+  // food-free days, else the global range average.
+  const betterness = (val, base) => {
     if (val == null) return null;
     if (isLogTag) {
       const occ = (5 - val) / 4;          // fraction of days the tag occurred
-      const d = occ - baseline;           // more occurrence
+      const d = occ - base;               // more occurrence
       return isPos ? d : -d;              // for a bad tag, more = worse
     }
-    return val - baseline;                // higher score = better
+    return val - base;                    // higher score = better
   };
   const th1 = isLogTag ? 0.08 : 0.3;
   const th2 = isLogTag ? 0.20 : 0.7;
@@ -6056,41 +6249,48 @@ function renderTimeline() {
     if (b <= -th1) return 'background:#FECACA; color:#1A2533;';
     return 'background:var(--bg); color:var(--muted); border:1px solid var(--border);';
   };
-  const cellText = (val) => {
+  const cellText = (val, base) => {
     if (val == null) return '—';
     if (isLogTag) {
-      const pp = Math.round(((5 - val) / 4 - baseline) * 100);
+      const pp = Math.round(((5 - val) / 4 - base) * 100);
       return (pp > 0 ? '+' : pp < 0 ? '−' : '') + Math.abs(pp) + 'pp';
     }
-    const d = val - baseline;
+    const d = val - base;
     return (d >= 0.05 ? '+' : d <= -0.05 ? '−' : '±') + Math.abs(d).toFixed(1);
   };
 
   // enrich + sort so the most adverse foods rise to the top
   const enriched = data.map(r => {
-    const bs = r.avgs.map(betterness);
+    // ≥3 food-free days required to trust the self-excluded baseline
+    const ownBaseOk = r.foodBase != null && r.foodBaseN >= 3;
+    const base = ownBaseOk ? r.foodBase : baseline;
+    const bs = r.avgs.map(v => betterness(v, base));
+    const texts = r.avgs.map(v => cellText(v, base));
     const worst = Math.min(...bs.filter(v => v != null).concat([0]));
     const worstIdx = bs.indexOf(worst);
+    const best = Math.max(...bs.filter(v => v != null).concat([0]));
+    const bestIdx = bs.indexOf(best);
     const eatenShare = r.count / totalDays;
     const staple = eatenShare >= 0.7 && totalDays >= 14;
     const lowN = r.count < 3;
-    return { ...r, bs, worst, worstIdx, staple, lowN };
+    return { ...r, bs, texts, worst, worstIdx, best, bestIdx, staple, lowN, ownBaseOk };
   });
   enriched.sort((a, b) => a.worst - b.worst || b.count - a.count);
 
   tbody.innerHTML = enriched.map(r => {
     const cells = r.bs.map((b, i) => {
-      const val = r.avgs[i];
-      return `<td><div style="display:inline-flex;align-items:center;justify-content:center;min-width:54px;height:32px;border-radius:12px;font-weight:800;font-size:12.5px;${cellColor(b)}">${cellText(val)}</div></td>`;
+      return `<td><div style="display:inline-flex;align-items:center;justify-content:center;min-width:54px;height:32px;border-radius:12px;font-weight:800;font-size:12.5px;${cellColor(b)}">${r.texts[i]}</div></td>`;
     }).join('');
 
     let flag = '';
     if (r.staple) flag = `<span class="tl-flag tl-staple" title="You eat this on most days, so a day-comparison can't separate it from everything else. Run a Trial to know for sure.">📌 eaten daily — can't isolate</span>`;
     else if (r.lowN) flag = `<span class="tl-flag tl-thin" title="Only ${r.count} exposures — treat as a weak hint, not proof.">⚠️ thin data (${r.count}×)</span>`;
+    else if (!r.ownBaseOk) flag = `<span class="tl-flag tl-thin" title="Fewer than 3 days without this food in range — compared against your overall average instead.">⚠️ few food-free days</span>`;
 
     let summary;
     if (r.staple) summary = 'You eat this most days — run a 🧪 Trial to isolate it.';
-    else if (r.worst <= -th1 && r.worstIdx >= 0) summary = `Worst on Day +${r.worstIdx}, ${cellText(r.avgs[r.worstIdx])} vs your usual${r.lowN ? ' (weak — few exposures)' : ''}.`;
+    else if (r.worst <= -th1 && r.worstIdx >= 0) summary = `Worst on Day +${r.worstIdx}, ${r.texts[r.worstIdx]} vs your days without it${r.lowN ? ' (weak — few exposures)' : ''}.`;
+    else if (r.best >= th1 && r.bestIdx >= 0) summary = `Better than your food-free days, peaking Day +${r.bestIdx} (${r.texts[r.bestIdx]})${r.lowN ? ' (weak — few exposures)' : ''}.`;
     else summary = 'Stays close to your usual — no clear reaction.';
 
     return `<tr${r.lowN ? ' style="opacity:0.72;"' : ''}>
@@ -6110,6 +6310,7 @@ function renderTimeline() {
 
 function setHistFilter(filter, btn) {
   _histFilter = filter;
+  _histShown = 50; // new filter → start the pager fresh
   document.querySelectorAll('#hist-filter-row .tf-btn').forEach(b => b.classList.remove('active'));
   if (btn) btn.classList.add('active');
   renderHistory();
@@ -6352,7 +6553,7 @@ function logBundle(id) {
   const mealType = (bundle.mealType || document.getElementById('inp-meal').value || '').trim();
   const entries = loadMigrated();
   bundle.items.slice().reverse().forEach(food => {
-    entries.unshift({ id:uid(), date, mealType, food, logTime, windows:{w1:null,w2:null,w3:null,w4:null}, symptoms:blankSymptoms() });
+    entries.unshift({ id:uid(), date, mealType, food: canonicalFoodName(food), logTime, windows:{w1:null,w2:null,w3:null,w4:null}, symptoms:blankSymptoms() });
   });
   save(entries);
   saveLastMealType(mealType);
@@ -6850,7 +7051,6 @@ window.promptClearLogs = function() {
     // 3. Reset the UI state
     _checkinDate = today();
     _checkinDateManual = false;
-    if (typeof refreshStorageMeterSnapshot === 'function') refreshStorageMeterSnapshot();
     if (typeof render === 'function') render();
 
     toast("History cleared! 🧹 Your food names were kept for autocomplete.");
@@ -6877,7 +7077,6 @@ function toggleDiary2Checklist(sectionId, entryId, itemId) {
   if (item) {
     item.done = !item.done;
     saveArchives(sections);
-    if (typeof refreshStorageMeterSnapshot === 'function') refreshStorageMeterSnapshot();
     renderDiary2();
     if (_currentListModalSec === sectionId && _currentListModalEnt === entryId) {
         renderDiary2ListModalContent();
@@ -6900,7 +7099,6 @@ function editDiary2ChecklistItem(sectionId, entryId, itemId, event) {
   if (newText !== null && newText.trim() !== '') {
     item.text = newText.trim();
     saveArchives(sections);
-    if (typeof refreshStorageMeterSnapshot === 'function') refreshStorageMeterSnapshot();
     renderDiary2();
     if (_currentListModalSec === sectionId && _currentListModalEnt === entryId) {
         renderDiary2ListModalContent();
@@ -6968,6 +7166,13 @@ function renderDiary2ListModalContent() {
   const ent = sec && Array.isArray(sec.entries) ? sec.entries.find(e => e.id === _currentListModalEnt) : null;
   if (!ent) { closeDiary2ListModal(); return; }
 
+  // Heal legacy items (missing ids / empty text) DURABLY — an id regenerated
+  // only in memory made its checkbox untoggleable (the save path couldn't
+  // find it by the new id).
+  const beforeNorm = JSON.stringify(ent.checklist || []);
+  normalizeArchiveEntry(ent);
+  if (JSON.stringify(ent.checklist) !== beforeNorm) saveArchives(sections);
+
   const total = ent.checklist.length;
   const done = ent.checklist.filter(i => i.done).length;
   const pct = total ? Math.round((done/total)*100) : 0;
@@ -7007,22 +7212,26 @@ function renderDiary2() {
      let html = '';
      sections.forEach(sec => {
        const entries = Array.isArray(sec.entries) ? sec.entries.map(normalizeArchiveEntry) : [];
+       // a section-TITLE match keeps the whole section visible (searching
+       // "Skin Care" used to hide the Skin Care section)
+       const secMatches = !!_diary2Search && (sec.name || '').toLowerCase().includes(_diary2Search);
        const filtered = entries.filter(e => {
-          if (!_diary2Search) return true;
+          if (!_diary2Search || secMatches) return true;
           if ((e.name||'').toLowerCase().includes(_diary2Search)) return true;
           if ((e.note||'').toLowerCase().includes(_diary2Search)) return true;
           if (e.checklist.some(c => (c.text||'').toLowerCase().includes(_diary2Search))) return true;
           return false;
        });
 
-       if (_diary2Search && !filtered.length) return; 
+       if (_diary2Search && !secMatches && !filtered.length) return;
 
-       // Header now includes the Up/Down arrows
+       // Header includes the Up/Down arrows — hidden while a search filter is
+       // active (reordering relative to invisible neighbours looked broken)
        html += `<div class="diary2-section-title">
                   ${esc(sec.name)}
                   <div style="margin-left:auto; display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end;">
-                    <button class="sym-add-btn" style="font-size:11px; padding:4px 8px; border-radius:6px;" onclick="moveArchiveSection('${sec.id}', 'up')" title="Move Section Up">↑</button>
-                    <button class="sym-add-btn" style="font-size:11px; padding:4px 8px; border-radius:6px;" onclick="moveArchiveSection('${sec.id}', 'down')" title="Move Section Down">↓</button>
+                    ${_diary2Search ? '' : `<button class="sym-add-btn" style="font-size:11px; padding:4px 8px; border-radius:6px;" onclick="moveArchiveSection('${sec.id}', 'up')" title="Move Section Up">↑</button>
+                    <button class="sym-add-btn" style="font-size:11px; padding:4px 8px; border-radius:6px;" onclick="moveArchiveSection('${sec.id}', 'down')" title="Move Section Down">↓</button>`}
                     <button class="sym-add-btn" style="font-size:11px; padding:4px 10px; border-radius:6px;" onclick="addArchiveEntry('${sec.id}')">＋ Add Card</button>
                     <button class="sym-add-btn" style="font-size:11px; padding:4px 10px; border-radius:6px;" onclick="renameArchiveSection('${sec.id}')">✏️ Rename</button>
                     <button class="sym-add-btn" style="font-size:11px; padding:4px 10px; border-radius:6px; color:var(--neg); border-color:var(--neg);" onclick="deleteArchiveSection('${sec.id}')">✕ Delete</button>
@@ -7075,57 +7284,55 @@ function renderDiary2() {
      wrap.innerHTML = html ? html : `<div class="card"><div class="empty"><span>🔍</span>No matches found for "${esc(_diary2Search)}"</div></div>`;
   }
 
-  // Storage Snapshot Meter
-  const snap = typeof loadStorageMeterSnapshot === 'function' ? loadStorageMeterSnapshot() : null;
-  storageWrap.innerHTML = snap ? `
+  // Storage meter — LIVE sizes computed from the raw stored strings (UTF-16 =
+  // 2 bytes/char) plus the browser's real quota. The old cached "snapshot"
+  // over-counted re-inflated data, warned about a 4 MB localStorage cap that
+  // the IndexedDB layer made obsolete, and went stale for weeks.
+  const meter = calcStorageMeterLive();
+  storageWrap.innerHTML = `
     <div class="card storage-meter-card">
       <div class="storage-meter-head">
         <div>
-          <div class="storage-meter-title">Storage Snapshot</div>
-          <div class="storage-meter-sub">Lightweight cached estimate. Refreshed on export, import, and diary note/checklist saves.</div>
+          <div class="storage-meter-title">Storage</div>
+          <div class="storage-meter-sub">Live sizes. Everything lives in this browser — file exports are your only off-device copy.</div>
         </div>
-        <div class="storage-meter-badge">${esc(snap.status)} · ${esc(formatBytes(snap.total))}</div>
+        <div class="storage-meter-badge">${esc(formatBytes(meter.total))}</div>
       </div>
-      <div class="storage-meter-bar"><div class="storage-meter-fill" style="width:${Math.max(2, snap.pct)}%"></div></div>
+      <div class="storage-meter-bar"><div id="storage-quota-fill" class="storage-meter-fill" style="width:2%"></div></div>
+      <div class="storage-meter-sub" id="storage-quota-line" style="margin-top:6px;">Checking browser quota…</div>
       <div class="storage-meter-grid">
-        <div class="storage-meter-cell"><div class="storage-meter-cell-label">Diary</div><div class="storage-meter-cell-value">${esc(formatBytes(snap.parts?.diary || 0))}</div></div>
-        <div class="storage-meter-cell"><div class="storage-meter-cell-label">Food Notes</div><div class="storage-meter-cell-value">${esc(formatBytes(snap.parts?.notes || 0))}</div></div>
-        <div class="storage-meter-cell"><div class="storage-meter-cell-label">Meal Logs</div><div class="storage-meter-cell-value">${esc(formatBytes(snap.parts?.logs || 0))}</div></div>
-        <div class="storage-meter-cell"><div class="storage-meter-cell-label">Vitals</div><div class="storage-meter-cell-value">${esc(formatBytes(snap.parts?.checkins || 0))}</div></div>
-        <div class="storage-meter-cell"><div class="storage-meter-cell-label">Other App Data</div><div class="storage-meter-cell-value">${esc(formatBytes(snap.parts?.extras || 0))}</div></div>
+        <div class="storage-meter-cell"><div class="storage-meter-cell-label">Diary</div><div class="storage-meter-cell-value">${esc(formatBytes(meter.parts.diary))}</div></div>
+        <div class="storage-meter-cell"><div class="storage-meter-cell-label">Food Notes</div><div class="storage-meter-cell-value">${esc(formatBytes(meter.parts.notes))}</div></div>
+        <div class="storage-meter-cell"><div class="storage-meter-cell-label">Meal Logs</div><div class="storage-meter-cell-value">${esc(formatBytes(meter.parts.logs))}</div></div>
+        <div class="storage-meter-cell"><div class="storage-meter-cell-label">Vitals</div><div class="storage-meter-cell-value">${esc(formatBytes(meter.parts.checkins))}</div></div>
+        <div class="storage-meter-cell"><div class="storage-meter-cell-label">Other App Data</div><div class="storage-meter-cell-value">${esc(formatBytes(meter.parts.extras))}</div></div>
       </div>
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-top:16px; flex-wrap:wrap; gap:10px; padding-top:12px; border-top:1px dashed var(--border);">
-        <div class="storage-meter-sub">Last updated: ${esc(new Date(snap.updatedAt).toLocaleString())}</div>
-        
-        <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
-          
-          <div style="display:inline-flex; align-items:center; gap:6px;">
-            <button class="delete-btn" style="border:1.5px solid var(--neg); padding:6px 12px; border-radius:6px; font-size:12px; font-weight:700;" onclick="promptClearLogs()">
-              🛑 Clear Logs & Vitals
-            </button>
-            
-            <div style="display:inline-block; vertical-align:middle; font-family:sans-serif;" 
-                 onmouseenter="const rect=this.getBoundingClientRect(); const t=this.querySelector('.story-tt'); if(t){ document.body.appendChild(t); t.style.left=(rect.right - 290)+'px'; t.style.top='auto'; t.style.bottom=(window.innerHeight - rect.top + 15)+'px'; t.style.opacity='1'; t.style.visibility='visible'; this._tt=t; }" 
-                 onmouseleave="if(this._tt){ this._tt.style.opacity='0'; this._tt.style.visibility='hidden'; this.appendChild(this._tt); this._tt=null; }">
-              <span style="display:inline-flex; align-items:center; justify-content:center; width:16px; height:16px; border-radius:50%; background:var(--neg); color:#fff; font-size:11px; font-family:serif; font-style:italic; font-weight:bold; cursor:help; line-height:1;">i</span>
-              
-              <div class="story-tt" style="opacity:0; visibility:hidden; position:fixed; width:280px; background:var(--card); border:1px solid var(--border); box-shadow:0 -6px 16px rgba(0,0,0,0.18); padding:12px; border-radius:8px; font-size:12px; z-index:999999; pointer-events:none; white-space:normal; font-weight:400; line-height:1.4; color:var(--text); text-transform:none; letter-spacing:normal; text-align:left;">
-                <strong style="font-size:13px; color:var(--text);">🛑 Hard Reset Guide</strong><br><br>
-                <strong style="color:var(--text);">What it does:</strong> Wipes ALL daily food logs and vitals from the app. Your diary notes remain safe.<br><br>
-                <strong style="color:var(--text);">When it's useful:</strong> Starting a strict elimination diet to track new baselines, clearing a corrupted backup import, or wiping data for privacy.<br><br>
-                <span style="color:var(--neg); font-weight:bold;">Warning: This cannot be undone.</span>
-              </div>
-            </div>
-          </div>
-          
+      <div style="display:flex; justify-content:flex-end; align-items:center; margin-top:16px; flex-wrap:wrap; gap:10px; padding-top:12px; border-top:1px dashed var(--border);">
+        <div style="display:inline-flex; align-items:center; gap:6px;">
+          <button class="delete-btn" style="border:1.5px solid var(--neg); padding:6px 12px; border-radius:6px; font-size:12px; font-weight:700;" onclick="promptClearLogs()">
+            🛑 Clear Logs & Vitals
+          </button>
+          <button onclick="const t=document.getElementById('hard-reset-info'); t.style.display = t.style.display==='none' ? '' : 'none';" title="What does Clear do?" style="display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; border-radius:50%; background:var(--neg); color:#fff; font-size:11px; font-family:serif; font-style:italic; font-weight:bold; border:none; cursor:pointer; line-height:1;">i</button>
         </div>
       </div>
-  ` : `
-    <div class="card storage-meter-card">
-      <div class="storage-meter-title">Storage Snapshot</div>
-      <div class="storage-meter-sub" style="margin-top:8px;">No snapshot yet. Export or import once, or save a diary note/checklist, and the meter will appear here.</div>
-    </div>
-  `;
+      <div id="hard-reset-info" style="display:none; margin-top:10px; background:var(--bg); border:1px solid var(--border); padding:12px; border-radius:8px; font-size:12px; line-height:1.5; color:var(--text);">
+        <strong style="font-size:13px;">🛑 Hard Reset Guide</strong><br><br>
+        <strong>What it does:</strong> Wipes ALL daily food logs and vitals from the app. Your diary notes remain safe.<br><br>
+        <strong>When it's useful:</strong> Starting a strict elimination diet to track new baselines, clearing a corrupted backup import, or wiping data for privacy.<br><br>
+        <span style="color:var(--neg); font-weight:bold;">Warning: This cannot be undone.</span>
+      </div>
+    </div>`;
+  // async: patch in the real quota once the browser answers
+  if (navigator.storage && navigator.storage.estimate) {
+    navigator.storage.estimate().then(est => {
+      const line = document.getElementById('storage-quota-line');
+      const fill = document.getElementById('storage-quota-fill');
+      if (!line || !est || !est.quota) return;
+      const pct = (est.usage / est.quota) * 100;
+      line.textContent = `Using ${formatBytes(est.usage)} of ${formatBytes(est.quota)} browser quota (${pct < 1 ? '<1' : Math.round(pct)}%).`;
+      if (fill) fill.style.width = Math.max(2, Math.min(100, pct)) + '%';
+    }).catch(() => {});
+  }
 }
 
 // ─── LAB / DISCOVERY LOGIC ───────────────────────────────────────────────────
@@ -7243,12 +7450,24 @@ function renderSafeFoodList() {
   // 3. Sort by Clear Rate (highest first), then by total logs
   safeFoods.sort((a, b) => b.clearRate - a.clearRate || b.logs - a.logs);
 
-  // 4. Handle Empty State
+  // 4. Handle Empty State — state the REAL gate (all three conditions) and
+  //    show how close the nearest foods are instead of a dead end.
   if (safeFoods.length === 0) {
+    const nearMisses = Object.entries(stats)
+      .filter(([, d]) => d.logs >= 2 && !(d.logs >= 5 && d.scoredWindows >= 8))
+      .map(([food, d]) => {
+        const clear = d.scoredWindows ? Math.round(((d.scoredWindows - d.negWindows) / d.scoredWindows) * 100) : null;
+        return { food, logs: d.logs, scored: d.scoredWindows, clear };
+      })
+      .filter(x => x.clear === null || x.clear >= 70)
+      .sort((a, b) => (b.logs + b.scored) - (a.logs + a.scored))
+      .slice(0, 3);
     wrap.innerHTML = `
       <div class="empty" style="padding:14px; border:1px dashed var(--border); border-radius:10px;">
         <span style="font-size:24px; margin-bottom:8px; display:block;">⏳</span>
-        Data is building up.<br>Log a food at least 5 times with a ≥70% clear rate to unlock it as a Safe Food.
+        Unlock rule: <b>5+ logs</b> AND <b>8+ scored windows</b> AND <b>≥70% clear</b>.
+        ${nearMisses.length ? `<div style="margin-top:10px; font-size:12px; text-align:left;">Closest to unlocking:<br>${nearMisses.map(x =>
+          `• ${esc(x.food)} — ${x.logs}/5 logs · ${x.scored}/8 windows${x.clear !== null ? ` · ${x.clear}% clear so far` : ''}`).join('<br>')}</div>` : ''}
       </div>
     `;
     return;
@@ -7279,7 +7498,7 @@ function renderSafeFoodList() {
 
   wrap.innerHTML = `
     <div style="font-size:12px; color:var(--muted); line-height:1.5; margin-bottom:12px;">
-      Auto-generated list of proven staples. Foods require a minimum of 5 logs and a ≥70% symptom-free clear rate to appear here.
+      Auto-generated list of proven staples. To appear here a food needs <b>5+ logs</b>, <b>8+ scored reaction windows</b>, and a <b>≥70%</b> symptom-free clear rate.
     </div>
     <div style="display:flex; flex-direction:column;">
       ${listHtml}
@@ -7293,11 +7512,12 @@ function renderVelocity() {
   if (!wrap) return;
 
   const entries = loadMigrated();
+  // Time-based titles; the physiology is a HYPOTHESIS, phrased as one.
   const velocityData = {
-    w1: { title: 'Upper GI (0-4h)', sub: 'Stomach / Immediate Acid', items: [] },
-    w2: { title: 'Mid GI (5-8h)', sub: 'Small Intestine / Rapid Ferment', items: [] },
-    w3: { title: 'Lower GI (9-13h)', sub: 'Colon / Deep Fermentation', items: [] },
-    w4: { title: 'Systemic (14h+)', sub: 'Inflammation / Delayed', items: [] }
+    w1: { title: 'Fast (0–4h)', sub: 'often stomach / upper GI', items: [] },
+    w2: { title: 'Mid (5–8h)', sub: 'often small intestine', items: [] },
+    w3: { title: 'Slow (9–13h)', sub: 'often colon / fermentation', items: [] },
+    w4: { title: 'Late (14–17h)', sub: 'delayed / whole-body', items: [] }
   };
 
   const foodStats = {};
@@ -7317,7 +7537,7 @@ function renderVelocity() {
       let max = 0; let dom = '';
       WINDOWS.forEach(w => { if(stats[w.key] > max) { max = stats[w.key]; dom = w.key; } });
       
-      // Dominant window must account for > 50% of the negative reactions
+      // Dominant window must account for ≥50% of the negative reactions
       if (dom && (max / stats.totalNeg) >= 0.5) {
         velocityData[dom].items.push({ food, count: max, total: stats.totalNeg });
       }
@@ -7336,9 +7556,9 @@ function renderVelocity() {
         </div>
         <div style="display:flex; flex-direction:column; gap:6px;">
           ${group.items.length ? group.items.map(i => `
-            <div class="lab-velocity-tag" title="${escAttr(i.food)}" style="cursor: pointer;">
+            <div class="lab-velocity-tag" title="${escAttr(i.food)} — ${i.count} of its ${i.total} reactions land in this window">
               <span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${esc(i.food)}</span>
-              <span style="color:var(--neg); font-size:10px;">${Math.round((i.count/i.total)*100)}%</span>
+              <span style="color:var(--neg); font-size:10px; white-space:nowrap;">${i.count} of ${i.total} ✕</span>
             </div>
           `).join('') : '<span style="display: block; text-align: center !important; font-size:11px; color:var(--muted);">No clear culprits.</span>'}
         </div>
@@ -7348,7 +7568,8 @@ function renderVelocity() {
 
   wrap.innerHTML = `
     <div style="font-size:12px; color:var(--muted); line-height:1.5; margin-bottom:14px;">
-      Maps your negative reactions by physiological location. If a food consistently triggers you in 0-4h, it's likely a stomach/upper-GI issue. If it hits at 9-13h, it's fermenting in the colon, if you mark X negative result after that, then it is systemic/delayed reaction.
+      Groups foods by <b>when</b> their reactions usually land (a food appears once it has 2+ ✕ and one window holds ≥50% of them).
+      The timing <i>may hint</i> at where in digestion the trouble starts — fast often means stomach/upper GI, slow often means colon — but that's a hypothesis to test, not a diagnosis. Counts show how thin the data is.
     </div>
     <div class="lab-velocity-grid">${colsHtml}</div>
   `;
@@ -7362,6 +7583,10 @@ function renderVelocity() {
 let _weekOffset = 0; // 0 = current week (declaration restored — it sat inside the deleted reintro block)
 function shiftWeek(dir) {
   _weekOffset = Math.max(0, _weekOffset + dir);
+  renderWeekly();
+}
+function jumpToCurrentWeek() {
+  _weekOffset = 0; // paging back used to require one › tap per week to return
   renderWeekly();
 }
 
@@ -7497,6 +7722,8 @@ function renderWeekly() {
   const W = computeWeekly(_weekOffset);
   const nextBtn = document.getElementById('weekly-next-btn');
   if (nextBtn) nextBtn.disabled = _weekOffset === 0;
+  const nowBtn = document.getElementById('weekly-now-btn');
+  if (nowBtn) nowBtn.style.display = _weekOffset > 0 ? '' : 'none';
   if (labelEl) labelEl.textContent = `${fmtDayShort(W.curFrom)} – ${fmtDayShort(W.curTo)}${_weekOffset === 0 ? ' (last 7 days)' : ''}`;
 
   const f1 = v => v == null ? '—' : v.toFixed(1);
@@ -8037,6 +8264,7 @@ function startExperiment(food) {
   });
   saveExperiments(exps);
   toast('🧪 Trial started — avoid it for ' + EXP_ELIM_DAYS + ' days');
+  computeTrialSuggestion(); // an active trial silences the suggestion nudge
   render();
   showTab('experiments', document.querySelector('nav button[onclick*="experiments"]'));
 }
@@ -8064,6 +8292,7 @@ function finishExperiment(id) {
   // resumed eating must not count as "avoidance" days.
   if (!e.endedAt) e.endedAt = today();
   saveExperiments(exps);
+  computeTrialSuggestion();
   render();
 }
 function deleteExperiment(id) {
@@ -8160,40 +8389,49 @@ function learnedLabelDir(lbl) {
 
 function learnedData() {
   const status = loadFoodStatus();
+  // Union by canonical identity — a stale "cow milk" status key must not
+  // spawn a phantom row beside the canonical "Cow Milk".
   const verdicts = {};
-  computeVerdicts().list.forEach(v => { verdicts[v.food] = v; });
+  computeVerdicts().list.forEach(v => { verdicts[normFood(v.food)] = v; });
   const trials = {};
   loadExperiments().filter(e => e.status === 'done').forEach(e => {
-    const prev = trials[e.food];
-    if (!prev || e.elimStart > prev.start) trials[e.food] = { verdict: computeExperiment(e).verdict, start: e.elimStart };
+    const t = normFood(e.food);
+    const prev = trials[t];
+    if (!prev || e.elimStart > prev.start) trials[t] = { name: e.food, verdict: computeExperiment(e).verdict, start: e.elimStart };
   });
+  const statusByNorm = {};
+  Object.entries(status).forEach(([k, v]) => { statusByNorm[normFood(k)] = { name: k, label: v }; });
 
-  const foods = new Set([...Object.keys(status), ...Object.keys(verdicts), ...Object.keys(trials)]);
+  const norms = new Set([...Object.keys(statusByNorm), ...Object.keys(verdicts), ...Object.keys(trials)]);
   const items = [];
-  foods.forEach(food => {
+  norms.forEach(t => {
     const avoid = [], safe = [];
-    const lbl = status[food];
+    const v = verdicts[t];
+    const st = statusByNorm[t];
+    const tr = trials[t];
+    // display name: canonical (verdict) casing first, else the label's, else the trial's
+    const food = (v && v.food) || (st && st.name) || (tr && tr.name);
+    if (!food) return;
+    const lbl = st ? st.label : undefined;
     const dir = learnedLabelDir(lbl);
     if (dir === 'avoid') avoid.push({ src: 'you', strength: 2, text: `You labeled it ${lbl}` });
     if (dir === 'safe') safe.push({ src: 'you', strength: 2, text: `You labeled it ${lbl}` });
-    const v = verdicts[food];
     if (v) {
       const s = v.conf.key === 'high' ? 1.5 : v.conf.key === 'medium' ? 1 : 0.5;
       if (v.verdict === 'suspect') avoid.push({ src: 'verdict', strength: s, text: `Reacts more than your baseline (${v.conf.evidence})` });
       if (v.verdict === 'gentler') safe.push({ src: 'verdict', strength: s, text: `Easier than your baseline (${v.conf.evidence})` });
     }
-    const t = trials[food];
     // Only CONCLUSIVE trials count — a trial finished while still
     // 'collecting' used to permanently claim the "🧪 tested" badge (hiding
     // the Test button) while contributing no evidence at all.
-    const conclusive = t && (t.verdict === 'helped' || t.verdict === 'worse' || t.verdict === 'nochange');
+    const conclusive = tr && (tr.verdict === 'helped' || tr.verdict === 'worse' || tr.verdict === 'nochange');
     if (conclusive) {
-      if (t.verdict === 'helped') avoid.push({ src: 'trial', strength: 3, text: '🧪 Trial: you improved while avoiding it (likely trigger)' });
+      if (tr.verdict === 'helped') avoid.push({ src: 'trial', strength: 3, text: '🧪 Trial: you improved while avoiding it (likely trigger)' });
       // "Worse while avoiding" usually means something ELSE flared that week —
       // weak evidence of safety, not trial-proof (was strength 3, able to
       // outrank the user's own 🚩 label).
-      if (t.verdict === 'worse') safe.push({ src: 'trial', strength: 1.5, text: '🧪 Trial: avoiding it made you worse (weak evidence it\'s fine — something else may have been going on)' });
-      if (t.verdict === 'nochange') safe.push({ src: 'trial', strength: 1.5, text: '🧪 Trial: no change while avoiding it (probably not a trigger)' });
+      if (tr.verdict === 'worse') safe.push({ src: 'trial', strength: 1.5, text: '🧪 Trial: avoiding it made you worse (weak evidence it\'s fine — something else may have been going on)' });
+      if (tr.verdict === 'nochange') safe.push({ src: 'trial', strength: 1.5, text: '🧪 Trial: no change while avoiding it (probably not a trigger)' });
     }
     if (!avoid.length && !safe.length) return;
     const maxStr = Math.max(0, ...avoid.map(x => x.strength), ...safe.map(x => x.strength));
@@ -8229,8 +8467,7 @@ const LEARNED_STATUS_CLS = { 'N/A': 'status-na', '🏅 Vital': 'status-vital', '
 
 function learnedSetStatus(food, label) {
   const s = loadFoodStatus();
-  if (label === 'N/A' || !label) delete s[food];   // clear the label
-  else s[food] = label;
+  ciWrite(s, food, (label === 'N/A' || !label) ? undefined : label); // clears + heals case-duplicates
   saveFoodStatus(s);
   if (typeof toast === 'function') toast(label === 'N/A' ? 'Label cleared' : 'Marked: ' + label);
   renderLearned();
@@ -8297,10 +8534,11 @@ function copyLearnedText() {
 }
 
 function render() {
-  // Always-on chrome (nav dot + reminder + backup nag)
+  // Always-on chrome (nav dot + reminder + backup nag + trial nudges)
   updateCheckinDot();
   renderCheckinReminder();
   renderBackupNag();
+  renderTrialNudge();
   // Render ONLY the visible tab. Rendering all ~19 sections on every tap
   // rebuilt the entire app per interaction — the main source of mobile jank.
   // Every tab switch routes through showTab() → render(), so a newly-opened
@@ -8600,6 +8838,13 @@ function renderHistory() {
     container.innerHTML = `<div class="card"><div class="empty"><span>📋</span>${q ? 'No matching entries.' : _histFilter === 'all' ? 'No entries yet. Start logging!' : 'No entries for this period.'}</div></div>`;
     return;
   }
+  // Paginate: "All time" used to render every entry card (thousands) into the
+  // DOM at once. Filters/search reset the pager to the first page.
+  const totalMatches = entries.length;
+  entries = entries.slice(0, _histShown);
+  const pagerHTML = totalMatches > entries.length
+    ? `<button class="btn-primary" style="display:block; margin:16px auto;" onclick="_histShown += 50; renderHistory();">Show 50 more (${totalMatches - entries.length} remaining)</button>`
+    : '';
   container.innerHTML = entries.map(e => {
       const agoTag = hoursAgoLabel(e.date, e.logTime);
       const chips = WINDOWS.map(w => {
@@ -8640,7 +8885,7 @@ function renderHistory() {
         </div>
         
       </div>`;
-    }).join('');
+    }).join('') + pagerHTML;
 }
 
 function parseYMD(dateStr) {
@@ -9164,10 +9409,10 @@ function renderSummary() {
     const symCell = activeSyms.length
       ? `<div class="summary-symptoms-wrap" title="${escAttr(symCellTitle)}">${visibleSyms.map(s => `<span class="sym-pill">${esc(s.label)} ${ws.symptoms[s.key]}</span>`).join('')}${hiddenSyms.length ? `<span class="sym-pill">+${hiddenSyms.length} more</span>` : ''}</div>`
       : '<span style="color:var(--muted)">—</span>';
-    const hasNote = !!foodNotes[food];
+    const hasNote = ciLookup(foodNotes, food) !== undefined; // old keys may carry a different casing
     
     // Status Logic
-    const statusVal = foodStatuses[food] || 'N/A';
+    const statusVal = ciLookup(foodStatuses, food) || 'N/A';
     const clsMap = { 'N/A':'status-na', '🏅 Vital':'status-vital', '✅ Safe':'status-safe', '👍 Positive':'status-positive', '🤷‍♂️ Meh':'status-meh', '🚩 Suspect':'status-suspect', '⚠️ Limit':'status-limit', '⛔ Banned':'status-banned', '🩻 B.List':'status-blacklist' };
     const curCls = clsMap[statusVal] || 'status-na';
     const optionsHTML = Object.keys(clsMap).map(k => `<option value="${k}" ${k===statusVal?'selected':''}>${k}</option>`).join('');
@@ -9240,7 +9485,6 @@ function exportCSV() {
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   localStorage.setItem('fst_last_backup', String(Date.now()));
-  refreshStorageMeterSnapshot();
   renderArchives();
   renderBackupNag();
   toast('Full backup exported ✓');
@@ -9417,7 +9661,7 @@ function normalizeImportedBackupData(rawData) {
   };
 }
 
-function importFullBackup(text, inputEl) {
+async function importFullBackup(text, inputEl) {
   let parsed;
   try {
     parsed = JSON.parse(text);
@@ -9445,9 +9689,19 @@ function importFullBackup(text, inputEl) {
   const curEntries = loadMigrated().length, curCheckins = Object.keys(loadCheckins()).length;
   const inEntries = Array.isArray(rawData.entries) ? rawData.entries.length : 0;
   const inCheckins = rawData.checkins && typeof rawData.checkins === 'object' ? Object.keys(rawData.checkins).length : 0;
-  if (!confirm(`Replace current tracker data with this full backup?\n\nYou have now: ${curEntries} logs, ${curCheckins} check-in days.\nThe backup holds: ${inEntries} logs, ${inCheckins} check-in days.`)) {
+  if (!confirm(`Replace current tracker data with this full backup?\n\nYou have now: ${curEntries} logs, ${curCheckins} check-in days.\nThe backup holds: ${inEntries} logs, ${inCheckins} check-in days.\n\nA safety snapshot of the current data is saved first.`)) {
     inputEl.value = '';
     return;
+  }
+
+  // Snapshot the current state before it's replaced — same protection the
+  // snapshot-restore flow already had.
+  try { if (window.__fstTakeSnapshot) await window.__fstTakeSnapshot(false); }
+  catch (e) {
+    if (!confirm('Could not save a safety snapshot first — continue with the import anyway?')) {
+      inputEl.value = '';
+      return;
+    }
   }
 
   try {
@@ -9483,7 +9737,6 @@ function importFullBackup(text, inputEl) {
     _trendActive = null;
     try { localStorage.removeItem('fst_trend_active'); } catch (e) {} // the old filter resurrected on next reload
     inputEl.value = '';
-    refreshStorageMeterSnapshot();
     render();
     toast(`Backup loaded ✓ ${data.entries.length} logs, ${Object.keys(data.checkins).length} check-ins`);
   } catch (err) {
@@ -9554,7 +9807,6 @@ function importLegacyCSV(text, inputEl) {
   customSymMap.forEach((sym, key) => { if (!existingKeys.has(key)) mergedCustoms.push(sym); });
   saveCustomSyms(mergedCustoms);
 
-  refreshStorageMeterSnapshot();
   toast(`Imported ${fresh.length} legacy entr${fresh.length===1?'y':'ies'} ✓`);
   inputEl.value = '';
   render();
@@ -9621,9 +9873,17 @@ function parseCSVLine(line) {
     drop.querySelectorAll('.ac-item').forEach(el => el.addEventListener('mousedown', e => { e.preventDefault(); selectItem(+el.dataset.idx); }));
   }
   function closeDrop() { drop.classList.remove('open'); acItems=[]; hiIdx=-1; }
+  // Multi-add support: suggestions match only the fragment after the last ';'
+  // and selecting fills just that fragment.
+  function fragQuery() {
+    const parts = inp.value.split(';');
+    return parts[parts.length - 1].trim();
+  }
   function selectItem(idx) {
     const f = acItems[idx]; if (!f) return;
-    inp.value = f.food;
+    const parts = inp.value.split(';');
+    parts[parts.length - 1] = (parts.length > 1 ? ' ' : '') + f.food;
+    inp.value = parts.join(';');
     closeDrop(); inp.focus();
   }
   function highlight(idx) {
@@ -9631,11 +9891,11 @@ function parseCSVLine(line) {
     if (idx >= 0 && idx < acItems.length) { drop.querySelectorAll('.ac-item')[idx].classList.add('highlighted'); drop.querySelectorAll('.ac-item')[idx].scrollIntoView({block:'nearest'}); }
     hiIdx = idx;
   }
-  inp.addEventListener('input',  () => openDrop(getUniqueFoods(inp.value.trim())));
-  inp.addEventListener('focus',  () => openDrop(getUniqueFoods(inp.value.trim())));
+  inp.addEventListener('input',  () => openDrop(getUniqueFoods(fragQuery())));
+  inp.addEventListener('focus',  () => openDrop(getUniqueFoods(fragQuery())));
   inp.addEventListener('keydown', e => {
     if (e.key==='Enter')      { hiIdx>=0&&acItems.length ? selectItem(hiIdx) : (closeDrop(), addEntry()); }
-    else if (e.key==='ArrowDown')  { e.preventDefault(); if (!drop.classList.contains('open')) openDrop(getUniqueFoods(inp.value.trim())); highlight(Math.min(hiIdx+1,acItems.length-1)); }
+    else if (e.key==='ArrowDown')  { e.preventDefault(); if (!drop.classList.contains('open')) openDrop(getUniqueFoods(fragQuery())); highlight(Math.min(hiIdx+1,acItems.length-1)); }
     else if (e.key==='ArrowUp')    { e.preventDefault(); highlight(Math.max(hiIdx-1,0)); }
     else if (e.key==='Escape')     { closeDrop(); }
   });
@@ -9694,6 +9954,16 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // The most important part: draw the page ONLY after everything is ready!
     render();
+
+    // Trial suggestion (heavy: full verdicts pass) — once, off the boot path.
+    setTimeout(() => { computeTrialSuggestion(); renderTrialNudge(); }, 400);
+
+    // PWA shortcut / deep link: long-press app icon → "Log a meal" / "Daily
+    // check-in" (manifest shortcuts pass ?tab=log / ?tab=checkin).
+    const wantTab = new URLSearchParams(location.search).get('tab');
+    if (wantTab && wantTab !== 'checkin' && document.getElementById('tab-' + wantTab)) {
+      showTab(wantTab, document.querySelector(`nav button[onclick*="'${wantTab}'"]`));
+    }
 });
 
  // A function that handles data deletion which is 5 months or older, super useful to keep relevant data but still reduce local storage size.
@@ -9921,6 +10191,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     db.close();
     return ts;
   }
+  // Exposed so backup-import (main script scope) can snapshot before replacing data.
+  window.__fstTakeSnapshot = takeSnapshot;
 
   async function autoSnapshotIfDue() {
     try {
