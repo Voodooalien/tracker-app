@@ -6,7 +6,7 @@
  * All user data lives in localStorage/IndexedDB on the device — the SW only
  * caches the app shell.
  */
-const VERSION = 'v2';
+const VERSION = 'v3'; // v57 UI batch
 const SHELL_CACHE = 'fst-shell-' + VERSION;
 const ASSET_CACHE = 'fst-assets-' + VERSION;
 
