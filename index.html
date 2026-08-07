@@ -2422,6 +2422,29 @@ body.dark.visual-theme-obsidian #toast {
   font-size:11px; font-weight:700; color:var(--muted); background:var(--bg);
   border:1px solid var(--border); border-radius:999px; padding:3px 10px;
 }
+/* Orphan-food cleanup notice: marks whose food isn't in the log any more */
+.fm-orphans {
+  margin:2px 0 10px; padding:9px 11px; border-radius:9px;
+  border:1px solid rgba(231,76,60,.35); background:rgba(231,76,60,.06);
+}
+.fm-orphans-h { font-size:11px; font-weight:800; color:var(--neg); margin-bottom:7px; }
+.fm-orphans-list { display:flex; flex-wrap:wrap; gap:6px; }
+.fm-orphan-chip {
+  display:inline-flex; align-items:center; gap:6px; padding:3px 5px 3px 10px;
+  background:var(--card); border:1px solid var(--border); border-radius:999px;
+  font-size:12px; font-weight:700; color:var(--text);
+}
+.fm-orphan-chip .c { color:var(--muted); font-weight:700; font-size:10.5px; }
+.fm-orphan-x { background:none; border:none; color:var(--muted); font-weight:800; font-size:12px; cursor:pointer; padding:0 2px; line-height:1; }
+.fm-orphan-x:hover { color:var(--neg); }
+.fm-orphan-remap { background:none; border:none; color:var(--navy); font-weight:800; font-size:13px; cursor:pointer; padding:0 2px; line-height:1; }
+.fm-orphan-remap:hover { opacity:.7; }
+.fm-orphan-chip.remapping { flex-basis:100%; border-radius:10px; padding:5px 7px 5px 10px; gap:8px; }
+.fm-orphan-chip.remapping .autocomplete-wrap { flex:1; min-width:120px; }
+.fm-orphan-chip.remapping input {
+  width:100%; box-sizing:border-box; padding:6px 9px; font-family:inherit; font-size:12.5px;
+  border:1px solid var(--border); border-radius:7px; background:var(--bg); color:var(--text);
+}
 .fm-views { display:flex; gap:6px; justify-content:center; margin:10px 0 2px; flex-wrap:wrap; }
 .fm-view-btn {
   background:var(--card); border:1.5px solid var(--border); color:var(--muted);
@@ -2440,18 +2463,20 @@ body.dark.visual-theme-obsidian #toast {
 .fm-features path { fill:none; stroke:var(--muted); stroke-width:2; stroke-linecap:round; opacity:.5; }
 .fm-region { cursor:pointer; }
 .fm-zone {
-  fill:var(--neg); stroke:var(--muted); stroke-width:1.2;
-  stroke-dasharray:3 4; stroke-opacity:.35;
-  transition:fill-opacity .3s, stroke .15s, stroke-opacity .15s;
+  fill:var(--neg); stroke:var(--navy); stroke-width:2; stroke-opacity:0;
+  transition:fill-opacity .3s, stroke-opacity .15s, stroke-width .15s;
 }
-.fm-region.fm-hot .fm-zone { stroke:var(--neg); stroke-dasharray:none; stroke-opacity:.55; filter:url(#fmGlow); }
-.fm-region:hover .fm-zone, .fm-region.fm-sel .fm-zone {
-  stroke:var(--navy); stroke-width:2.5; stroke-opacity:.95; stroke-dasharray:none;
-}
-@keyframes fmPulse { 0%,100% { stroke-width:2.5; } 50% { stroke-width:4.5; } }
-.fm-region.fm-sel .fm-zone { animation:fmPulse 1.5s ease-in-out infinite; }
-.fm-dotmark { fill:var(--muted); opacity:.4; pointer-events:none; }
-.fm-badge circle { fill:var(--neg); opacity:.92; pointer-events:none; }
+/* History heat = a soft tint + faint outline. No glow, nothing that reads as
+   "selected right now" — the bold navy look below is reserved for live taps. */
+.fm-region.fm-hot .fm-zone { stroke:var(--neg); stroke-width:1.2; stroke-opacity:.28; }
+/* Reveal the tappable zone on hover … */
+.fm-region:hover .fm-zone { stroke:var(--navy); stroke-width:2.5; stroke-opacity:.9; }
+/* … and make a spot you actually tapped unmistakably active. */
+.fm-region.fm-sel .fm-zone { stroke:var(--navy); stroke-width:3; stroke-opacity:1; animation:fmPulse 1.5s ease-in-out infinite; }
+@keyframes fmPulse { 0%,100% { stroke-width:3; } 50% { stroke-width:4.5; } }
+.fm-dotmark { fill:var(--muted); opacity:.14; pointer-events:none; transition:opacity .15s; }
+.fm-region:hover .fm-dotmark { opacity:.5; }
+.fm-badge circle { fill:var(--neg); opacity:.8; pointer-events:none; }
 .fm-badge text {
   fill:#fff; font-size:11px; font-weight:800; text-anchor:middle;
   font-family:inherit; pointer-events:none;
@@ -2496,10 +2521,46 @@ body.dark.visual-theme-obsidian #toast {
   cursor:pointer; transition:all .12s;
 }
 .fm-foodchip:hover { border-color:var(--navy); color:var(--navy); }
-.fm-sevpill { border-radius:5px; padding:2px 7px; font-size:10px; font-weight:800; white-space:nowrap; }
-.fm-sevpill.s1 { background:var(--sev3); color:#92400E; }
-.fm-sevpill.s2 { background:var(--sev2); color:#991B1B; }
-.fm-sevpill.s3 { background:var(--sev1); color:#fff; }
+/* Most-reactive-spots as skimmable bullets (replaces the heavy .fm-row cards here) */
+.fm-bullets { list-style:none; margin:0; padding:0; }
+.fm-bullet {
+  display:flex; align-items:center; gap:7px; flex-wrap:nowrap; overflow:hidden;
+  padding:5px 6px 5px 17px; position:relative; cursor:pointer;
+  font-size:12.5px; border-radius:6px; transition:background .1s;
+}
+.fm-bullet::before { content:"•"; position:absolute; left:5px; top:50%; transform:translateY(-50%); color:var(--neg); font-weight:800; line-height:1; }
+.fm-bullet:hover { background:var(--bg); }
+.fm-b-spot { font-weight:800; white-space:nowrap; flex:0 0 auto; }
+.fm-b-count { font-size:11px; color:var(--muted); font-weight:700; white-space:nowrap; flex:0 0 auto; }
+/* Most reactive spots: each spot is a section heading, its foods bulleted below */
+.fm-spotgroup { margin-bottom:11px; }
+.fm-spot-head {
+  display:flex; align-items:center; gap:7px; cursor:pointer;
+  padding:3px 6px; border-radius:6px; font-size:13px; transition:background .1s;
+}
+.fm-spot-head:hover { background:var(--bg); }
+.fm-spot-head b { font-weight:800; white-space:nowrap; }
+.fm-spot-count { margin-left:auto; font-size:11px; color:var(--muted); font-weight:700; white-space:nowrap; }
+.fm-spot-foods { list-style:none; margin:3px 0 0; padding:0; }
+.fm-spot-food {
+  position:relative; margin-left:10px; padding:3px 6px 3px 18px;
+  font-size:12.5px; color:var(--text); cursor:pointer; border-radius:5px;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; transition:background .1s;
+}
+.fm-spot-food::before { content:"•"; position:absolute; left:5px; color:var(--neg); font-weight:800; }
+.fm-spot-food:hover { background:var(--bg); text-decoration:underline; }
+.fm-suspects-pick { margin-bottom:10px; }
+.fm-suspects-pick select {
+  width:100%; padding:9px 10px; font-size:13px; font-weight:600;
+  color:var(--text); background:var(--card); border:1px solid var(--border);
+  border-radius:8px; cursor:pointer;
+}
+.fm-suspects-pick select:focus { outline:none; border-color:var(--navy); }
+.fm-rank {
+  flex:0 0 auto; min-width:20px; height:20px; padding:0 6px; border-radius:10px;
+  background:var(--bg); border:1px solid var(--border); color:var(--muted);
+  font-size:10.5px; font-weight:800; display:inline-flex; align-items:center; justify-content:center;
+}
 /* face-map region modal */
 #fm-modal-bg {
   display:none; position:fixed; inset:0; background:rgba(0,0,0,0.35);
@@ -2507,22 +2568,34 @@ body.dark.visual-theme-obsidian #toast {
 }
 #fm-modal-bg.open { display:flex; }
 #fm-modal {
-  background:var(--card); color:var(--text); border-radius:12px; padding:22px;
+  background:var(--card); color:var(--text); border-radius:12px; padding:18px;
   width:100%; max-width:460px; box-shadow:0 12px 40px rgba(0,0,0,0.25);
   margin:16px; max-height:86vh; overflow-y:auto;
 }
 #fm-modal h3 { font-size:15px; font-weight:800; margin-bottom:2px; }
 #fm-modal .food-sub { font-size:12px; color:var(--muted); margin-bottom:12px; }
-.fm-mark-row {
-  display:flex; align-items:center; gap:8px; padding:7px 10px;
-  border:1px solid var(--border); border-radius:8px; margin-bottom:6px; font-size:12.5px;
+/* Already-logged marks as compact, removable tags (was a tall list of rows) */
+.fm-mark-head {
+  font-size:10.5px; font-weight:800; text-transform:uppercase; letter-spacing:.05em;
+  color:var(--muted); margin:2px 0 7px;
 }
-.fm-mark-row .fm-date { font-size:10.5px; color:var(--muted); margin-left:auto; white-space:nowrap; }
-.fm-mark-del {
-  background:none; border:none; color:var(--muted); font-size:14px; font-weight:800;
-  cursor:pointer; padding:2px 6px; transition:color .12s;
+.fm-mark-tags { display:flex; flex-wrap:wrap; gap:6px; max-height:132px; overflow-y:auto; padding-bottom:2px; }
+.fm-mtag {
+  display:inline-flex; align-items:center; gap:5px; padding:3px 5px 3px 9px;
+  border-radius:999px; font-size:12px; font-weight:700; color:var(--text);
+  background:var(--bg); border:1px solid var(--border); border-left:4px solid var(--border);
 }
-.fm-mark-del:hover { color:var(--neg); }
+.fm-mtag.s1 { border-left-color:var(--sev3); }
+.fm-mtag.s2 { border-left-color:var(--sev1); }
+.fm-mtag.s3 { border-left-color:var(--neg); }
+.fm-mtag i {
+  font-style:normal; font-weight:700; font-size:10px; color:var(--muted); background:var(--card);
+  border:1px solid var(--border); border-radius:999px; padding:1px 6px;
+}
+.fm-mtag-x { background:none; border:none; color:var(--muted); font-weight:800; font-size:12px; cursor:pointer; padding:0 2px; line-height:1; }
+.fm-mtag-x:hover { color:var(--neg); }
+.fm-mark-empty { font-size:12.5px; color:var(--muted); padding:2px 2px 6px; }
+.fm-add-h { font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); margin-bottom:8px; }
 .fm-add-wrap { margin-top:12px; border-top:1.5px dashed var(--border); padding-top:12px; }
 .fm-add-wrap input {
   width:100%; padding:9px 12px; border:1.5px solid var(--border); border-radius:8px;
@@ -2569,6 +2642,165 @@ body.dark.visual-theme-obsidian #toast {
   padding:10px; font-size:13px; font-weight:700; cursor:pointer; transition:opacity .15s;
 }
 .fm-add-btn:hover { opacity:.88; }
+/* ── Other-areas (non-facial) bullets + multi-select log bar ──────────────── */
+.fm-body-panel { max-width:340px; margin:14px auto 0; }
+.fm-body-h {
+  font-size:10.5px; font-weight:800; color:var(--muted); text-transform:uppercase;
+  letter-spacing:.05em; margin:0 2px 7px;
+}
+.fm-body-item {
+  display:flex; align-items:center; gap:10px; padding:9px 11px; margin-bottom:6px;
+  border:1.5px solid var(--border); border-radius:9px; background:var(--card);
+  font-size:13.5px; font-weight:600; cursor:pointer; transition:border-color .12s, background .12s;
+}
+.fm-body-item:hover { border-color:var(--navy); }
+.fm-body-item.sel { border-color:var(--navy); background:var(--bg); }
+.fm-body-box {
+  width:20px; height:20px; border:1.5px solid var(--border); border-radius:5px;
+  display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:800;
+  color:#fff; background:var(--card); flex:0 0 20px;
+}
+.fm-body-item.sel .fm-body-box { background:var(--navy); border-color:var(--navy); }
+.fm-body-count { margin-left:auto; font-size:11px; font-weight:800; color:var(--muted); white-space:nowrap; }
+.fm-body-item.hot .fm-body-count { color:var(--neg); }
+.fm-actionbar {
+  position:sticky; bottom:10px; z-index:5; display:flex; gap:8px; align-items:center;
+  max-width:340px; margin:14px auto 2px;
+}
+.fm-log-btn {
+  flex:1; background:var(--navy); color:#fff; border:none; border-radius:9px;
+  padding:12px; font-size:14px; font-weight:800; cursor:pointer;
+  box-shadow:0 6px 18px rgba(16,24,40,0.28); transition:opacity .15s;
+}
+.fm-log-btn:hover { opacity:.9; }
+.fm-clear-sel {
+  background:var(--card); color:var(--muted); border:1.5px solid var(--border);
+  border-radius:9px; padding:12px 14px; font-size:13px; font-weight:700; cursor:pointer;
+}
+.fm-clear-sel:hover { border-color:var(--neg); color:var(--neg); }
+
+/* ── Log-modal fast pick: suspects-here + this-week window (v62) ──────────── */
+.fm-suspects-here { margin:2px 0 10px; }
+.fm-susp-h {
+  font-size:10.5px; font-weight:800; text-transform:uppercase; letter-spacing:.05em;
+  color:var(--muted); margin:2px 0 7px;
+}
+.fm-susp-chips { display:flex; flex-wrap:wrap; gap:6px; }
+.fm-susp-chip {
+  display:inline-flex; align-items:center; gap:6px; background:var(--bg);
+  border:1.5px solid var(--border); border-radius:999px; padding:4px 11px 4px 6px;
+  font-size:12.5px; font-weight:700; color:var(--text); cursor:pointer; transition:all .12s;
+}
+.fm-susp-chip:hover { border-color:var(--navy); }
+.fm-susp-chip.on { border-color:var(--navy); background:var(--card); box-shadow:0 1px 5px rgba(16,24,40,0.12); }
+.fm-susp-box {
+  width:18px; height:18px; border-radius:5px; display:inline-flex; align-items:center;
+  justify-content:center; font-size:11px; font-weight:800; color:#fff; background:var(--navy);
+}
+.fm-susp-chip i { font-style:normal; font-weight:700; font-size:10px; color:var(--muted); }
+.fm-window-row { display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin:10px 0 0; }
+.fm-window-label {
+  font-size:10.5px; font-weight:800; text-transform:uppercase; letter-spacing:.05em;
+  color:var(--muted); margin-right:1px;
+}
+.fm-window-btn {
+  background:var(--bg); border:1.5px solid var(--border); color:var(--muted);
+  border-radius:999px; padding:5px 12px; font-size:12px; font-weight:700;
+  cursor:pointer; transition:all .12s;
+}
+.fm-window-btn:hover { border-color:var(--navy); color:var(--navy); }
+.fm-window-btn.active { background:var(--navy); border-color:var(--navy); color:#fff; }
+.fm-day-head {
+  position:sticky; top:0; z-index:1; background:var(--card);
+  font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.06em;
+  color:var(--muted); padding:8px 12px 4px; border-bottom:1px solid var(--border);
+}
+.fm-pick-none { padding:14px; font-size:12.5px; color:var(--muted); }
+
+/* ── Food Profile (v61) ── */
+.fm-profile-btn {
+  background:none; border:1px solid var(--border); border-radius:6px;
+  padding:2px 6px; cursor:pointer; font-size:12px; line-height:1.3; flex:0 0 auto;
+}
+.fm-profile-btn:hover { border-color:var(--navy); }
+.fp-card { padding:14px 16px; margin-bottom:12px; }
+.fp-h {
+  font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:.8px;
+  color:var(--muted); margin-bottom:8px; display:block;
+}
+.fp-h-row { display:flex; align-items:baseline; justify-content:space-between; gap:8px; }
+.fp-jump {
+  background:none; border:none; color:var(--navy); font-size:11.5px; font-weight:700;
+  cursor:pointer; padding:0; white-space:nowrap;
+}
+body.dark .fp-jump { color:#8fb7d6; }
+.fp-jump:hover { text-decoration:underline; }
+.fp-name-row { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:10px; }
+.fp-name { font-size:19px; font-weight:800; }
+.fp-status { font-size:11px; font-weight:800; border-radius:999px; padding:3px 10px; border:1px solid var(--border); background:var(--bg); color:var(--muted); }
+.fp-status.avoid { background:#FDECEC; color:#C0392B; border-color:transparent; }
+.fp-status.safe  { background:#E8F8EE; color:#1E8449; border-color:transparent; }
+body.dark .fp-status.avoid { background:rgba(231,76,60,0.14); color:#F5A79B; }
+body.dark .fp-status.safe  { background:rgba(30,132,73,0.15); color:#7DDBA3; }
+.fp-statgrid { display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; margin-bottom:8px; }
+.fp-stat { background:var(--bg); border-radius:8px; padding:8px 6px; text-align:center; }
+.fp-stat b { display:block; font-size:15px; }
+.fp-stat span { font-size:10px; color:var(--muted); font-weight:700; text-transform:uppercase; letter-spacing:.04em; }
+.fp-sub { font-size:11.5px; color:var(--muted); }
+.fp-empty { font-size:12.5px; color:var(--muted); padding:4px 0; }
+.fp-legend { font-size:10.5px; color:var(--muted); margin-top:8px; }
+.fp-chiprow { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px; }
+.fp-chip {
+  display:inline-flex; align-items:center; gap:6px; background:var(--card);
+  border:1.5px solid var(--border); border-radius:999px; padding:6px 8px 6px 12px;
+  font-size:12.5px; font-weight:700; color:var(--text); cursor:pointer; transition:border-color .12s;
+}
+.fp-chip:hover { border-color:var(--navy); }
+.fp-chip-n { font-size:10px; font-weight:800; color:var(--muted); background:var(--bg); border-radius:999px; padding:1px 7px; }
+.fp-verdict-row { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:8px; }
+.fp-verdict-pill { font-size:12.5px; font-weight:800; border-radius:999px; padding:4px 12px; }
+.fp-verdict-pill.suspect { background:#FDECEC; color:#C0392B; }
+.fp-verdict-pill.typical { background:#FDF3D7; color:#9A6E00; }
+.fp-verdict-pill.gentler { background:#E8F8EE; color:#1E8449; }
+.fp-verdict-pill.unclear { background:var(--bg); color:var(--muted); }
+body.dark .fp-verdict-pill.suspect { background:rgba(231,76,60,0.14); color:#F5A79B; }
+body.dark .fp-verdict-pill.typical { background:rgba(245,158,11,0.13); color:#FCD34D; }
+body.dark .fp-verdict-pill.gentler { background:rgba(30,132,73,0.15); color:#7DDBA3; }
+.fp-vcounts { margin-left:auto; display:inline-flex; gap:5px; }
+.fp-exp-hint { font-size:12px; color:var(--muted); margin-top:8px; border-top:1px dashed var(--border); padding-top:8px; }
+.fp-imp-head {
+  display:flex; align-items:center; gap:8px; font-size:9.5px; font-weight:800;
+  color:var(--muted); text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px;
+}
+.fp-imp-head span:nth-child(1) { flex:0 0 108px; }
+.fp-imp-head span:nth-child(2) { flex:1; text-align:center; }
+.fp-imp-head span:nth-child(3), .fp-imp-head span:nth-child(4) { flex:0 0 auto; }
+.fp-imp-row { display:flex; align-items:center; gap:8px; padding:4px 0; font-size:12.5px; }
+.fp-imp-label { flex:0 0 108px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.fp-imp-bar { flex:1; position:relative; height:9px; background:var(--bg); border-radius:5px; overflow:hidden; }
+.fp-imp-bar::before { content:""; position:absolute; left:50%; top:0; bottom:0; width:1.5px; background:var(--border); }
+.fp-imp-bar i { position:absolute; top:0; bottom:0; border-radius:4px; }
+.fp-imp-bar i.bad  { background:var(--neg); }
+.fp-imp-bar i.good { background:var(--pos); }
+.fp-imp-bar i.flat { background:var(--muted); opacity:.45; }
+.fp-imp-delta { flex:0 0 44px; text-align:right; font-weight:800; font-size:12px; }
+.fp-imp-delta.bad { color:var(--neg); } .fp-imp-delta.good { color:var(--pos); } .fp-imp-delta.flat { color:var(--muted); }
+.fp-imp-next { flex:0 0 60px; font-size:10.5px; color:var(--muted); font-weight:700; text-align:right; white-space:nowrap; }
+.fp-thin { color:var(--muted); font-weight:800; }
+.fp-faces { display:flex; gap:10px; justify-content:center; }
+.fp-face { flex:0 1 96px; text-align:center; }
+.fp-face svg { width:100%; height:auto; pointer-events:none; }
+.fp-face span { font-size:10px; color:var(--muted); font-weight:800; text-transform:uppercase; letter-spacing:.04em; }
+.fp-trial-row { display:flex; align-items:center; gap:8px; padding:6px 0; font-size:12.5px; flex-wrap:wrap; }
+.fp-trial-phase { color:var(--muted); font-size:11px; }
+.fp-trial-v { margin-left:auto; font-weight:800; font-size:11.5px; }
+.fp-hist { width:100%; height:auto; display:block; }
+.fp-note { font-size:13px; line-height:1.5; white-space:pre-wrap; }
+@media (max-width:480px) {
+  .fp-statgrid { grid-template-columns:repeat(2, 1fr); }
+  .fp-imp-label { flex-basis:88px; font-size:11.5px; }
+  .fp-imp-next { flex-basis:52px; }
+}
 
 </style>
 
@@ -2605,7 +2837,7 @@ try {
     <button data-tab="log" onclick="showTab('log',this)" style="color: #FDECEC; ">📑 Logs</button>
     <button data-tab="history" onclick="showTab('history',this)" style="color: #FDECEC; ">📦 History</button>
     <button data-tab="archives2" onclick="showTab('archives2',this)" style="color: #FDECEC; ">📖 Diary</button>
-    <button data-tab="verdicts" onclick="showTab('verdicts',this)" style="color: #FDECEC; ">⚖️ Verdicts</button>
+    <button data-tab="profile" onclick="showTab('profile',this)" style="color: #FDECEC; ">📇 Food Profile</button>
     <button data-tab="summary" onclick="showTab('summary',this)" style="color: #FDECEC; ">📋 Summary</button>
     <button data-tab="weekly" onclick="showTab('weekly',this)" style="color: #FDECEC; ">📅 Weekly</button>
     <button id="nav-more-btn" onclick="toggleNavMore()" title="Analysis, Timeline, Trials and more" style="color: #FDECEC; border: 1px dashed rgba(255,255,255,0.4);">⋯ More</button>
@@ -2616,6 +2848,7 @@ try {
   </div>
 
   <div id="nav-more-tray" style="display:none; flex-basis:100%; flex-wrap:wrap; gap:4px; padding-top:6px; margin-top:4px; border-top:1px dashed rgba(255,255,255,0.18);">
+    <button data-tab="verdicts" onclick="showTab('verdicts',this)" style="color: #FDECEC; ">⚖️ Verdicts</button>
     <button data-tab="detective" onclick="showTab('detective',this)" style="color: #FDECEC; ">🕵️ Detective</button>
     <button data-tab="facemap" onclick="showTab('facemap',this)" style="color: #FDECEC; ">👤 Face Map</button>
     <button data-tab="anomalies" onclick="showTab('anomalies',this)" style="color: #FDECEC; ">📡 Anomalies</button>
@@ -3048,6 +3281,16 @@ html body select.status-badge-select.status-blacklist {
 </main>
 </div>
 
+<div id="tab-profile" class="tab-content">
+<main>
+  <p class="section-title">Food Profile</p>
+  <div id="foodprofile-wrap"></div>
+  <p style="font-size:11px;color:var(--muted);margin-top:10px;">
+    Everything the app knows about one food, in one place — pulled from the same engines as Verdicts, Insights, the Face Map and Trials, so the numbers always agree.
+  </p>
+</main>
+</div>
+
 <!-- ═══ DAILY CHECK-IN / VITALS TAB ═══ -->
 <div id="tab-checkin" class="tab-content active">
 <main>
@@ -3455,10 +3698,13 @@ html body select.status-badge-select.status-blacklist {
     <div class="food-sub" id="fm-modal-sub"></div>
     <div id="fm-modal-marks"></div>
     <div class="fm-add-wrap">
-      <input type="text" id="fm-add-input" placeholder="Search foods, tap to select several…" autocomplete="off"
+      <div class="fm-add-h">➕ Which foods reacted here?</div>
+      <div class="fm-suspects-here" id="fm-suspects-here"></div>
+      <input type="text" id="fm-add-input" placeholder="🔍 Search all your logged foods…" autocomplete="off"
              oninput="renderFmPickList()"
              onkeydown="if(event.key==='Enter'){event.preventDefault();fmPickTyped();}">
       <div class="fm-pick-chips" id="fm-pick-chips"></div>
+      <div class="fm-window-row" id="fm-window-row"></div>
       <div class="fm-pick-list" id="fm-pick-list"></div>
       <div class="fm-sev-row" id="fm-sev-row"></div>
       <button class="fm-add-btn" id="fm-add-btn" onclick="fmAddMark()">＋ Mark here</button>
@@ -3901,7 +4147,7 @@ function joinSegs(parts) { return parts.filter(Boolean).join(SEG_ARROW); }
 // ─── Tab navigation ──────────────────────────────────────────────────────────
 // Tabs that live in the collapsible "⋯ More" tray — the More button itself
 // lights up when one of these is active, and the tray closes after any pick.
-const MORE_TABS = ['Timeline', 'insights', 'learned', 'experiments', 'lab', 'detective', 'facemap', 'anomalies'];
+const MORE_TABS = ['Timeline', 'insights', 'learned', 'experiments', 'lab', 'detective', 'facemap', 'anomalies', 'verdicts'];
 // Old analysis tabs now living inside Insights — showTab() redirects so every
 // saved link, ?tab= shortcut and in-app button keeps working.
 const LEGACY_INSIGHT_TABS = { factors: 'factors', analysis: 'calendar', corr: 'corr', Exp: 'bucket' };
@@ -3949,8 +4195,9 @@ const NAV_ITEMS = [
   { tab: 'history',     ico: '📦', label: 'History', bar: true },
   { tab: 'summary',     ico: '📋', label: 'Summary', bar: true },
   { tab: 'archives2',   ico: '📖', label: 'Diary' },
-  { tab: 'verdicts',    ico: '⚖️', label: 'Verdicts' },
+  { tab: 'profile',     ico: '📇', label: 'Food Profile' },
   { tab: 'weekly',      ico: '📅', label: 'Weekly' },
+  { tab: 'verdicts',    ico: '⚖️', label: 'Verdicts' },
   { tab: 'detective',   ico: '🕵️', label: 'Detective' },
   { tab: 'facemap',     ico: '👤', label: 'Face Map' },
   { tab: 'anomalies',   ico: '📡', label: 'Anomalies' },
@@ -4757,7 +5004,7 @@ function saveEdit(renameAll) {
 // merge can be reverted one step without touching anything logged afterwards.
 function migrateFoodReferences(oldName, newName, undo) {
   const oldNorm = normFood(oldName);
-  const report = { notes: 0, status: 0, bundles: 0, experiments: 0, dictionary: 0 };
+  const report = { notes: 0, status: 0, bundles: 0, experiments: 0, dictionary: 0, faceMap: 0 };
 
   // notes/status maps can hold stray keys under old casings — move them all
   const notes = loadFoodNotes();
@@ -4819,6 +5066,17 @@ function migrateFoodReferences(oldName, newName, undo) {
     report.dictionary = deadNames.length;
   }
 
+  // face-map reaction marks store the food by name too — repoint them so a
+  // rename doesn't orphan every spot ever mapped to the old spelling (v60).
+  const fmMarks = loadFaceMap();
+  const hitMarks = fmMarks.filter(m => m && normFood(m.food) === oldNorm && m.food !== newName);
+  if (hitMarks.length) {
+    if (undo) hitMarks.forEach(m => undo.faceMap.push({ id: m.id, food: m.food }));
+    hitMarks.forEach(m => { m.food = newName; });
+    saveFaceMap(fmMarks);
+    report.faceMap = hitMarks.length;
+  }
+
   return report;
 }
 
@@ -4840,7 +5098,8 @@ function collectFoodImpact(from, to) {
     bundleNames: loadBundles().filter(b => (b.items || []).some(s => normFood(s) === fromNorm)).map(b => b.name),
     exps: exps.length,
     activeTrial: exps.some(x => x.status === 'eliminating' || x.status === 'reintroducing'),
-    dict: loadFoodDictionary().filter(n => normFood(n) === fromNorm).length
+    dict: loadFoodDictionary().filter(n => normFood(n) === fromNorm).length,
+    faceMarks: loadFaceMap().filter(m => m && normFood(m.food) === fromNorm && m.food !== to).length
   };
 }
 
@@ -4908,6 +5167,9 @@ function undoFoodMerge() {
   const exps = loadExperiments();
   (u.experiments || []).forEach(pi => { const x = exps.find(y => y.id === pi.id); if (x) x.food = pi.food; });
   saveExperiments(exps);
+  const fmMarks = loadFaceMap();
+  (u.faceMap || []).forEach(pi => { const m = fmMarks.find(x => x.id === pi.id); if (m) m.food = pi.food; });
+  saveFaceMap(fmMarks);
   if ((u.dictionary || []).length) {
     const d = loadFoodDictionary();
     u.dictionary.forEach(n => { if (!d.includes(n)) d.push(n); });
@@ -4917,6 +5179,7 @@ function undoFoodMerge() {
   toast(`Merge undone — ${restored} entr${restored === 1 ? 'y' : 'ies'} restored ✓`);
   render();
   renderFoodIdentity();
+  renderFaceMap();
 }
 
 // ─── Food identity manager (🧬 Merge / rename) ───────────────────────────────
@@ -5056,6 +5319,7 @@ function renderFoodIdentityPreview() {
   if (I.bundleNames.length) lines.push(`🍱 bundle${I.bundleNames.length === 1 ? '' : 's'} updated: ${I.bundleNames.map(esc).join(', ')}`);
   if (I.exps) lines.push(`🧪 ${I.exps} trial${I.exps === 1 ? '' : 's'} re-pointed${I.activeTrial ? ' — <b style="color:var(--neg);">one is ACTIVE: adherence matching follows the new name from now on</b>' : ''}`);
   if (I.dict) lines.push(`📖 ${I.dict} retired spelling${I.dict === 1 ? '' : 's'} removed from autocomplete`);
+  if (I.faceMarks) lines.push(`🙂 ${I.faceMarks} face-map spot${I.faceMarks === 1 ? '' : 's'} re-pointed to the new name`);
   el.innerHTML = `
     <div style="background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:10px 12px; font-size:12.5px; line-height:1.7;">
       <div style="font-weight:800; margin-bottom:4px;">${isMerge ? 'Merge' : 'Rename'} <span style="color:var(--navy);">${esc(from)}</span> → <span style="color:var(--navy);">${esc(to)}</span> will:</div>
@@ -5077,7 +5341,7 @@ async function confirmFoodMerge() {
     if (!confirm('Could not save a safety snapshot first (' + (e && e.message) + ').\n\nProceed with the merge anyway?')) return;
   }
   // 2. surgical undo record + apply
-  const undo = { ts: Date.now(), from, to, entries: [], notes: {}, status: {}, bundles: [], experiments: [], dictionary: [] };
+  const undo = { ts: Date.now(), from, to, entries: [], notes: {}, status: {}, bundles: [], experiments: [], dictionary: [], faceMap: [] };
   const entries = loadMigrated();
   entries.forEach(e => { if (e.food === from) { undo.entries.push({ id: e.id, food: e.food }); e.food = to; } });
   save(entries);
@@ -9718,6 +9982,7 @@ function renderVerdicts() {
               <span class="verdict-badges">
                 ${i.staple ? '<span class="verdict-tag staple" title="Eaten on 70%+ of tracked days — day-comparison analyses cannot isolate it">📌 staple</span>' : ''}
                 <span class="verdict-tag conf-neutral" title="Backed by ${i.scored} scored reaction windows — more windows means a more trustworthy verdict">${i.conf.evidence}</span>
+                <button class="verdict-test-btn" title="Open the full Food Profile dossier" onclick="openFoodProfile(${escAttr(JSON.stringify(i.food))})">📇</button>
                 <button class="verdict-test-btn" title="Run a controlled elimination trial on this food" onclick="startExperiment(${escAttr(JSON.stringify(i.food))})">🧪 Test</button>
               </span>
             </div>
@@ -10242,6 +10507,7 @@ function render() {
     'tab-facemap':     [renderFaceMap],
     'tab-anomalies':   [renderAnomalies],
     'tab-lab':         [renderLab],
+    'tab-profile':     [renderFoodProfile],
   };
   const active = document.querySelector('.tab-content.active');
   (byTab[active ? active.id : ''] || []).forEach(fn => fn());
@@ -11888,12 +12154,16 @@ const FM_FRONT_REGIONS = [
   { k:'eye_l',       lbl:'Left under-eye',        cx:116, cy:186, rx:20, ry:11 },
   { k:'eye_r',       lbl:'Right under-eye',       cx:184, cy:186, rx:20, ry:11 },
   { k:'nose',        lbl:'Nose',                  cx:150, cy:188, rx:12, ry:26 },
+  { k:'sinus_l',     lbl:'Left sinus',            cx:129, cy:203, rx:10, ry:12 },
+  { k:'sinus_r',     lbl:'Right sinus',           cx:171, cy:203, rx:10, ry:12 },
   { k:'cheek_l',     lbl:'Left cheek',            cx:103, cy:224, rx:22, ry:24 },
   { k:'cheek_r',     lbl:'Right cheek',           cx:197, cy:224, rx:22, ry:24 },
   { k:'mustache',    lbl:'Mustache area',         cx:150, cy:230, rx:20, ry:8 },
   { k:'mouth',       lbl:'Around mouth',          cx:150, cy:250, rx:25, ry:12 },
   { k:'jaw_l',       lbl:'Left jawline',          cx:114, cy:268, rx:17, ry:12, rot:38 },
   { k:'jaw_r',       lbl:'Right jawline',         cx:186, cy:268, rx:17, ry:12, rot:-38 },
+  { k:'jaw_end_l',   lbl:'Left lower-jaw end',    cx:94,  cy:250, rx:11, ry:12 },
+  { k:'jaw_end_r',   lbl:'Right lower-jaw end',   cx:206, cy:250, rx:11, ry:12 },
   { k:'chin',        lbl:'Chin',                  cx:150, cy:283, rx:19, ry:13 },
   { k:'neck',        lbl:'Neck (front)',          cx:150, cy:327, rx:27, ry:19 },
 ];
@@ -11906,12 +12176,14 @@ const FM_PROFILE_REGIONS = [
   { k:'forehead_lb', lbl:'lower back forehead',    cx:133, cy:121, rx:16, ry:13 },
   { k:'temple',      lbl:'temple',                 cx:151, cy:148, rx:19, ry:20 },
   { k:'eye',         lbl:'eye area (side)',        cx:113, cy:178, rx:16, ry:11 },
+  { k:'nose_top',    lbl:'top of nose (side)',     cx:97,  cy:162, rx:10, ry:12 },
   { k:'nose_side',   lbl:'side of nose',           cx:85,  cy:188, rx:12, ry:19 },
   { k:'sideburn',    lbl:'front of ear',           cx:159, cy:197, rx:12, ry:21 },
   { k:'ear',         lbl:'ear',                    cx:191, cy:187, rx:16, ry:25 },
   { k:'behind_ear',  lbl:'behind ear',             cx:224, cy:197, rx:13, ry:21 },
   { k:'cheek',       lbl:'cheek (side)',           cx:122, cy:222, rx:24, ry:22 },
   { k:'jaw',         lbl:'jawline (side)',         cx:139, cy:250, rx:29, ry:11, rot:-16 },
+  { k:'neck_lymph',  lbl:'upper neck lymph (side)',cx:181, cy:247, rx:11, ry:16 },
   { k:'neck_top',    lbl:'upper neck (below jaw)', cx:160, cy:272, rx:24, ry:12, rot:-10 },
   { k:'neck',        lbl:'neck (side)',            cx:174, cy:312, rx:33, ry:23 },
 ];
@@ -11920,6 +12192,16 @@ const FACE_REGIONS = [
   ...FM_PROFILE_REGIONS.map(r => ({ key:'l_' + r.k, view:'left',  label:'Left '  + r.lbl, cx:r.cx,       cy:r.cy, rx:r.rx, ry:r.ry, rot:r.rot || 0 })),
   ...FM_PROFILE_REGIONS.map(r => ({ key:'r_' + r.k, view:'right', label:'Right ' + r.lbl, cx:300 - r.cx, cy:r.cy, rx:r.rx, ry:r.ry, rot:-(r.rot || 0) })),
 ];
+// Non-facial reaction points. view:'body' keeps them OUT of the front/left/right
+// SVG loop while still living in the shared region registry — stats, the log
+// modal and backups all key off the region id, so they need no new plumbing.
+// These keys are shipped persisted data: only ADD, never rename.
+const FM_BODY_REGIONS = [
+  { key:'body_back',    label:'Back' },
+  { key:'body_butt',    label:'Butt / glutes' },
+  { key:'body_general', label:'General / all over' },
+];
+FM_BODY_REGIONS.forEach(r => FACE_REGIONS.push({ key:r.key, view:'body', label:r.label, cx:0, cy:0, rx:0, ry:0, rot:0 }));
 const FM_REGION_BY_KEY = {};
 FACE_REGIONS.forEach(r => { FM_REGION_BY_KEY[r.key] = r; });
 const FM_VIEWS = [
@@ -11958,17 +12240,82 @@ function fmRegionStats(marks, filterFood) {
   return out;
 }
 
-// Every food name the user has ever logged, retired or already marked.
+// Every food the user has actually logged: the live food log plus the
+// preserved/retired-name dictionary (which also holds names kept across a
+// "fresh start" or a rename). Deliberately NOT seeded from face-map marks —
+// otherwise a mistaken entry (a typo like "zeoli") would relist itself forever
+// and keep showing up as a suggestion. This list is the face map's whole
+// vocabulary: you can only map a reaction to a food you've eaten.
 function fmCatalogFoods() {
   const set = new Set();
-  loadMigrated().forEach(e => { if (e.food) set.add(e.food); });
+  loadMigrated().forEach(e => { if (e && e.food) set.add(e.food); });
   loadFoodDictionary().forEach(f => { if (f) set.add(f); });
-  loadFaceMap().forEach(m => { if (m && m.food) set.add(m.food); });
   return [...set].sort((a, b) => a.localeCompare(b));
 }
+// The canonical spelling of a logged food, or null if it was never logged.
+// This is the gate for adding a mark: no match ⇒ not allowed onto the map.
+function fmKnownMatch(name) {
+  const k = normFood(name || '');
+  if (!k) return null;
+  return fmCatalogFoods().find(f => normFood(f) === k) || null;
+}
+// Foods marked on the face that are no longer in the food log (an old typo, or
+// a food whose log entries were deleted). New ones can't be created any more,
+// but pre-existing ones may linger — surfaced for one-tap cleanup. Pure.
+function fmOrphanFoods(marks) {
+  const known = new Set(fmCatalogFoods().map(normFood));
+  const per = {};
+  (marks || []).forEach(m => {
+    if (!m || !m.food || !FM_REGION_BY_KEY[m.region]) return;
+    if (known.has(normFood(m.food))) return;
+    per[m.food] = (per[m.food] || 0) + 1;
+  });
+  return Object.keys(per).sort((a, b) => a.localeCompare(b)).map(f => ({ food: f, count: per[f] }));
+}
+// Remove every mark for one food (used to clear an orphan like "zeoli").
+function fmRemoveFood(food) {
+  const k = normFood(food);
+  const marks = loadFaceMap();
+  const kept = marks.filter(m => !(m && normFood(m.food) === k));
+  const removed = marks.length - kept.length;
+  if (!removed) return;
+  saveFaceMap(kept);
+  if (_fmFilter && normFood(_fmFilter) === k) _fmFilter = '';
+  _fmSel = [];
+  renderFaceMap();
+  toast(`Removed ${removed} “${food}” mark${removed === 1 ? '' : 's'} ✓`);
+}
+// Open / close the inline "repoint this orphan to a logged food" picker.
+function fmRemapStart(food) { _fmRemap = food; renderFaceMap(); }
+function fmRemapCancel() { _fmRemap = ''; renderFaceMap(); }
+// Only logged foods appear in the remap picker — same vocabulary that gates new marks.
+function fmCatalogItems(q) {
+  const qq = normFood(q || '');
+  return fmCatalogFoods().filter(f => !qq || normFood(f).includes(qq)).map(f => ({ food: f, chip: '' }));
+}
+// Repoint every mark carrying the orphan name `oldFood` onto the logged food
+// `newFood` — the reaction history survives a rename instead of being deleted.
+function fmRemapFood(oldFood, newFood) {
+  const known = fmKnownMatch(newFood);
+  if (!known) { toast(`“${newFood}” isn't in your food log — pick a logged food`); return; }
+  const k = normFood(oldFood);
+  const marks = loadFaceMap();
+  let moved = 0;
+  marks.forEach(m => { if (m && normFood(m.food) === k) { m.food = known; moved++; } });
+  _fmRemap = '';
+  if (!moved) { renderFaceMap(); return; }
+  saveFaceMap(marks);
+  if (_fmFilter && normFood(_fmFilter) === k) _fmFilter = known;
+  renderFaceMap();
+  toast(`${moved} “${oldFood}” mark${moved === 1 ? '' : 's'} → “${known}” ✓`);
+}
 
-let _fmView = 'front', _fmFilter = '', _fmRegion = null, _fmSev = 2, _fmAnim = '';
+let _fmView = 'front', _fmFilter = '', _fmSel = [], _fmSev = 2, _fmAnim = '', _fmSuspectRegion = '';
+let _fmRemap = ''; // orphan food name whose inline "repoint to a logged food" picker is open
 let _fmPick = []; // foods selected in the region modal, waiting to be marked together
+let _fmWindow = 7; // log-modal "foods eaten in the last N days" window (7 / 14 / all); reset on open
+// _fmSel = the spots (face regions + body areas) the user has tapped to select;
+// tapping toggles membership, then one "Log" opens the picker and marks them all.
 
 // ── SVG builders ─────────────────────────────────────────────────────────────
 function fmDefsSVG() {
@@ -12056,10 +12403,10 @@ function renderFaceMap() {
   const regions = FACE_REGIONS.filter(r => r.view === _fmView).map(r => {
     const s = stats[r.key];
     const w = s ? s.weight : 0;
-    const op = w ? (0.16 + 0.5 * (w / maxW)).toFixed(3) : 0;
+    const op = w ? (0.10 + 0.32 * (w / maxW)).toFixed(3) : 0;
     const tf = r.rot ? ` transform="rotate(${r.rot} ${r.cx} ${r.cy})"` : '';
-    return `<g class="fm-region${w ? ' fm-hot' : ''}${_fmRegion === r.key ? ' fm-sel' : ''}" data-region="${r.key}"
-      onclick="openFaceRegion(this.dataset.region)" onmouseenter="fmHover(this.dataset.region)" onmouseleave="fmHover('')">
+    return `<g class="fm-region${w ? ' fm-hot' : ''}${_fmSel.includes(r.key) ? ' fm-sel' : ''}" data-region="${r.key}"
+      onclick="fmToggleSel(this.dataset.region)" onmouseenter="fmHover(this.dataset.region)" onmouseleave="fmHover('')">
       <title>${esc(r.label)}${s ? ` — ${s.count} mark${s.count === 1 ? '' : 's'}` : ''}</title>
       <ellipse class="fm-zone" cx="${r.cx}" cy="${r.cy}" rx="${r.rx}" ry="${r.ry}"${tf} style="fill-opacity:${op};"/>
       ${w ? `<g class="fm-badge"><circle cx="${r.cx}" cy="${r.cy}" r="10"/><text x="${r.cx}" y="${r.cy}" dy="3.5">${s.count}</text></g>`
@@ -12067,56 +12414,186 @@ function renderFaceMap() {
     </g>`;
   }).join('');
 
+  const n = _fmSel.length;
+  const hoverTxt = n
+    ? `${n} spot${n === 1 ? '' : 's'} selected — tap “Log” to add foods`
+    : (marks.length ? 'Tap spots to select, then Log them together' : 'Tap any dotted region or area to start');
+
   const stage = `<div class="fm-views">${viewBtns}</div>
   <div class="fm-stage">
     <svg class="fm-svg ${_fmAnim}" viewBox="0 0 300 380" xmlns="http://www.w3.org/2000/svg">
       ${fmDefsSVG()}${fmHeadSVG(_fmView)}${regions}
     </svg>
   </div>
-  <div class="fm-hovername" id="fm-hovername">${marks.length ? 'Tap a region to see or add foods' : 'Tap any dotted region to mark your first reaction'}</div>
+  <div class="fm-hovername" id="fm-hovername">${hoverTxt}</div>
   <div class="fm-legend">🪞 Mirror view — image-left is <b>&nbsp;your&nbsp;</b> left · <span class="fm-grad"></span> fewer → more reactions</div>`;
 
-  host.innerHTML = filterBar + chips + stage + fmInsightsHTML(marks, stats);
+  // Non-facial reaction points as bullet rows — same selection set as the face.
+  const bodyRows = FM_BODY_REGIONS.map(b => {
+    const s = stats[b.key], on = _fmSel.includes(b.key), cnt = s ? s.count : 0;
+    return `<div class="fm-body-item${on ? ' sel' : ''}${cnt ? ' hot' : ''}" data-region="${b.key}"
+      onclick="fmToggleSel(this.dataset.region)">
+      <span class="fm-body-box">${on ? '✓' : ''}</span>
+      <span style="flex:1; min-width:0;">${esc(b.label)}</span>
+      <span class="fm-body-count">${cnt ? cnt + '×' : ''}</span>
+    </div>`;
+  }).join('');
+  const bodyPanel = `<div class="fm-body-panel"><div class="fm-body-h">🧍 Other areas</div>${bodyRows}</div>`;
+
+  const actionBar = n
+    ? `<div class="fm-actionbar">
+        <button class="fm-log-btn" onclick="fmOpenLog()">📝 Log ${n} spot${n === 1 ? '' : 's'}</button>
+        <button class="fm-clear-sel" onclick="fmClearSel()">Clear</button>
+      </div>`
+    : '';
+
+  // Marks whose food is no longer in the log (e.g. an old typo) — offer cleanup.
+  const orphans = fmOrphanFoods(marks);
+  const orphanPanel = orphans.length ? `<div class="fm-orphans">
+    <div class="fm-orphans-h">⚠️ These aren't in your food log — <b>↪</b> repoint to the new name, or <b>✕</b> remove</div>
+    <div class="fm-orphans-list">${orphans.map(o => {
+      if (normFood(_fmRemap) === normFood(o.food)) {
+        return `<span class="fm-orphan-chip remapping">
+          <b>${esc(o.food)}</b><span class="c">→</span>
+          <span class="autocomplete-wrap">
+            <input id="fm-remap-input" placeholder="🔍 pick the new food…" autocomplete="off">
+            <div class="autocomplete-dropdown" id="fm-remap-drop"></div>
+          </span>
+          <button class="fm-orphan-x" onclick="fmRemapCancel()" title="Cancel">✕</button>
+        </span>`;
+      }
+      return `<span class="fm-orphan-chip"><b>${esc(o.food)}</b><span class="c">${o.count}×</span>`
+        + `<button class="fm-orphan-remap" data-food="${escAttr(o.food)}" onclick="fmRemapStart(this.dataset.food)" title="Repoint all ${o.count} “${escAttr(o.food)}” mark${o.count === 1 ? '' : 's'} onto a logged food">↪</button>`
+        + `<button class="fm-orphan-x" data-food="${escAttr(o.food)}" onclick="fmRemoveFood(this.dataset.food)" title="Remove all ${o.count} “${escAttr(o.food)}” mark${o.count === 1 ? '' : 's'}">✕</button></span>`;
+    }).join('')}</div>
+  </div>` : '';
+
+  host.innerHTML = filterBar + chips + orphanPanel + stage + bodyPanel + actionBar
+    + fmInsightsHTML(marks, stats) + (marks.length ? fmSuspectsHTML(marks) : '');
   _fmAnim = '';
   // the input was just rebuilt with the tab — old listeners died with the old node
   fmWireAutocomplete(
     document.getElementById('fm-filter-input'), document.getElementById('fm-filter-drop'),
     fmFilterItems, f => fmSetFilter(f), v => fmSetFilter(v));
+  // orphan remap: only logged foods are offered, so a mark can never be
+  // repointed onto another unlogged name (same rule that gates new marks).
+  if (_fmRemap) {
+    const ri = document.getElementById('fm-remap-input'), rd = document.getElementById('fm-remap-drop');
+    fmWireAutocomplete(ri, rd, fmCatalogItems, f => fmRemapFood(_fmRemap, f),
+      v => { const m = fmKnownMatch(v); if (m) fmRemapFood(_fmRemap, m); else toast(`“${v}” isn't in your food log — pick a logged food`); });
+    if (ri) ri.focus();
+  }
 }
 
 function fmInsightsHTML(marks, stats) {
   const keys = Object.keys(stats).sort((a, b) => stats[b].weight - stats[a].weight);
-  const maxW = keys.length ? stats[keys[0]].weight : 1;
   const viewTag = k => `<span class="fm-viewtag">${FM_REGION_BY_KEY[k].view}</span>`;
 
   if (_fmFilter) {
     if (!keys.length) return `<div class="fm-insights"><div class="empty" style="padding:20px;"><span>👀</span>No spots marked for <b>${esc(_fmFilter)}</b> yet.<br>Tap a region on the face to add one.</div></div>`;
     const rows = keys.map(k => {
       const s = stats[k];
-      return `<div class="fm-row" data-region="${k}" onclick="fmJump(this.dataset.region)">
-        <b>${esc(FM_REGION_BY_KEY[k].label)}</b>${viewTag(k)}
-        <span class="fm-bar"><i style="width:${Math.round(100 * s.weight / maxW)}%;"></i></span>
-        <span class="fm-count">${s.count}× · last ${esc(fmt(s.last))}</span>
-      </div>`;
+      return `<li class="fm-bullet" data-region="${k}" onclick="fmJump(this.dataset.region)">
+        <span class="fm-b-spot">${esc(FM_REGION_BY_KEY[k].label)}</span>${viewTag(k)}
+        <span class="fm-b-count">${s.count}× · last ${esc(fmt(s.last))}</span>
+      </li>`;
     }).join('');
-    return `<div class="fm-insights"><div class="fm-h">Where ${esc(_fmFilter)} shows up</div>${rows}</div>`;
+    return `<div class="fm-insights"><div class="fm-h">Where ${esc(_fmFilter)} shows up</div><ul class="fm-bullets">${rows}</ul></div>`;
   }
 
   if (!keys.length) return '';
-  const rows = keys.slice(0, 6).map(k => {
+  // Each reactive spot is a small section: the spot name is the heading, and the
+  // foods that react there are listed one per bullet underneath. Tap the heading
+  // to log/view the spot; tap a food to light up where it reacts.
+  const groups = keys.slice(0, 6).map(k => {
     const s = stats[k];
-    const foods = Object.keys(s.foods).sort((a, b) => s.foods[b] - s.foods[a]).slice(0, 3);
-    return `<div class="fm-row" data-region="${k}" onclick="fmJump(this.dataset.region)">
-      <b>${esc(FM_REGION_BY_KEY[k].label)}</b>${viewTag(k)}
-      <span class="fm-bar"><i style="width:${Math.round(100 * s.weight / maxW)}%;"></i></span>
-      <span class="fm-count">${s.count}×</span>
-      <span class="fm-foodchips">${foods.map(f => `<button class="fm-foodchip" data-food="${escAttr(f)}" onclick="event.stopPropagation();fmSetFilter(this.dataset.food)">${esc(f)}</button>`).join('')}</span>
+    const foods = Object.keys(s.foods).sort((a, b) => s.foods[b] - s.foods[a]).slice(0, 4);
+    const foodItems = foods.map(f =>
+      `<li class="fm-spot-food" role="button" tabindex="0" data-food="${escAttr(f)}" onclick="fmSetFilter(this.dataset.food)" title="Show where ${escAttr(f)} reacts">${esc(f)}</li>`).join('');
+    return `<div class="fm-spotgroup">
+      <div class="fm-spot-head" data-region="${k}" onclick="fmJump(this.dataset.region)" title="Log or view ${escAttr(FM_REGION_BY_KEY[k].label)}">
+        <b>${esc(FM_REGION_BY_KEY[k].label)}</b>${viewTag(k)}<span class="fm-spot-count">${s.count}×</span>
+      </div>
+      <ul class="fm-spot-foods">${foodItems}</ul>
     </div>`;
   }).join('');
-  return `<div class="fm-insights"><div class="fm-h">Most reactive spots</div>${rows}</div>`;
+  return `<div class="fm-insights"><div class="fm-h">Most reactive spots</div>${groups}</div>`;
+}
+
+// ── Suspects-by-region browser ───────────────────────────────────────────────
+// Pick any region label → every food ever linked to it, ranked most → least
+// (weight = Σ severity, same currency the heat-map uses). Ignores the food
+// filter on purpose: this panel answers "for THIS spot, who's guilty?".
+function fmSuspectsForRegions(marks, keys) {
+  const set = new Set(keys || []);
+  const per = {};
+  (marks || []).forEach(m => {
+    if (!m || !m.food || !set.has(m.region)) return;
+    const sev = m.sev === 1 || m.sev === 3 ? m.sev : 2;
+    const x = per[m.food] || (per[m.food] = { food: m.food, count: 0, weight: 0, last: '' });
+    x.count++; x.weight += sev;
+    if ((m.date || '') > x.last) x.last = m.date || '';
+  });
+  return Object.values(per).sort((a, b) => b.weight - a.weight || b.count - a.count || a.food.localeCompare(b.food));
+}
+function fmSuspectsForRegion(marks, key) { return fmSuspectsForRegions(marks, [key]); }
+// One-tap "seen here before" list for the log modal: suspects across the tapped
+// spot(s), narrowed to foods still in the log (re-adding an orphan would just
+// recreate one) and resolved to their canonical logged spelling. Pure.
+function fmSuspectsHere(marks, keys) {
+  const out = [];
+  fmSuspectsForRegions(marks, keys).forEach(x => {
+    const f = fmKnownMatch(x.food);
+    if (f) out.push({ food: f, count: x.count, weight: x.weight, last: x.last });
+  });
+  return out;
+}
+function fmSuspectsHTML(marks) {
+  const allStats = fmRegionStats(marks, '');
+  const groups = [
+    { view: 'front', label: 'Front' },
+    { view: 'left',  label: 'Left side' },
+    { view: 'right', label: 'Right side' },
+    { view: 'body',  label: 'Other areas' },
+  ];
+  const opts = groups.map(g => {
+    const inner = FACE_REGIONS.filter(r => r.view === g.view).map(r => {
+      const c = allStats[r.key] ? allStats[r.key].count : 0;
+      return `<option value="${escAttr(r.key)}"${r.key === _fmSuspectRegion ? ' selected' : ''}>${esc(r.label)}${c ? ` — ${c} mark${c === 1 ? '' : 's'}` : ''}</option>`;
+    }).join('');
+    return `<optgroup label="${esc(g.label)}">${inner}</optgroup>`;
+  }).join('');
+  const picker = `<div class="fm-suspects-pick"><select id="fm-suspect-sel" onchange="fmSetSuspectRegion(this.value)">
+    <option value="">Choose a region…</option>${opts}
+  </select></div>`;
+
+  const reg = _fmSuspectRegion && FM_REGION_BY_KEY[_fmSuspectRegion];
+  let body;
+  if (reg) {
+    const list = fmSuspectsForRegion(marks, _fmSuspectRegion);
+    if (!list.length) {
+      body = `<div class="empty" style="padding:18px;"><span>🕵️</span>No foods linked to <b>${esc(reg.label)}</b> yet.<br>Tap this spot on the face above to add one.</div>`;
+    } else {
+      const maxW = list[0].weight || 1;
+      body = list.map((x, i) => `<div class="fm-row" data-food="${escAttr(x.food)}" onclick="fmSetFilter(this.dataset.food)" title="Show where ${escAttr(x.food)} reacts">
+        <span class="fm-rank">${i + 1}</span><b>${esc(x.food)}</b>
+        <span class="fm-bar"><i style="width:${Math.round(100 * x.weight / maxW)}%;"></i></span>
+        <span class="fm-count">${x.count}× · last ${esc(fmt(x.last))}</span>
+        <button class="fm-profile-btn" data-food="${escAttr(x.food)}" onclick="event.stopPropagation();openFoodProfile(this.dataset.food)" title="Open the full Food Profile dossier">📇</button>
+      </div>`).join('');
+    }
+  } else {
+    body = `<div style="font-size:12.5px; color:var(--muted); padding:6px 2px;">Pick a region above to see which foods it reacts to, ranked most → least suspicious.</div>`;
+  }
+  const title = reg ? `Suspects for ${esc(reg.label)}` : 'Suspects by region';
+  return `<div class="fm-insights fm-suspects"><div class="fm-h">🕵️ ${title}</div>${picker}${body}</div>`;
 }
 
 // ── Interactions ─────────────────────────────────────────────────────────────
+function fmSetSuspectRegion(key) {
+  _fmSuspectRegion = FM_REGION_BY_KEY[key] ? key : '';
+  renderFaceMap();
+}
 function fmSetView(v) {
   const order = ['left', 'front', 'right'];
   const from = order.indexOf(_fmView), to = order.indexOf(v);
@@ -12202,13 +12679,31 @@ function fmFilterItems(q) {
   return out;
 }
 
-// Region-modal suggestions: whole catalog A→Z, flagging foods already here.
-function fmModalItems(q) {
-  const qq = normFood(q || '');
-  const here = new Set(loadFaceMap().filter(m => m && m.region === _fmRegion).map(m => normFood(m.food || '')));
-  return fmCatalogFoods()
-    .filter(f => !qq || normFood(f).includes(qq))
-    .map(f => ({ food: f, chip: here.has(normFood(f)) ? '✓ marked here' : '' }));
+// Foods eaten within the last `days` days (rolling from today), one row per
+// food carrying its most-recent day, sorted most-recent-first then A→Z. Pure —
+// pinned by the self-test. This is the log modal's fast path: the likely
+// culprit of a fresh reaction sits at the top instead of buried in the A→Z
+// catalog. `days` ≥ 3650 means "all foods" (handled by the caller, not here).
+function fmRecentFoods(entries, days) {
+  const t = parseYMD(today());
+  const per = {};
+  (entries || []).forEach(e => {
+    if (!e || !e.food || !e.date) return;
+    const ago = Math.round((t - parseYMD(e.date)) / 86400000);
+    if (ago < 0 || ago >= days) return;
+    const k = normFood(e.food);
+    const x = per[k];
+    if (!x) { per[k] = { food: e.food, ago }; }
+    else if (ago < x.ago) { x.ago = ago; x.food = e.food; }
+  });
+  return Object.values(per).sort((a, b) => a.ago - b.ago || a.food.localeCompare(b.food));
+}
+// Human day header for the recent list. Within the widest window (14d) a plain
+// "N days ago" reads fine; Today/Yesterday get names.
+function fmDayLabel(ago) {
+  if (ago <= 0) return 'Today';
+  if (ago === 1) return 'Yesterday';
+  return ago + ' days ago';
 }
 function fmHover(key) {
   const el = document.getElementById('fm-hovername');
@@ -12221,43 +12716,62 @@ function fmHover(key) {
 function fmJump(key) {
   const r = FM_REGION_BY_KEY[key];
   if (!r) return;
-  if (r.view !== _fmView) fmSetView(r.view);
-  openFaceRegion(key);
+  _fmSel = [key];
+  if (r.view !== 'body' && r.view !== _fmView) fmSetView(r.view);
+  fmOpenLog();
 }
 
 // ── Region modal ─────────────────────────────────────────────────────────────
-function openFaceRegion(key) {
-  const r = FM_REGION_BY_KEY[key];
-  if (!r) return;
-  _fmRegion = key;
+// Tap a spot (face region or body area) → toggle it in/out of the selection.
+// Nothing opens yet; the picker waits for the "Log" button.
+function fmToggleSel(key) {
+  if (!FM_REGION_BY_KEY[key]) return;
+  const i = _fmSel.indexOf(key);
+  if (i >= 0) _fmSel.splice(i, 1); else _fmSel.push(key);
+  renderFaceMap();
+}
+function fmClearSel() { _fmSel = []; renderFaceMap(); }
+// Open the food picker for the whole current selection.
+function fmOpenLog() {
+  if (!_fmSel.length) return;
   _fmPick = [];
+  _fmWindow = 7; // always open on "this week" (the chosen default)
   const inp = document.getElementById('fm-add-input');
   if (inp) inp.value = '';
   document.getElementById('fm-modal-bg').classList.add('open');
   renderFaceModal();
-  renderFaceMap(); // pulse the selected region behind the modal
+  renderFaceMap(); // keep the selected spots pulsing behind the modal
   setTimeout(() => { const i = document.getElementById('fm-add-input'); if (i && !('ontouchstart' in window)) i.focus(); }, 40);
 }
 function closeFaceModal() {
-  _fmRegion = null;
+  _fmSel = [];
   document.getElementById('fm-modal-bg').classList.remove('open');
   renderFaceMap();
 }
 function renderFaceModal() {
-  const r = FM_REGION_BY_KEY[_fmRegion];
-  if (!r) return;
-  const marks = loadFaceMap().filter(m => m && m.region === _fmRegion);
-  document.getElementById('fm-modal-title').textContent = '👤 ' + r.label;
-  document.getElementById('fm-modal-sub').textContent =
-    `${FM_VIEWS.find(v => v.key === r.view).label.replace('◀ ', '').replace(' ▶', '')} view · ${marks.length ? marks.length + ' mark' + (marks.length === 1 ? '' : 's') : 'no marks yet'}`;
-  const sevPill = s => { const n = s === 1 || s === 3 ? s : 2; return `<span class="fm-sevpill s${n}">${FM_SEVS[n - 1].label}</span>`; };
+  const keys = _fmSel.filter(k => FM_REGION_BY_KEY[k]);
+  if (!keys.length) return;
+  const multi = keys.length > 1;
+  const labels = keys.map(k => FM_REGION_BY_KEY[k].label);
+  const marks = loadFaceMap().filter(m => m && keys.includes(m.region));
+  document.getElementById('fm-modal-title').textContent = multi ? `👤 ${keys.length} spots selected` : '👤 ' + labels[0];
+  const r0 = FM_REGION_BY_KEY[keys[0]];
+  const vw = FM_VIEWS.find(v => v.key === r0.view);
+  const viewTxt = vw ? vw.label.replace('◀ ', '').replace(' ▶', '') + ' view' : 'Other area';
+  document.getElementById('fm-modal-sub').textContent = multi
+    ? labels.join(' · ')
+    : `${viewTxt} · ${marks.length ? marks.length + ' mark' + (marks.length === 1 ? '' : 's') : 'no marks yet'}`;
+  const mtag = m => {
+    const n = m.sev === 1 || m.sev === 3 ? m.sev : 2;
+    const tip = `${FM_SEVS[n - 1].label} · ${fmt(m.date)}${multi ? ' · ' + FM_REGION_BY_KEY[m.region].label : ''}`;
+    return `<span class="fm-mtag s${n}" title="${escAttr(tip)}">
+      <b>${esc(m.food)}</b>${multi ? `<i>${esc(FM_REGION_BY_KEY[m.region].label)}</i>` : ''}
+      <button class="fm-mtag-x" data-id="${escAttr(m.id)}" onclick="fmDeleteMark(this.dataset.id)" title="Remove this mark">✕</button>
+    </span>`;
+  };
   document.getElementById('fm-modal-marks').innerHTML = marks.length
-    ? marks.map(m => `<div class="fm-mark-row">
-        <b>${esc(m.food)}</b>${sevPill(m.sev)}
-        <span class="fm-date">${esc(fmt(m.date))}</span>
-        <button class="fm-mark-del" data-id="${escAttr(m.id)}" onclick="fmDeleteMark(this.dataset.id)" title="Remove this mark">✕</button>
-      </div>`).join('')
-    : `<div style="font-size:12.5px; color:var(--muted); padding:6px 2px;">Nothing linked here yet — add the food you suspect below.</div>`;
+    ? `<div class="fm-mark-head">Already logged here · ${marks.length}</div><div class="fm-mark-tags">${marks.map(mtag).join('')}</div>`
+    : `<div class="fm-mark-empty">No foods linked ${multi ? 'to these spots' : 'here'} yet — add the ones you suspect below.</div>`;
   document.getElementById('fm-sev-row').innerHTML = FM_SEVS.map(s =>
     `<button class="fm-sev-btn${s.sev === _fmSev ? ' active' : ''}" onclick="fmSetSev(${s.sev})">${s.label}</button>`).join('');
   renderFmPickChips();
@@ -12273,25 +12787,100 @@ function renderFmPickChips() {
   el.innerHTML = _fmPick.map(f =>
     `<span class="fm-pick-chip">${esc(f)}<button data-food="${escAttr(f)}" onclick="fmTogglePick(this.dataset.food)" title="Remove from selection">✕</button></span>`).join('');
   const btn = document.getElementById('fm-add-btn');
-  if (btn) btn.textContent = _fmPick.length > 1 ? `＋ Mark ${_fmPick.length} foods here` : _fmPick.length === 1 ? '＋ Mark 1 food here' : '＋ Mark here';
+  if (btn) {
+    const nr = _fmSel.length, on = nr > 1 ? ` on ${nr} spots` : '';
+    btn.textContent = _fmPick.length > 1 ? `＋ Mark ${_fmPick.length} foods${on}`
+      : _fmPick.length === 1 ? `＋ Mark 1 food${on}`
+      : (nr > 1 ? `＋ Mark on ${nr} spots` : '＋ Mark here');
+  }
 }
+const FM_WINDOWS = [{ d: 7, l: 'This week' }, { d: 14, l: '2 weeks' }, { d: 3650, l: 'All foods' }];
+function fmSetWindow(days) { _fmWindow = days; renderFmPickList(); }
+
+// The modal food picker, rebuilt on every keystroke / toggle / window switch.
+// The search <input> is a SEPARATE node, so re-rendering here never steals its
+// focus. Three surfaces, in priority order:
+//   1. Suspects-here — foods already linked to the tapped spot(s): one tap re-adds.
+//   2. Window toggle — This week / 2 weeks / All (hidden while searching).
+//   3. The list — recent-first & grouped by day (browse), or the filtered
+//      catalog with recent matches floated up (while searching).
 function renderFmPickList() {
   const el = document.getElementById('fm-pick-list');
   if (!el) return;
   const inp = document.getElementById('fm-add-input');
   const q = String(inp && inp.value || '').trim();
+  const searching = q.length > 0;
   const sel = new Set(_fmPick.map(f => normFood(f)));
-  const items = fmModalItems(q);
-  el.innerHTML = items.length
-    ? items.map(it => {
-        const on = sel.has(normFood(it.food));
-        return `<div class="fm-pick-item${on ? ' sel' : ''}" data-food="${escAttr(it.food)}" onclick="fmTogglePick(this.dataset.food)">
-          <span class="fm-pick-box">${on ? '✓' : ''}</span>
-          <span style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${esc(it.food)}</span>
-          ${it.chip ? `<span class="fm-ac-chip">${esc(it.chip)}</span>` : ''}
-        </div>`;
-      }).join('')
-    : `<div style="padding:14px; font-size:12.5px; color:var(--muted);">${q ? `No match — press Enter to select “${esc(q)}” as a new name.` : 'No foods in your catalog yet — type a name above and press Enter.'}</div>`;
+  const here = new Set(loadFaceMap().filter(m => m && _fmSel.includes(m.region)).map(m => normFood(m.food || '')));
+  const chipFor = f => here.has(normFood(f)) ? '✓ marked here' : '';
+  const row = (food, chip) => {
+    const on = sel.has(normFood(food));
+    return `<div class="fm-pick-item${on ? ' sel' : ''}" data-food="${escAttr(food)}" onclick="fmTogglePick(this.dataset.food)">
+      <span class="fm-pick-box">${on ? '✓' : ''}</span>
+      <span style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${esc(food)}</span>
+      ${chip ? `<span class="fm-ac-chip">${esc(chip)}</span>` : ''}
+    </div>`;
+  };
+
+  // 1. Suspects-here (only while browsing — a distraction mid-search)
+  const suspEl = document.getElementById('fm-suspects-here');
+  if (suspEl) {
+    const susp = searching ? [] : fmSuspectsHere(loadFaceMap(), _fmSel).slice(0, 8);
+    suspEl.innerHTML = susp.length
+      ? `<div class="fm-susp-h">⚡ Seen here before — tap to re-add</div><div class="fm-susp-chips">${susp.map(x => {
+          const on = sel.has(normFood(x.food));
+          return `<button class="fm-susp-chip${on ? ' on' : ''}" data-food="${escAttr(x.food)}" onclick="fmTogglePick(this.dataset.food)" title="${x.count}× marked here">
+            <span class="fm-susp-box">${on ? '✓' : '＋'}</span>${esc(x.food)}<i>${x.count}×</i></button>`;
+        }).join('')}</div>`
+      : '';
+  }
+
+  // 2. Window toggle
+  const winEl = document.getElementById('fm-window-row');
+  if (winEl) {
+    winEl.innerHTML = searching ? '' : `<span class="fm-window-label">Eaten:</span>` + FM_WINDOWS.map(o =>
+      `<button class="fm-window-btn${_fmWindow === o.d ? ' active' : ''}" onclick="fmSetWindow(${o.d})">${o.l}</button>`).join('');
+  }
+
+  // 3a. Search mode — full catalog filtered, recent matches floated to the top.
+  if (searching) {
+    const qq = normFood(q);
+    const order = {};
+    fmRecentFoods(loadMigrated(), 3650).forEach((x, i) => { order[normFood(x.food)] = i; });
+    const items = fmCatalogFoods()
+      .filter(f => normFood(f).includes(qq))
+      .sort((a, b) => {
+        const oa = normFood(a) in order ? order[normFood(a)] : 1e9;
+        const ob = normFood(b) in order ? order[normFood(b)] : 1e9;
+        return oa - ob || a.localeCompare(b);
+      });
+    el.innerHTML = items.length
+      ? items.map(f => row(f, chipFor(f))).join('')
+      : `<div class="fm-pick-none">No logged food matches “${esc(q)}”. You can only map foods you've eaten — log it first.</div>`;
+    return;
+  }
+
+  // 3b. All-foods mode — the whole catalog, A→Z.
+  if (_fmWindow >= 3650) {
+    const items = fmCatalogFoods();
+    el.innerHTML = items.length
+      ? items.map(f => row(f, chipFor(f))).join('')
+      : `<div class="fm-pick-none">You haven't logged any foods yet — add some on the Log tab first.</div>`;
+    return;
+  }
+
+  // 3c. This-week / 2-weeks mode — recent foods, grouped by day (most recent first).
+  const recent = fmRecentFoods(loadMigrated(), _fmWindow);
+  if (!recent.length) {
+    el.innerHTML = `<div class="fm-pick-none">Nothing logged in the last ${_fmWindow} days. Try “All foods”, or search above.</div>`;
+    return;
+  }
+  let html = '', lastAgo = -1;
+  recent.forEach(x => {
+    if (x.ago !== lastAgo) { html += `<div class="fm-day-head">${esc(fmDayLabel(x.ago))}</div>`; lastAgo = x.ago; }
+    html += row(x.food, chipFor(x.food));
+  });
+  el.innerHTML = html;
 }
 function fmTogglePick(food) {
   const k = normFood(food);
@@ -12300,32 +12889,47 @@ function fmTogglePick(food) {
   renderFmPickChips();
   renderFmPickList();
 }
-// Enter in the search box: select the typed name (new names are allowed)
+// Enter in the search box: select the typed name — but ONLY if it's a food the
+// user has actually logged. Free-typing a brand-new name is how stray entries
+// (e.g. "zeoli") used to get onto the map; now an unlogged name is refused.
 function fmPickTyped() {
   const inp = document.getElementById('fm-add-input');
-  const name = canonicalFoodName(String(inp.value || '').trim());
-  if (!name) return;
-  if (!_fmPick.some(f => normFood(f) === normFood(name))) _fmPick.push(name);
+  const raw = String(inp.value || '').trim();
+  if (!raw) return;
+  const known = fmKnownMatch(raw);
+  if (!known) { toast(`“${raw}” isn't in your food log — log it first, then map it`); return; }
+  if (!_fmPick.some(f => normFood(f) === normFood(known))) _fmPick.push(known);
   inp.value = '';
   renderFmPickChips();
   renderFmPickList();
 }
 function fmSetSev(n) { _fmSev = n === 1 || n === 3 ? n : 2; renderFaceModal(); }
 function fmAddMark() {
-  if (!_fmRegion) return;
+  const regions = _fmSel.filter(k => FM_REGION_BY_KEY[k]);
+  if (!regions.length) return;
   const inp = document.getElementById('fm-add-input');
   const typed = String(inp && inp.value || '').trim();
-  const foods = [..._fmPick];
-  if (typed && !foods.some(f => normFood(f) === normFood(typed))) foods.push(typed);
-  if (!foods.length) { toast('Pick at least one food first'); return; }
+  if (typed) {
+    const known = fmKnownMatch(typed);
+    if (!known) { toast(`“${typed}” isn't in your food log — pick a logged food`); return; }
+    if (!_fmPick.some(f => normFood(f) === normFood(known))) _fmPick.push(known);
+  }
+  // Only ever store foods the user has logged — resolve each to its canonical
+  // logged spelling and drop anything that no longer matches (defence in depth).
+  const foods = [...new Set(_fmPick.map(f => fmKnownMatch(f)).filter(Boolean))];
+  if (!foods.length) { toast('Pick at least one logged food first'); return; }
   const marks = loadFaceMap();
-  foods.forEach(f => marks.unshift({ id: uid(), region: _fmRegion, food: canonicalFoodName(f), sev: _fmSev, date: today() }));
+  foods.forEach(f => regions.forEach(reg =>
+    marks.unshift({ id: uid(), region: reg, food: f, sev: _fmSev, date: today() })));
   saveFaceMap(marks);
   _fmPick = [];
   if (inp) inp.value = '';
   renderFaceModal();
   renderFaceMap();
-  toast(foods.length === 1 ? `${canonicalFoodName(foods[0])} marked ✓` : `${foods.length} foods marked ✓`);
+  const nf = foods.length, nr = regions.length;
+  toast(nr === 1
+    ? (nf === 1 ? `${foods[0]} marked ✓` : `${nf} foods marked ✓`)
+    : `${nf} food${nf === 1 ? '' : 's'} × ${nr} spots marked ✓`);
 }
 function fmDeleteMark(id) {
   const marks = loadFaceMap();
@@ -12339,6 +12943,351 @@ function fmDeleteMark(id) {
 }
 document.getElementById('fm-modal-bg').addEventListener('click', function (e) { if (e.target === this) closeFaceModal(); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && document.getElementById('fm-modal-bg').classList.contains('open')) closeFaceModal(); });
+
+// ═══ Food Profile (v61) ══════════════════════════════════════════════════════
+// One dossier per food: everything the app knows about a single product in one
+// place. DELIBERATELY reuses the existing engines (computeVerdicts, the
+// Factors day-comparison math, fmRegionStats, computeExperiment) instead of
+// re-deriving — the profile must never disagree with the tabs it summarizes.
+// All fp* compute helpers are pure (entries/checkins passed in) → self-tested.
+
+let _fpFood = '';
+
+// Times eaten, distinct days, first/last, per-week frequency, meal-type split.
+function fpBasics(entries, food) {
+  const k = normFood(food);
+  const es = entries.filter(e => e && normFood(e.food) === k);
+  const days = [...new Set(es.map(e => e.date))].sort();
+  const meals = {};
+  es.forEach(e => { const m = e.mealType || 'other'; meals[m] = (meals[m] || 0) + 1; });
+  const first = days[0] || '', last = days[days.length - 1] || '';
+  const spanDays = first ? Math.round((parseYMD(last) - parseYMD(first)) / 86400000) + 1 : 0;
+  return { logs: es.length, days: days.length, first, last, spanDays,
+           perWeek: spanDays > 0 ? days.length / spanDays * 7 : 0, meals };
+}
+
+// Per reaction window: this food's ✓/✕ counts vs a baseline that EXCLUDES the
+// food itself (same self-inclusion guard computeVerdicts uses).
+function fpWindowStats(entries, food) {
+  const k = normFood(food);
+  const per = WINDOWS.map(w => ({ key: w.key, label: w.label, cls: w.cls, p: 0, n: 0, bp: 0, bn: 0 }));
+  entries.forEach(e => {
+    if (!e) return;
+    const mine = normFood(e.food) === k;
+    per.forEach(s => {
+      const v = e.windows ? e.windows[s.key] : undefined;
+      if (v === true) { if (mine) s.p++; else s.bp++; }
+      else if (v === false) { if (mine) s.n++; else s.bn++; }
+    });
+  });
+  per.forEach(s => {
+    s.tot = s.p + s.n;
+    const btot = s.bp + s.bn;
+    s.rate = s.tot ? s.n / s.tot : null;
+    s.base = btot ? s.bn / btot : null;
+  });
+  return per;
+}
+
+// Check-in metric averages on eaten vs non-eaten days. lag 1 = "the day
+// after eating". Same math as the Insights Factors engine in absolute mode:
+// deltaPct = (eatenAvg − controlAvg) / 4 × 100 on the 1–5 scale (higher =
+// better), so NEGATIVE = worse on days you ate it.
+function fpImpacts(entries, checkins, food, syms, lag) {
+  const k = normFood(food);
+  const eaten = new Set(entries.filter(e => e && normFood(e.food) === k).map(e => e.date));
+  return (syms || []).map(s => {
+    const exp = [], ctl = [];
+    Object.keys(checkins || {}).forEach(d => {
+      const v = checkins[d] ? checkins[d][s.key] : null;
+      if (v == null || typeof v !== 'number') return;
+      (eaten.has(addDays(d, -(lag || 0))) ? exp : ctl).push(v);
+    });
+    const avg = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : null;
+    const ea = avg(exp), ca = avg(ctl);
+    return { key: s.key, label: s.label, expN: exp.length, ctlN: ctl.length, expAvg: ea, ctlAvg: ca,
+             deltaPct: ea != null && ca != null ? (ea - ca) / 4 * 100 : null,
+             thin: exp.length < 5 || ctl.length < 5 };
+  });
+}
+
+// Foods that share the plate: distinct same-days with the profile food.
+function fpCoEaten(entries, food) {
+  const k = normFood(food);
+  const mineDays = new Set(entries.filter(e => e && normFood(e.food) === k).map(e => e.date));
+  if (!mineDays.size) return [];
+  const per = {};
+  entries.forEach(e => {
+    if (!e || !mineDays.has(e.date) || normFood(e.food) === k) return;
+    const kk = normFood(e.food);
+    const x = per[kk] || (per[kk] = { food: e.food, days: new Set() });
+    x.days.add(e.date);
+  });
+  return Object.values(per)
+    .map(x => ({ food: x.food, co: x.days.size, share: x.days.size / mineDays.size }))
+    .filter(x => x.co >= 2)
+    .sort((a, b) => b.co - a.co || a.food.localeCompare(b.food))
+    .slice(0, 8);
+}
+
+// Weekly buckets, oldest → newest: logs that week + whether any window was ✕.
+function fpWeeklyHistory(entries, food, weeks) {
+  const k = normFood(food), n = weeks || 16;
+  const out = Array.from({ length: n }, () => ({ logs: 0, neg: 0 }));
+  const t = parseYMD(today());
+  entries.forEach(e => {
+    if (!e || normFood(e.food) !== k) return;
+    const ago = Math.round((t - parseYMD(e.date)) / 86400000);
+    if (ago < 0) return;
+    const w = Math.floor(ago / 7);
+    if (w >= n) return;
+    const b = out[n - 1 - w];
+    b.logs++;
+    WINDOWS.forEach(win => { if (e.windows && e.windows[win.key] === false) b.neg++; });
+  });
+  return out;
+}
+
+// ── Navigation ───────────────────────────────────────────────────────────────
+function openFoodProfile(food) {
+  _fpFood = canonicalFoodName(String(food || '').trim());
+  showTab('profile');
+}
+function fpOpen(food) { _fpFood = canonicalFoodName(String(food || '').trim()); renderFoodProfile(); }
+function fpClear() { _fpFood = ''; renderFoodProfile(); }
+function fpGoFaceMap() { if (_fpFood) _fmFilter = canonicalFoodName(_fpFood); showTab('facemap'); }
+
+// Search suggestions: most-logged first, retired names last.
+function fpSearchItems(q) {
+  const qq = normFood(q || '');
+  const logsPer = {};
+  loadMigrated().forEach(e => { if (e.food) logsPer[normFood(e.food)] = (logsPer[normFood(e.food)] || 0) + 1; });
+  return fmCatalogFoods()
+    .filter(f => !qq || normFood(f).includes(qq))
+    .map(f => ({ food: f, chip: logsPer[normFood(f)] ? `${logsPer[normFood(f)]} log${logsPer[normFood(f)] === 1 ? '' : 's'}` : 'retired' }))
+    .sort((a, b) => (logsPer[normFood(b.food)] || 0) - (logsPer[normFood(a.food)] || 0));
+}
+
+// ── Renderer ─────────────────────────────────────────────────────────────────
+function renderFoodProfile() {
+  const host = document.getElementById('foodprofile-wrap');
+  if (!host) return;
+  const entries = loadMigrated();
+
+  const searchBar = `<div class="fm-filterbar" style="margin-bottom:12px;">
+    <div class="autocomplete-wrap">
+      <input id="fp-search" placeholder="🔍 Type any food you've logged…" value="" autocomplete="off">
+      <div class="autocomplete-dropdown" id="fp-drop"></div>
+    </div>
+    ${_fpFood ? `<button class="fm-clear-btn" onclick="fpClear()">✕ ${esc(_fpFood)}</button>` : ''}
+  </div>`;
+
+  if (!_fpFood) {
+    // landing: recent + most-logged quick picks
+    const lastDate = {}, logsPer = {};
+    entries.forEach(e => {
+      const k = normFood(e.food || ''); if (!k) return;
+      logsPer[k] = (logsPer[k] || 0) + 1;
+      if (!lastDate[k] || e.date > lastDate[k].date) lastDate[k] = { food: e.food, date: e.date };
+    });
+    const recent = Object.values(lastDate).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 6).map(x => x.food);
+    const frequent = Object.values(lastDate).sort((a, b) => (logsPer[normFood(b.food)] || 0) - (logsPer[normFood(a.food)] || 0)).slice(0, 8).map(x => x.food);
+    const chip = f => `<button class="fp-chip" data-food="${escAttr(f)}" onclick="fpOpen(this.dataset.food)">${esc(f)}<span class="fp-chip-n">${logsPer[normFood(f)] || 0}×</span></button>`;
+    const seen = new Set(recent.map(normFood));
+    const freq2 = frequent.filter(f => !seen.has(normFood(f)));
+    host.innerHTML = searchBar + (recent.length
+      ? `<div class="fp-h">Recently eaten</div><div class="fp-chiprow">${recent.map(chip).join('')}</div>
+         ${freq2.length ? `<div class="fp-h">Most logged</div><div class="fp-chiprow">${freq2.map(chip).join('')}</div>` : ''}`
+      : `<div class="empty"><span>📇</span>Log some foods first — then search any of them here for the full story.</div>`);
+    fmWireAutocomplete(document.getElementById('fp-search'), document.getElementById('fp-drop'),
+      fpSearchItems, f => fpOpen(f), v => { const m = fmKnownMatch(v); if (m) fpOpen(m); else toast(`“${v}” isn't in your food log`); });
+    return;
+  }
+
+  const food = _fpFood;
+  const b = fpBasics(entries, food);
+
+  // verdict record — always all-time here regardless of the Verdicts tab range
+  const keepRange = _verdictRange; let vrec = null, allVerdicts = [];
+  _verdictRange = 'all';
+  try { allVerdicts = computeVerdicts().list; } finally { _verdictRange = keepRange; }
+  vrec = allVerdicts.find(x => normFood(x.food) === normFood(food)) || null;
+  const vByFood = {}; allVerdicts.forEach(x => { vByFood[normFood(x.food)] = x; });
+
+  // ── header ──
+  const status = ciLookup(loadFoodStatus(), food);
+  const sDir = learnedLabelDir(status);
+  const mealIco = { breakfast: '🌅', lunch: '☀️', snack: '🍎', dinner: '🌙', other: '🍽️' };
+  const mealTxt = Object.keys(b.meals).map(m => `${mealIco[m] || '🍽️'}${b.meals[m]}`).join(' · ');
+  const headCard = `<div class="card fp-card">
+    <div class="fp-name-row">
+      <span class="fp-name">${esc(food)}</span>
+      ${status ? `<span class="fp-status ${sDir || 'none'}">${esc(status)}</span>` : ''}
+      ${vrec && vrec.staple ? '<span class="verdict-tag staple" title="Eaten on 70%+ of tracked days">📌 staple</span>' : ''}
+    </div>
+    ${b.logs ? `<div class="fp-statgrid">
+      <div class="fp-stat"><b>${b.logs}</b><span>logs</span></div>
+      <div class="fp-stat"><b>${b.days}</b><span>days</span></div>
+      <div class="fp-stat"><b>${b.perWeek >= 10 ? Math.round(b.perWeek) : b.perWeek.toFixed(1)}</b><span>per week</span></div>
+      <div class="fp-stat"><b>${esc(fmt(b.last))}</b><span>last eaten</span></div>
+    </div>
+    <div class="fp-sub">First ${esc(fmt(b.first))} · ${mealTxt || 'no meal types'} · all-time data</div>`
+    : `<div class="fp-sub">No log entries under this name — it lives in your preserved food list. History shown where it exists.</div>`}
+  </div>`;
+
+  // ── verdict hero (evidence lines reuse the Verdicts tab's vw-* look) ──
+  const fpWhy = w => {
+    if (w.kind === 'note') return `<div class="vw-note">${w.text}</div>`;
+    if (w.kind === 'lift') return `<div class="vw-row">
+      <span class="vw-chip sym" title="Meal-tag symptom flagged on this food">${esc(w.sym)}</span>
+      <span class="vw-main"><b class="bad">${w.lift.toFixed(1)}×</b><span class="vw-base">your average rate</span></span>
+      <span class="vw-count">${w.c}× on this food</span>
+    </div>`;
+    const chip = w.kind === 'win'
+      ? `<span class="vw-chip ${w.cls}" title="Reaction window after eating">${w.win}</span>`
+      : `<span class="vw-chip all">overall</span>`;
+    const f = Math.round(Math.max(0, Math.min(1, w.foodPct)) * 100);
+    const bb = Math.round(Math.max(0, Math.min(1, w.basePct)) * 100);
+    const dirCls = w.dir === 'good' ? 'good' : (w.dir === 'flat' ? 'flat' : 'bad');
+    return `<div class="vw-row">${chip}
+      <span class="vw-count">${w.count}</span>
+      <span class="vw-main"><b class="${dirCls}">${f}%</b><span class="vw-vs">vs</span><span class="vw-base">${bb}% baseline</span></span>
+      <span class="vw-bars ${w.dir}" aria-hidden="true"><i class="vw-bar-food" style="width:${Math.max(f, 2)}%"></i><i class="vw-bar-base" style="width:${Math.max(bb, 2)}%"></i></span>
+    </div>${w.note ? `<div class="vw-note">${w.note}</div>` : ''}`;
+  };
+  const vm = vrec ? VERDICT_META[vrec.verdict] : null;
+  const verdictCard = vrec ? `<div class="card fp-card">
+    <div class="fp-h-row"><span class="fp-h">⚖️ Verdict</span><button class="fp-jump" onclick="showTab('verdicts')">open Verdicts →</button></div>
+    <div class="fp-verdict-row">
+      <span class="fp-verdict-pill ${vrec.verdict}">${vm.icon} ${vm.label}</span>
+      <span class="verdict-tag conf-neutral" title="Backed by ${vrec.scored} scored reaction windows">${vrec.conf.evidence}</span>
+      <span class="fp-vcounts"><span class="vm-pill pos">${vrec.pos} ✓</span><span class="vm-pill neg">${vrec.neg} ✕</span></span>
+    </div>
+    <div class="verdict-evidence">${vrec.why.map(fpWhy).join('')}</div>
+    ${vrec.experiment ? `<div class="fp-exp-hint">🔬 ${vrec.experiment}</div>` : ''}
+  </div>` : `<div class="card fp-card"><div class="fp-h">⚖️ Verdict</div><div class="fp-empty">No scored reaction windows yet — mark ✓/✕ on this food's entries in 📑 Logs.</div></div>`;
+
+  // ── symptoms & vitals impact ──
+  const syms = orderedCheckinSymptoms();
+  const imp0 = fpImpacts(entries, loadCheckins(), food, syms, 0);
+  const imp1 = fpImpacts(entries, loadCheckins(), food, syms, 1);
+  const i1By = {}; imp1.forEach(x => { i1By[x.key] = x; });
+  const rows = imp0.filter(x => x.deltaPct != null).sort((a, b) => Math.abs(b.deltaPct) - Math.abs(a.deltaPct));
+  const noData = imp0.filter(x => x.deltaPct == null).map(x => x.label);
+  const impRow = x => {
+    const d = Math.round(x.deltaPct);
+    const n1 = i1By[x.key], d1 = n1 && n1.deltaPct != null ? Math.round(n1.deltaPct) : null;
+    const cls = d <= -4 ? 'bad' : d >= 4 ? 'good' : 'flat';
+    const w = Math.min(Math.abs(x.deltaPct), 25) / 25 * 50;
+    const tip = `Eaten days avg ${x.expAvg.toFixed(1)} (${x.expN}d) vs other days ${x.ctlAvg.toFixed(1)} (${x.ctlN}d)`;
+    return `<div class="fp-imp-row" title="${escAttr(tip)}">
+      <span class="fp-imp-label">${x.label}</span>
+      <span class="fp-imp-bar"><i class="${cls}" style="width:${w.toFixed(1)}%; ${d < 0 ? 'right:50%' : 'left:50%'};"></i></span>
+      <span class="fp-imp-delta ${cls}">${d > 0 ? '+' : ''}${d}%</span>
+      <span class="fp-imp-next" title="Same comparison, the day AFTER eating">${d1 == null ? '' : `+1d ${d1 > 0 ? '+' : ''}${d1}%`}</span>
+      ${x.thin ? '<span class="fp-thin" title="Fewer than 5 days on one side — weak evidence">°</span>' : ''}
+    </div>`;
+  };
+  const impactCard = `<div class="card fp-card">
+    <div class="fp-h-row"><span class="fp-h">💓 Vitals &amp; symptoms on days you eat it</span><button class="fp-jump" onclick="showTab('insights')">more lags →</button></div>
+    ${rows.length ? `<div class="fp-imp-head"><span></span><span>worse ← · → better</span><span>same day</span><span>day after</span></div>${rows.map(impRow).join('')}
+      <div class="fp-legend">Score scale 1–5 (higher = better) · % of full scale · ° = thin data</div>`
+      : `<div class="fp-empty">No days with both a check-in and this food yet.</div>`}
+    ${noData.length && rows.length ? `<div class="fp-legend">No comparable days for: ${noData.map(esc).join(', ')}</div>` : ''}
+  </div>`;
+
+  // ── reaction windows ──
+  const ws = fpWindowStats(entries, food);
+  const anyWin = ws.some(s => s.tot > 0);
+  const winRow = s => {
+    const f = s.rate == null ? null : Math.round(s.rate * 100);
+    const bb = s.base == null ? null : Math.round(s.base * 100);
+    return `<div class="vw-row">
+      <span class="vw-chip ${s.cls}">${s.label}</span>
+      <span class="vw-count">${s.tot ? `${s.n} of ${s.tot} ✕` : 'no data'}</span>
+      ${f == null ? '<span class="vw-main"><span class="vw-base">not scored yet</span></span>' : `
+      <span class="vw-main"><b class="${f > (bb || 0) + 5 ? 'bad' : f < (bb || 0) - 5 ? 'good' : 'flat'}">${f}%</b><span class="vw-vs">vs</span><span class="vw-base">${bb == null ? 'n/a' : bb + '%'} baseline</span></span>
+      <span class="vw-bars ${f > (bb || 0) + 5 ? 'bad' : 'good'}" aria-hidden="true"><i class="vw-bar-food" style="width:${Math.max(f, 2)}%"></i><i class="vw-bar-base" style="width:${Math.max(bb || 0, 2)}%"></i></span>`}
+    </div>`;
+  };
+  const windowsCard = `<div class="card fp-card">
+    <div class="fp-h">⏱️ Reaction windows (hours after eating)</div>
+    ${anyWin ? ws.map(winRow).join('') + '<div class="fp-legend">Baseline = your ✕ rate across all other foods in that window</div>'
+             : '<div class="fp-empty">No ✓/✕ marks on this food\'s reaction windows yet.</div>'}
+  </div>`;
+
+  // ── face map ──
+  const fmStats = fmRegionStats(loadFaceMap(), food);
+  const fmKeys = Object.keys(fmStats).sort((a, b) => fmStats[b].weight - fmStats[a].weight);
+  const fmMaxW = fmKeys.length ? fmStats[fmKeys[0]].weight : 1;
+  const miniFace = view => {
+    const regs = FACE_REGIONS.filter(r => r.view === view && fmStats[r.key]).map(r => {
+      const op = (0.15 + 0.55 * (fmStats[r.key].weight / fmMaxW)).toFixed(2);
+      const tf = r.rot ? ` transform="rotate(${r.rot} ${r.cx} ${r.cy})"` : '';
+      return `<ellipse cx="${r.cx}" cy="${r.cy}" rx="${r.rx}" ry="${r.ry}"${tf} fill="var(--neg)" fill-opacity="${op}"/>`;
+    }).join('');
+    return `<div class="fp-face"><svg viewBox="0 0 300 380" xmlns="http://www.w3.org/2000/svg">${fmDefsSVG()}${fmHeadSVG(view)}${regs}</svg><span>${view}</span></div>`;
+  };
+  const topSpots = fmKeys.slice(0, 4).map(k2 => `<li class="fm-spot-food" style="cursor:default;">${esc(FM_REGION_BY_KEY[k2].label)} — ${fmStats[k2].count}×</li>`).join('');
+  const faceCard = fmKeys.length ? `<div class="card fp-card">
+    <div class="fp-h-row"><span class="fp-h">👤 Where it shows on your face</span><button class="fp-jump" onclick="fpGoFaceMap()">open Face Map →</button></div>
+    <div class="fp-faces">${['front', 'left', 'right'].map(miniFace).join('')}</div>
+    <ul class="fm-spot-foods" style="margin-top:8px;">${topSpots}</ul>
+  </div>` : '';
+
+  // ── trials ──
+  const kNorm = normFood(food);
+  const trials = loadExperiments().filter(x => x && (normFood(x.food) === kNorm || foodMatchesTrial(food, normFood(x.food)) || foodMatchesTrial(x.food, kNorm)));
+  const TMETA = { helped: ['🔺', 'Likely trigger'], worse: ['🟢', 'Probably fine'], nochange: ['🟡', 'No clear effect'], collecting: ['⏳', 'Collecting'] };
+  const trialRows = trials.map(x => {
+    const c = computeExperiment(x);
+    const m = TMETA[c.verdict] || TMETA.collecting;
+    const phase = x.status === 'eliminating' ? 'avoiding now' : x.status === 'reintroducing' ? 'reintroducing' : 'finished';
+    return `<div class="fp-trial-row"><span>${m[0]}</span><b>${esc(x.food)}</b><span class="fp-trial-phase">${phase} · started ${esc(fmtDayShort(x.elimStart))}</span><span class="fp-trial-v">${m[1]}</span></div>`;
+  }).join('');
+  const trialCard = `<div class="card fp-card">
+    <div class="fp-h-row"><span class="fp-h">🧪 Trials</span><button class="fp-jump" onclick="showTab('experiments')">open Trials →</button></div>
+    ${trials.length ? trialRows : `<div class="fp-empty">Never formally tested. ${vrec && vrec.verdict === 'suspect' ? 'It\'s a suspect — a 5-day avoidance trial would settle it.' : 'Run one from the Trials tab to get a controlled answer.'}</div>`}
+  </div>`;
+
+  // ── usually eaten with ──
+  const co = fpCoEaten(entries, food);
+  const coCard = co.length ? `<div class="card fp-card">
+    <div class="fp-h">🍽️ Usually eaten with</div>
+    <div class="fp-chiprow">${co.map(x => {
+      const v = vByFood[normFood(x.food)];
+      const ic = v ? VERDICT_META[v.verdict].icon : '';
+      return `<button class="fp-chip" data-food="${escAttr(x.food)}" onclick="fpOpen(this.dataset.food)" title="Same day on ${x.co} of your ${b.days} ${esc(food)} days — open its profile">${ic} ${esc(x.food)}<span class="fp-chip-n">${x.co}×</span></button>`;
+    }).join('')}</div>
+    <div class="fp-legend">Shared days can confuse day-based stats — a 🔺 companion may be the real culprit.</div>
+  </div>` : '';
+
+  // ── history strip ──
+  const hist = fpWeeklyHistory(entries, food, 16);
+  const hMax = Math.max(1, ...hist.map(h => h.logs));
+  const bars = hist.map((h, i) => {
+    const x = 4 + i * 21;
+    const hh = h.logs ? Math.max(3, h.logs / hMax * 30) : 0;
+    return (h.logs ? `<rect x="${x}" y="${36 - hh}" width="14" height="${hh}" rx="2" fill="var(--w1)" opacity="0.85"/>` : `<rect x="${x}" y="34" width="14" height="2" rx="1" fill="var(--border)"/>`)
+      + (h.neg ? `<circle cx="${x + 7}" cy="42" r="2.6" fill="var(--neg)"/>` : '');
+  }).join('');
+  const histCard = b.logs ? `<div class="card fp-card">
+    <div class="fp-h">📈 Last 16 weeks</div>
+    <svg class="fp-hist" viewBox="0 0 344 48" xmlns="http://www.w3.org/2000/svg">${bars}</svg>
+    <div class="fp-legend">bar = times eaten that week · <span style="color:var(--neg);">●</span> = a ✕ reaction window that week · left = 16 w ago</div>
+  </div>` : '';
+
+  // ── note ──
+  const note = ciLookup(loadFoodNotes(), food);
+  const noteCard = `<div class="card fp-card">
+    <div class="fp-h">📝 Your note</div>
+    ${note ? `<div class="fp-note">${esc(String(note))}</div>` : '<div class="fp-empty">No note yet — add one from 📋 Summary.</div>'}
+  </div>`;
+
+  host.innerHTML = searchBar + headCard + verdictCard + impactCard + windowsCard + faceCard + trialCard + coCard + histCard + noteCard;
+  fmWireAutocomplete(document.getElementById('fp-search'), document.getElementById('fp-drop'),
+    fpSearchItems, f => fpOpen(f), v => { const m = fmKnownMatch(v); if (m) fpOpen(m); else toast(`“${v}” isn't in your food log`); });
+}
 
 // ═══ Self-test harness (?selftest=1) ═════════════════════════════════════════
 // Guards the scoring math (verdicts, weekly report, trials, streaks, parsers,
@@ -12393,11 +13342,13 @@ function selfTestFixtures() {
       targetSyms: ['c_overall'], createdAt: D(9)
     }],
     archives: [],
+    dictionary: ['RetiredFood'], // a preserved/retired name: logged once, not in the live log
     faceMap: [
       { id: 'fm1', region: 'cheek_l', food: 'TestChili', sev: 3, date: D(1) },
       { id: 'fm2', region: 'cheek_l', food: 'TestChili', sev: 2, date: D(3) },
       { id: 'fm3', region: 'cheek_l', food: 'Banana',    sev: 1, date: D(2) },
       { id: 'fm4', region: 'l_jaw',   food: 'TestChili', sev: 2, date: D(1) },
+      { id: 'fm5', region: 'chin',    food: 'Zeoli',     sev: 2, date: D(2) }, // orphan: never logged
     ],
   };
 }
@@ -12426,6 +13377,7 @@ function runSelfTest() {
   loadExperiments = () => FX.experiments;
   loadArchives = () => FX.archives;
   loadFaceMap = () => FX.faceMap;
+  loadFoodDictionary = () => FX.dictionary;
   _verdictRange = 'all';
 
   // 3. The suite.
@@ -12618,11 +13570,75 @@ function runSelfTest() {
     const bad = FX.faceMap.find(m => !FM_REGION_BY_KEY[m.region]);
     return bad ? 'unknown region: ' + bad.region : true;
   });
+  t('face map: body areas are registered regions', () =>
+    ['body_back', 'body_butt', 'body_general'].every(k => FM_REGION_BY_KEY[k] && FM_REGION_BY_KEY[k].view === 'body')
+      ? true : 'a body reaction area is missing from the registry');
+  t('face map: nose-top + neck-lymph exist on both sides', () =>
+    ['l_nose_top', 'r_nose_top', 'l_neck_lymph', 'r_neck_lymph'].every(k => FM_REGION_BY_KEY[k])
+      ? true : 'a new profile region is missing from a side');
   const FMS = fmRegionStats(FX.faceMap, '');
   t('face map: unfiltered stats aggregate all marks', () => eq(FMS.cheek_l.count + '|' + FMS.cheek_l.weight, '3|6'));
   const FMF = fmRegionStats(FX.faceMap, 'testchili'); // filter matching is case-insensitive
   t('face map: food filter is case-insensitive across views', () => eq(FMF.cheek_l.count + '|' + (FMF.l_jaw ? FMF.l_jaw.count : 0), '2|1'));
   t('face map: filtered stats exclude other foods', () => eq(FMF.cheek_l.weight, 5));
+  // v60: the face map can only reference foods the user has actually logged.
+  t('face map: catalog excludes marks-only foods (no self-seeding typos)', () =>
+    fmCatalogFoods().some(f => normFood(f) === 'zeoli') ? 'Zeoli leaked into the catalog' : true);
+  t('face map: catalog includes the preserved-name dictionary', () =>
+    fmCatalogFoods().includes('RetiredFood') ? true : 'RetiredFood missing from catalog');
+  t('face map: known-food gate resolves logged casing', () => eq(fmKnownMatch('banana'), 'Banana'));
+  t('face map: known-food gate rejects an unlogged name', () => eq(fmKnownMatch('Zeoli'), null));
+  t('face map: orphan detector flags marks not in the log', () => {
+    const o = fmOrphanFoods(FX.faceMap);
+    return o.length === 1 && o[0].food === 'Zeoli' && o[0].count === 1
+      ? true : 'expected one Zeoli orphan, got ' + JSON.stringify(o);
+  });
+  // v62: the log modal's fast pick — recent-first list + suspects-here.
+  t('face map: recent-foods lists the last-7-days window, most-recent first', () =>
+    eq(fmRecentFoods(FX.entries, 7).map(x => x.food).join(','), 'Banana,Oats,TestChili'));
+  t('face map: recent-foods widens to catch lagging days', () =>
+    fmRecentFoods(FX.entries, 14).some(x => x.food === 'TestChili wrap') ? true : 'D7 wrap missing from the 14-day window');
+  t('face map: recent-foods dedupes a food to its most recent day', () => {
+    const b = fmRecentFoods(FX.entries, 14).find(x => x.food === 'Banana');
+    return b ? eq(b.ago, 0) : 'Banana missing from recent list';
+  });
+  t('face map: suspects-here ranks by Σ-severity across spots', () => {
+    const s = fmSuspectsHere(FX.faceMap, ['cheek_l', 'l_jaw']);
+    return eq(s.map(x => x.food).join(',') + '|' + (s[0] && s[0].weight), 'TestChili,Banana|7');
+  });
+  t('face map: suspects-here excludes orphan (unlogged) foods', () =>
+    fmSuspectsHere(FX.faceMap, ['chin']).length === 0 ? true : 'orphan Zeoli leaked into suspects-here');
+
+  // ── food profile ──
+  t('food profile: basics count logs, days and dates', () => {
+    const bb = fpBasics(FX.entries, 'Banana');
+    return eq([bb.logs, bb.days, bb.first, bb.last].join('|'), ['10', '10', D(12), D(0)].join('|'));
+  });
+  t('food profile: window stats split food vs excluded baseline', () => {
+    const w2 = fpWindowStats(FX.entries, 'TestChili').find(s => s.key === 'w2');
+    // chili: 4 ✕ of 4 in w2; baseline w2 = Banana's 10 clean → 0%
+    return eq([w2.p, w2.n, w2.rate, w2.base].join('|'), '0|4|1|0');
+  });
+  t('food profile: same-day impact compares eaten vs control days', () => {
+    const r = fpImpacts(FX.entries, FX.checkins, 'Banana', [{ key: 'c_overall', label: 'o' }], 0)[0];
+    // eaten checkin days D0,1,2,8,12 → avg 3.4 · control D6,11 → 3.0 → +10% of scale
+    const ok = close(r.deltaPct, 10, 0.001);
+    return ok === true ? eq([r.expN, r.ctlN, r.thin].join('|'), '5|2|true') : ok;
+  });
+  t('food profile: day-after impact shifts the exposure window', () => {
+    const r = fpImpacts(FX.entries, FX.checkins, 'TestChili', [{ key: 'c_overall', label: 'o' }], 1)[0];
+    // chili D1–4 → next-day checkins D0,1,2 avg 3.667 vs D6,8,11,12 avg 3.0
+    return close(r.deltaPct, 16.6667, 0.01);
+  });
+  t('food profile: co-eaten finds same-day companions', () => {
+    const c = fpCoEaten(FX.entries, 'TestChili');
+    return c.length === 1 && c[0].food === 'Banana' && c[0].co === 4
+      ? true : 'expected Banana ×4, got ' + JSON.stringify(c);
+  });
+  t('food profile: weekly history buckets land in the newest week', () => {
+    const h = fpWeeklyHistory(FX.entries, 'TestChili', 4);
+    return eq([h[3].logs, h[3].neg, h[2].logs].join('|'), '4|4|0');
+  });
 
   // ── backup round-trip ──
   const parsedBackup = JSON.parse(buildBackupJSON().json);
