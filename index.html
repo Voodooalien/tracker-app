@@ -4038,7 +4038,7 @@ function inferItemType(food) {
     return 'supplement';
   if (has('🧂') || /\bsalt\b/.test(l)) return 'condiment';
   if (has('🌞') || has('🍁') ||
-      /\b(sun exposure|cbd|vape|topical|lotion|serum|balm|ointment)\b/.test(l))
+      /\b(sun exposure|cbd|vape|topical|lotion|serum|balm|ointment|bathing|sauna|swim|shower|dead sea)\b/.test(l))
     return 'activity';
   return 'food';
 }
@@ -13711,6 +13711,7 @@ function runSelfTest() {
       ['🪱🔫ParaFight x0.5 cap with a meal', 'supplement'],
       ['🧂🩷Himalayan Salt - Grinder', 'condiment'],
       ['🌞Sun Exposure', 'activity'],
+      ['🌊🛁Dead Sea bathing', 'activity'],
       ['🍁CBD Oil Vape x2-3 puff', 'activity'],
       ['🫙🖤Topical Lugol Iodine - 2-4 drops', 'supplement'],
       ['🌿Goldenseal drops x11-13 drops pre-meal', 'supplement'],
