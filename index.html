@@ -2844,7 +2844,7 @@ try {
   </div>
 
   <div style="margin-left: auto; display: flex; align-items: center; gap: 4px;">
-    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v60</span>
+    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v64</span>
   </div>
 
   <div id="nav-more-tray" style="display:none; flex-basis:100%; flex-wrap:wrap; gap:4px; padding-top:6px; margin-top:4px; border-top:1px dashed rgba(255,255,255,0.18);">
@@ -4032,11 +4032,13 @@ function inferItemType(food) {
   const l = f.toLowerCase();
   const has = s => f.includes(s);
   if (has('💊') || has('🪱') || has('🩹') ||
-      /\b(serrapeptase|parafight|betaine|hcl|enzyme|probiotic|vitamin|magnesium|biofilm|zinc|omega|capsule|ox bile)\b/.test(l) ||
+      /\b(serrapeptase|parafight|betaine|hcl|enzyme|probiotic|vitamin|magnesium|biofilm|zinc|omega|capsule|ox bile|iodine|lugol|melatonin|electrolyte|tincture|goldenseal|allisure|allicin|berberine|quercetin)\b/.test(l) ||
+      /\bdrops?\b/.test(l) ||
       /\bx\d+(\.\d+)?\s*cap\b/.test(l))
     return 'supplement';
   if (has('🧂') || /\bsalt\b/.test(l)) return 'condiment';
-  if (has('🌞') || has('🍁') || /\bsun exposure\b/.test(l) || /\bcbd\b/.test(l) || /\bvape\b/.test(l))
+  if (has('🌞') || has('🍁') ||
+      /\b(sun exposure|cbd|vape|topical|lotion|serum|balm|ointment)\b/.test(l))
     return 'activity';
   return 'food';
 }
@@ -6548,7 +6550,6 @@ const ciTableRows = Object.entries(results).map(([food, data]) => {
     
   wrap.innerHTML = `
     ${corrRangeControlsHTML()}
-    ${mealSuspectsCard(entries)}
     <div class="lag-selector" style="margin-bottom:6px;">
       <label style="font-weight:600;">Average Reaction Window:</label>
       <select id="corr-lag" onchange="renderCorrelations()" style="padding:6px 10px;border-radius:6px;border:1.5px solid var(--border);font-size:13px;font-family:inherit;">
@@ -11439,6 +11440,11 @@ function renderSummary() {
   }));
   const strongSuspects = [...summaryFoods].filter(x => x.suspectWindows.length).sort((a,b) => b.suspectWindows[0].pct - a.suspectWindows[0].pct || b.logs - a.logs).slice(0,8).map(x => ({...x, windows:x.suspectWindows}));
   renderSummaryInsights({ safeFoods, riskyFoods, strongSuspects });
+  // v64: meal-aware suspects — ranks foods by how much worse/better meals run
+  // WITH vs WITHOUT them, so a food isn't blamed for riding along in a bad meal.
+  const _mealCard = mealSuspectsCard(filteredEntries.filter(e => effectiveItemType(e) === 'food'));
+  const _iw = document.getElementById('summary-insights-wrap');
+  if (_iw && _mealCard) _iw.insertAdjacentHTML('afterbegin', _mealCard);
   renderSymptomSpecificAnalysis(summaryFoods, syms);
   renderFoodCompare(summaryFoods, syms);
   renderAnalysisDigest(filteredEntries);
@@ -13706,6 +13712,9 @@ function runSelfTest() {
       ['🧂🩷Himalayan Salt - Grinder', 'condiment'],
       ['🌞Sun Exposure', 'activity'],
       ['🍁CBD Oil Vape x2-3 puff', 'activity'],
+      ['🫙🖤Topical Lugol Iodine - 2-4 drops', 'supplement'],
+      ['🌿Goldenseal drops x11-13 drops pre-meal', 'supplement'],
+      ['Topical skin balm', 'activity'],
       ['🥒Cucumber raw with skin 60-80g', 'food'],
       ['🧇Waffle belgium rice, carrot, lettuce x1', 'food'],
     ];
