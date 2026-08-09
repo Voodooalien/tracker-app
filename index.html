@@ -3053,6 +3053,9 @@ html body select.status-badge-select.status-blacklist {
             <option value="dinner">🌙 Dinner</option>
           </select>
         </div>
+        <div class="form-group" style="flex: 0 1 auto; min-width: 0; margin: 0;">
+          <button type="button" id="log-solo-btn" onclick="toggleLogSolo(this)" title="Mark the next entry as a SOLO test — a food eaten alone, so its reaction is clean, un-confounded data" style="border-radius:8px; padding:8px 12px; font-size:12px; font-weight:700; cursor:pointer; border:1px solid var(--border); background:var(--card); color:var(--muted); height:100%;">🔬 Solo</button>
+        </div>
       </div>
     </div>
 
@@ -3631,6 +3634,21 @@ html body select.status-badge-select.status-blacklist {
       </select>
     </div>
     <div class="form-group">
+      <label>Item Type</label>
+      <select id="edit-type">
+        <option value="">Auto (detect from name)</option>
+        <option value="food">🍽️ Food</option>
+        <option value="condiment">🧂 Condiment</option>
+        <option value="supplement">💊 Supplement / med</option>
+        <option value="activity">🌞 Activity / non-food</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-weight:600;">
+        <input type="checkbox" id="edit-solo" style="width:auto;"> 🔬 Solo test — eaten alone (clean signal)
+      </label>
+    </div>
+    <div class="form-group">
       <label>Time Logged</label>
       <input type="time" id="edit-time">
     </div>
@@ -4002,6 +4020,40 @@ function canonicalFoodName(name) {
   return hit ? hit.food : name;
 }
 
+// ─── Item type (v63): food / condiment / supplement / activity ───────────────
+// Lets non-foods (salt, supplements, sun/CBD) be excluded from FOOD-reaction
+// correlations, so a meal's symptoms stop smearing onto the salt sprinkled on
+// it. Derived from the logged name — mostly the leading emoji Alex already uses
+// — so it classifies every existing entry with ZERO migration. A stored e.type
+// (set in the edit modal) always overrides the guess. PURE — self-tested.
+const ITEM_TYPES = ['food', 'condiment', 'supplement', 'activity'];
+function inferItemType(food) {
+  const f = food || '';
+  const l = f.toLowerCase();
+  const has = s => f.includes(s);
+  if (has('💊') || has('🪱') || has('🩹') ||
+      /\b(serrapeptase|parafight|betaine|hcl|enzyme|probiotic|vitamin|magnesium|biofilm|zinc|omega|capsule|ox bile)\b/.test(l) ||
+      /\bx\d+(\.\d+)?\s*cap\b/.test(l))
+    return 'supplement';
+  if (has('🧂') || /\bsalt\b/.test(l)) return 'condiment';
+  if (has('🌞') || has('🍁') || /\bsun exposure\b/.test(l) || /\bcbd\b/.test(l) || /\bvape\b/.test(l))
+    return 'activity';
+  return 'food';
+}
+function effectiveItemType(e) {
+  return (e && ITEM_TYPES.includes(e.type)) ? e.type : inferItemType(e && e.food);
+}
+// Log-form "🔬 Solo" toggle: next Add Entry marks a clean, eaten-alone test.
+function setSoloBtnStyle(btn, on) {
+  if (!btn) return;
+  btn.style.background  = on ? 'var(--navy)' : 'var(--card)';
+  btn.style.color       = on ? '#fff' : 'var(--muted)';
+  btn.style.borderColor = on ? 'var(--navy)' : 'var(--border)';
+}
+function toggleLogSolo(btn) { _logSolo = !_logSolo; setSoloBtnStyle(btn, _logSolo); }
+function toggleCorrFoodsOnly() { _corrFoodsOnly = !_corrFoodsOnly; renderCorrelations(); }
+function toggleCorrSoloOnly()  { _corrSoloOnly  = !_corrSoloOnly;  renderCorrelations(); }
+
 // ─── All symptoms (builtin + custom) ─────────────────────────────────────────
 function allSymptoms() {
   return [...BUILTIN_SYMPTOMS, ...loadCustomSyms()];
@@ -4081,6 +4133,9 @@ let _corrRange = 'all';
 let _corrCustomFrom = '';
 let _corrCustomTo = '';
 let _corrSearch = '';
+let _corrFoodsOnly = true;   // Correlations: hide non-food items by default (v63)
+let _corrSoloOnly  = false;  // Correlations: restrict to clean solo tests (v63)
+let _logSolo       = false;  // Log form: next Add Entry marks a solo test (v63)
 window._ExpSearch = '';
 let _pendingMealFilter = '';
 
@@ -4653,10 +4708,13 @@ function addEntry() {
   if (!foods.length) { document.getElementById('inp-food').focus(); return; }
   const entries = loadMigrated();
   for (let i = foods.length - 1; i >= 0; i--) {
-    entries.unshift({ id:uid(), date, mealType, food: foods[i], logTime, windows:{w1:null,w2:null,w3:null,w4:null}, symptoms:blankSymptoms() });
+    const e = { id:uid(), date, mealType, food: foods[i], logTime, windows:{w1:null,w2:null,w3:null,w4:null}, symptoms:blankSymptoms() };
+    if (_logSolo) e.solo = true;
+    entries.unshift(e);
   }
   save(entries);
   saveLastMealType(mealType);
+  if (_logSolo) { _logSolo = false; setSoloBtnStyle(document.getElementById('log-solo-btn'), false); }
   document.getElementById('inp-food').value = '';
   document.getElementById('inp-date').value = today();
   const n = new Date();
@@ -4926,6 +4984,8 @@ function openEditModal(id) {
   _editId = id; _editOriginalFood = entry.food;
   document.getElementById('edit-food').value  = entry.food;
   document.getElementById('edit-meal').value  = entry.mealType || '';
+  document.getElementById('edit-type').value  = ITEM_TYPES.includes(entry.type) ? entry.type : '';
+  document.getElementById('edit-solo').checked = !!entry.solo;
   document.getElementById('edit-time').value  = entry.logTime || '';
   const editDate = document.getElementById('edit-date');
   editDate.value = entry.date || today();
@@ -4975,6 +5035,9 @@ function saveEdit(renameAll) {
         e.mealType = newMealType;
         e.logTime = newLogTime;
         if (newDate) e.date = newDate;
+        const t = document.getElementById('edit-type').value;
+        if (t) e.type = t; else delete e.type;        // '' = Auto (derive from name)
+        if (document.getElementById('edit-solo').checked) e.solo = true; else delete e.solo;
       }
 
       changed++;
@@ -6194,6 +6257,12 @@ function corrRangeControlsHTML(prefix = 'corr') {
         <input id="${prefix}-search" class="summary-search-input" type="text" placeholder="Search foods..." value="${escAttr(_corrSearch)}" oninput="updateCorrSearch(this, '${prefix}')">
       </div>
     </div>
+    <div class="summary-control-row" style="margin-top:8px;">
+      <div class="summary-control-group">
+        <button class="summary-chip-btn ${_corrFoodsOnly?'active':''}" onclick="toggleCorrFoodsOnly()" title="Hide salt, supplements, CBD and sun — non-foods that only inherit a meal's symptoms">🍽️ Foods only</button>
+        <button class="summary-chip-btn ${_corrSoloOnly?'active':''}" onclick="toggleCorrSoloOnly()" title="Show only clean solo tests (a food eaten alone)">🔬 Solo only</button>
+      </div>
+    </div>
     <div class="summary-control-row" style="margin-top:8px;" ${customVis}>
       <div class="summary-control-group">
         <input id="${prefix}-date-from" class="summary-inline-date" type="date" value="${escAttr(_corrCustomFrom)}" onchange="setCorrCustomRange(this, '${prefix}')">
@@ -6245,7 +6314,9 @@ function renderCorrelations() {
   const q = (_corrSearch || '').trim().toLowerCase();
   const checkins = {};
   Object.entries(allCheckins).forEach(([d, v]) => { if (inCorrRange(d)) checkins[d] = v; });
-  const entries = allEntries.filter(e => inCorrRange(e.date));
+  let entries = allEntries.filter(e => inCorrRange(e.date));
+  if (_corrFoodsOnly) entries = entries.filter(e => effectiveItemType(e) === 'food');
+  if (_corrSoloOnly)  entries = entries.filter(e => e.solo);
   const checkinDates = Object.keys(checkins).sort();
   const foods = [...new Set(entries.map(e => e.food))].filter(f => !q || f.toLowerCase().includes(q));
 
@@ -13559,6 +13630,25 @@ function runSelfTest() {
   });
   t('anomalies: crash swallows a slide that runs past it', () =>
     eq(AD2.counts.crash + '|' + AD2.counts.slide, '1|0'));
+
+  // ── item type (v63) ──
+  t('item type: supplements / condiments / activities classified from name', () => {
+    const cases = [
+      ['💊🪓Serrapeptase x1 mid meal', 'supplement'],
+      ['🩹Vitamin Patches on chest', 'supplement'],
+      ['🪱🔫ParaFight x0.5 cap with a meal', 'supplement'],
+      ['🧂🩷Himalayan Salt - Grinder', 'condiment'],
+      ['🌞Sun Exposure', 'activity'],
+      ['🍁CBD Oil Vape x2-3 puff', 'activity'],
+      ['🥒Cucumber raw with skin 60-80g', 'food'],
+      ['🧇Waffle belgium rice, carrot, lettuce x1', 'food'],
+    ];
+    const bad = cases.find(([f, exp]) => inferItemType(f) !== exp);
+    return bad ? `${bad[0]} → ${inferItemType(bad[0])} (want ${bad[1]})` : true;
+  });
+  t('item type: explicit e.type overrides the name guess', () =>
+    effectiveItemType({ food: '🧂Salt', type: 'food' }) === 'food' &&
+    effectiveItemType({ food: '🧂Salt' }) === 'condiment' ? true : 'override/derive mismatch');
 
   // ── face map ──
   t('face map: every region key is unique', () => {
