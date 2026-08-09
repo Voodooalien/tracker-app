@@ -4113,9 +4113,7 @@ function mealSuspectsCard(entries) {
     <p class="section-title">🍽️ Meal-aware suspects <span style="font-size:11px;color:var(--muted);font-weight:500;">NEW</span></p>
     <div style="font-size:11px;color:var(--muted);margin-bottom:10px;">Ranks each food by how much <b>worse (or better)</b> your meals are when it's present vs absent — so a food isn't blamed just for sharing a plate with the real trigger. <b>Lift</b> in badness points; 🔬 = backed by clean solo tests.</div>
     <div style="overflow-x:auto;"><table class="corr-table"><thead><tr><th class="food-col" style="min-width:180px;">Food</th><th title="meals containing this food">meals</th><th title="avg badness of meals with this food">avg&nbsp;bad</th><th title="badness lift vs meals without it">lift</th></tr></thead>
-    <tbody>${worst.map(row).join('')}</tbody></table></div>
-    <div style="font-size:11px;color:var(--muted);margin:12px 0 4px;">Least-suspect — your meals run <b>calmer</b> with these:</div>
-    <div style="overflow-x:auto;"><table class="corr-table"><tbody>${best.map(row).join('')}</tbody></table></div>
+    <tbody>${worst.map(row).join('')}<tr><td colspan="4" style="font-size:11px;color:var(--muted);padding:12px 8px 4px;font-weight:600;">Least-suspect — your meals run <b>calmer</b> with these:</td></tr>${best.map(row).join('')}</tbody></table></div>
   </div>`;
 }
 
