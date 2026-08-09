@@ -4054,6 +4054,69 @@ function toggleLogSolo(btn) { _logSolo = !_logSolo; setSoloBtnStyle(btn, _logSol
 function toggleCorrFoodsOnly() { _corrFoodsOnly = !_corrFoodsOnly; renderCorrelations(); }
 function toggleCorrSoloOnly()  { _corrSoloOnly  = !_corrSoloOnly;  renderCorrelations(); }
 
+// ─── Meal-aware attribution (v64) ────────────────────────────────────────────
+// The bleed fix: a food eaten in a mixed meal shouldn't be blamed just for
+// riding along. We group entries into MEALS, score each meal's reaction once,
+// then rank each food by "lift" = avg meal-badness WITH the food minus WITHOUT.
+// A true trigger raises the meals it's in above your baseline; a bystander
+// doesn't. All PURE — self-tested.
+const _BADW = { c_strong_pain:3,c_wrecked:3,c_delayed_pain:3,c_liver_pain:3,
+  c_buildup:2,c_burns:2,c_sint_pain:2,c_brain_fog:2,c_hypoglycemia:2,c_heartburn:2,c_delayed_i:2,
+  c__minor_pain:1,c_short_pain:1,bloating:1,gas:1,c_burps:1,c__weak:1 };
+function entryBadness(e) {
+  const s = e.symptoms || {}, w = e.windows || {};
+  let b = 0;
+  for (const k in _BADW) if (s[k]) b += _BADW[k];
+  ['w1','w2','w3','w4'].forEach(x => { if (w[x]) b += 1; });
+  if (s.sleepy) b += 0.5;
+  return b;
+}
+// Foods logged together share a mealId; legacy entries fall back to a synthetic
+// key (same day + meal + minute = same meal), so history groups with no migration.
+function mealKeyOf(e) { return e.mealId || (e.date + '|' + (e.mealType || '') + '|' + (e.logTime || '')); }
+function foodMealLift(entries) {
+  const byKey = {};
+  entries.forEach(e => { const k = mealKeyOf(e); (byKey[k] || (byKey[k] = [])).push(e); });
+  const meals = Object.values(byKey).map(es => ({
+    foods: new Set(es.map(x => x.food)),
+    bad: Math.max(...es.map(entryBadness)),          // one reaction per meal
+    solo: es.some(x => x.solo) || new Set(es.map(x => x.food)).size === 1,
+  }));
+  const grand = meals.length ? meals.reduce((a, m) => a + m.bad, 0) / meals.length : 0;
+  const allFoods = new Set(); entries.forEach(e => allFoods.add(e.food));
+  const rows = [];
+  allFoods.forEach(f => {
+    const withM = meals.filter(m => m.foods.has(f));
+    const woM   = meals.filter(m => !m.foods.has(f));
+    const wMean = withM.reduce((a, m) => a + m.bad, 0) / (withM.length || 1);
+    const woMean = woM.length ? woM.reduce((a, m) => a + m.bad, 0) / woM.length : grand;
+    rows.push({ food: f, nMeals: withM.length, wMean, woMean, lift: wMean - woMean,
+                soloN: withM.filter(m => m.solo).length });
+  });
+  rows.sort((a, b) => b.lift - a.lift);
+  return rows;
+}
+function mealSuspectsCard(entries) {
+  const rows = foodMealLift(entries).filter(r => r.nMeals >= 5);
+  if (rows.length < 3) return '';
+  const worst = rows.slice(0, 12);
+  const best  = rows.slice(-6).reverse();
+  const fmt = n => (n >= 0 ? '+' : '') + n.toFixed(1);
+  const liftColor = l => l > 0.5 ? '#d03b3b' : (l < -0.5 ? '#0ca30c' : 'var(--muted)');
+  const row = r => `<tr><td class="food-col">${esc(r.food)}${r.soloN ? ` <span title="${r.soloN} clean solo test(s)" style="color:#0ca30c;font-weight:700;">🔬${r.soloN}</span>` : ''}</td>`
+    + `<td style="text-align:center;">${r.nMeals}</td>`
+    + `<td style="text-align:center;">${r.wMean.toFixed(1)}</td>`
+    + `<td style="text-align:center;font-weight:800;color:${liftColor(r.lift)};">${fmt(r.lift)}</td></tr>`;
+  return `<div class="card" style="margin-bottom:24px;">
+    <p class="section-title">🍽️ Meal-aware suspects <span style="font-size:11px;color:var(--muted);font-weight:500;">NEW</span></p>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:10px;">Ranks each food by how much <b>worse (or better)</b> your meals are when it's present vs absent — so a food isn't blamed just for sharing a plate with the real trigger. <b>Lift</b> in badness points; 🔬 = backed by clean solo tests.</div>
+    <div style="overflow-x:auto;"><table class="corr-table"><thead><tr><th class="food-col" style="min-width:180px;">Food</th><th title="meals containing this food">meals</th><th title="avg badness of meals with this food">avg&nbsp;bad</th><th title="badness lift vs meals without it">lift</th></tr></thead>
+    <tbody>${worst.map(row).join('')}</tbody></table></div>
+    <div style="font-size:11px;color:var(--muted);margin:12px 0 4px;">Least-suspect — your meals run <b>calmer</b> with these:</div>
+    <div style="overflow-x:auto;"><table class="corr-table"><tbody>${best.map(row).join('')}</tbody></table></div>
+  </div>`;
+}
+
 // ─── All symptoms (builtin + custom) ─────────────────────────────────────────
 function allSymptoms() {
   return [...BUILTIN_SYMPTOMS, ...loadCustomSyms()];
@@ -4707,8 +4770,10 @@ function addEntry() {
   const foods = raw.split(';').map(s => canonicalFoodName(s.trim())).filter(Boolean);
   if (!foods.length) { document.getElementById('inp-food').focus(); return; }
   const entries = loadMigrated();
+  const mealId = uid();  // v64: foods logged together = one meal (for meal-aware analysis)
   for (let i = foods.length - 1; i >= 0; i--) {
     const e = { id:uid(), date, mealType, food: foods[i], logTime, windows:{w1:null,w2:null,w3:null,w4:null}, symptoms:blankSymptoms() };
+    e.mealId = mealId;
     if (_logSolo) e.solo = true;
     entries.unshift(e);
   }
@@ -6483,6 +6548,7 @@ const ciTableRows = Object.entries(results).map(([food, data]) => {
     
   wrap.innerHTML = `
     ${corrRangeControlsHTML()}
+    ${mealSuspectsCard(entries)}
     <div class="lag-selector" style="margin-bottom:6px;">
       <label style="font-weight:600;">Average Reaction Window:</label>
       <select id="corr-lag" onchange="renderCorrelations()" style="padding:6px 10px;border-radius:6px;border:1.5px solid var(--border);font-size:13px;font-family:inherit;">
@@ -13649,6 +13715,29 @@ function runSelfTest() {
   t('item type: explicit e.type overrides the name guess', () =>
     effectiveItemType({ food: '🧂Salt', type: 'food' }) === 'food' &&
     effectiveItemType({ food: '🧂Salt' }) === 'condiment' ? true : 'override/derive mismatch');
+
+  // ── meal-aware lift (v64) ──
+  t('entryBadness: weighted symptoms + reaction windows', () =>
+    entryBadness({ symptoms:{ c_strong_pain:true, c_buildup:true }, windows:{ w1:true, w2:true, w3:true } }) === 8
+      || 'got ' + entryBadness({ symptoms:{ c_strong_pain:true, c_buildup:true }, windows:{ w1:true, w2:true, w3:true } }));
+  t('mealKeyOf: uses mealId, else date|meal|time', () =>
+    mealKeyOf({ mealId:'m1' }) === 'm1' &&
+    mealKeyOf({ date:'2026-01-01', mealType:'lunch', logTime:'12:00' }) === '2026-01-01|lunch|12:00'
+      ? true : 'key mismatch');
+  t('foodMealLift: a trigger outranks a bystander sharing its meals', () => {
+    const hi = { c_strong_pain:true, c_buildup:true }, hw = { w1:true, w2:true, w3:true };
+    const E = [
+      { date:'2026-01-01', mealType:'lunch', logTime:'12:00', food:'A', symptoms:hi, windows:hw },
+      { date:'2026-01-01', mealType:'lunch', logTime:'12:00', food:'B', symptoms:{}, windows:{} },
+      { date:'2026-01-02', mealType:'lunch', logTime:'12:00', food:'A', symptoms:hi, windows:hw },
+      { date:'2026-01-02', mealType:'lunch', logTime:'12:00', food:'C', symptoms:{}, windows:{} },
+      { date:'2026-01-03', mealType:'lunch', logTime:'12:00', food:'B', symptoms:{}, windows:{} },
+      { date:'2026-01-03', mealType:'lunch', logTime:'12:00', food:'C', symptoms:{}, windows:{} },
+    ];
+    const rows = foodMealLift(E);
+    const a = rows.find(r => r.food === 'A'), b = rows.find(r => r.food === 'B');
+    return (a && b && a.lift > b.lift && a.lift > 0) ? true : 'A should outrank bystander B';
+  });
 
   // ── face map ──
   t('face map: every region key is unique', () => {
