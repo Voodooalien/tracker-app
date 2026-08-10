@@ -2844,7 +2844,7 @@ try {
   </div>
 
   <div style="margin-left: auto; display: flex; align-items: center; gap: 4px;">
-    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v64</span>
+    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v65</span>
   </div>
 
   <div id="nav-more-tray" style="display:none; flex-basis:100%; flex-wrap:wrap; gap:4px; padding-top:6px; margin-top:4px; border-top:1px dashed rgba(255,255,255,0.18);">
@@ -3666,6 +3666,17 @@ html body select.status-badge-select.status-blacklist {
 </div>
 
 
+<!-- ═══ Review Item Types Modal (v65) ═══ -->
+<div id="itemtype-modal-bg" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:10000; align-items:center; justify-content:center; padding:16px;" onclick="if(event.target===this)closeItemTypesModal()">
+  <div style="background:var(--card); color:var(--text); border-radius:14px; max-width:540px; width:100%; max-height:82vh; display:flex; flex-direction:column; padding:20px; box-shadow:0 20px 60px rgba(0,0,0,0.45);">
+    <h3 style="margin:0 0 6px;">🏷️ Review Item Types</h3>
+    <p style="font-size:12px; color:var(--muted); margin:0 0 12px;">Non-foods (salt, supplements, activities) are left out of your food rankings. Fix any mislabeled item — the change applies to <b>every log of that item</b>. "Auto" uses the name-based guess.</p>
+    <input id="itemtype-search" type="text" placeholder="Search items…" oninput="renderItemTypesList(this.value)" style="width:100%; padding:8px 10px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text); margin-bottom:10px; box-sizing:border-box;">
+    <div id="itemtype-list" style="overflow-y:auto; flex:1; padding-right:4px;"></div>
+    <div style="margin-top:14px; text-align:right;"><button onclick="closeItemTypesModal()" style="padding:8px 18px; border-radius:8px; border:none; background:var(--navy); color:#fff; font-weight:700; cursor:pointer;">Done</button></div>
+  </div>
+</div>
+
 <!-- ═══ Notes Modal ═══ -->
 <div id="notes-modal-bg">
   <div id="notes-modal">
@@ -4042,8 +4053,84 @@ function inferItemType(food) {
     return 'activity';
   return 'food';
 }
+// Per-food-NAME overrides (v65): one tap in "Review item types" reclassifies
+// every log of that food, so the classifier's misses get fixed once — no
+// per-entry whack-a-mole. Cached in memory; effectiveItemType is called in hot
+// loops so it must not re-parse localStorage each time.
+let _itemTypeMap = null;
+function loadItemTypeMap() {
+  if (_itemTypeMap === null) {
+    try { _itemTypeMap = JSON.parse(localStorage.getItem('fst_item_types') || '{}'); }
+    catch (e) { _itemTypeMap = {}; }
+  }
+  return _itemTypeMap;
+}
+function saveItemTypeMap(m) { _itemTypeMap = m; localStorage.setItem('fst_item_types', JSON.stringify(m)); }
+// Type for a food NAME: manual per-food override wins over the name guess.
+function foodBaseType(foodName) {
+  const o = loadItemTypeMap()[foodName];
+  return ITEM_TYPES.includes(o) ? o : inferItemType(foodName);
+}
 function effectiveItemType(e) {
-  return (e && ITEM_TYPES.includes(e.type)) ? e.type : inferItemType(e && e.food);
+  if (!e) return 'food';
+  if (ITEM_TYPES.includes(e.type)) return e.type;   // per-entry override (edit modal) wins
+  return foodBaseType(e.food);                        // per-food override, else the name guess
+}
+function toggleSummaryFoodsOnly() { _summaryFoodsOnly = !_summaryFoodsOnly; renderSummary(); }
+
+// ── "Review item types" modal (v65) ──
+let _itemTypeSearch = '';
+function openItemTypesModal() {
+  _itemTypeSearch = '';
+  const bg = document.getElementById('itemtype-modal-bg');
+  const s = document.getElementById('itemtype-search');
+  if (s) s.value = '';
+  if (bg) bg.style.display = 'flex';
+  renderItemTypesList('');
+}
+function closeItemTypesModal() {
+  const bg = document.getElementById('itemtype-modal-bg');
+  if (bg) bg.style.display = 'none';
+  renderSummary();  // reflect any reclassifications
+}
+function setItemTypeOverride(food, type) {
+  const m = { ...loadItemTypeMap() };
+  if (type) m[food] = type; else delete m[food];   // '' = Auto (drop override, use name guess)
+  saveItemTypeMap(m);
+  renderItemTypesList(_itemTypeSearch);
+}
+function renderItemTypesList(search) {
+  _itemTypeSearch = search || '';
+  const q = _itemTypeSearch.trim().toLowerCase();
+  const el = document.getElementById('itemtype-list');
+  if (!el) return;
+  const counts = {};
+  loadMigrated().forEach(e => { if (e.food) counts[e.food] = (counts[e.food] || 0) + 1; });
+  let names = Object.keys(counts);
+  if (q) names = names.filter(f => f.toLowerCase().includes(q));
+  const map = loadItemTypeMap();
+  names.sort((a, b) => {   // non-food first (those are what need a look), then most-logged
+    const na = foodBaseType(a) === 'food' ? 1 : 0, nb = foodBaseType(b) === 'food' ? 1 : 0;
+    if (na !== nb) return na - nb;
+    return counts[b] - counts[a];
+  });
+  const nonFood = names.filter(f => foodBaseType(f) !== 'food').length;
+  const opt = (val, label, sel) => `<option value="${val}" ${sel ? 'selected' : ''}>${label}</option>`;
+  el.innerHTML = `<div style="font-size:11px;color:var(--muted);margin-bottom:8px;">${names.length} item${names.length===1?'':'s'} • ${nonFood} tagged non-food (excluded from food rankings)</div>`
+    + names.slice(0, 500).map(f => {
+      const over = ITEM_TYPES.includes(map[f]);
+      const t = foodBaseType(f);
+      return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);">
+        <div style="flex:1;min-width:0;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escAttr(f)}">${esc(f)} <span style="color:var(--muted);font-size:11px;">×${counts[f]}</span>${over ? ' <span title="manually set" style="color:#0ca30c;font-weight:800;">●</span>' : ''}</div>
+        <select data-food="${escAttr(f)}" onchange="setItemTypeOverride(this.dataset.food, this.value)" style="font-size:12px;padding:4px 6px;border-radius:6px;background:var(--bg);color:var(--text);border:1px solid var(--border);">
+          ${opt('', `Auto (${inferItemType(f)})`, !over)}
+          ${opt('food', '🍽️ Food', over && t==='food')}
+          ${opt('condiment', '🧂 Condiment', over && t==='condiment')}
+          ${opt('supplement', '💊 Supplement', over && t==='supplement')}
+          ${opt('activity', '🌞 Activity', over && t==='activity')}
+        </select>
+      </div>`;
+    }).join('');
 }
 // Log-form "🔬 Solo" toggle: next Add Entry marks a clean, eaten-alone test.
 function setSoloBtnStyle(btn, on) {
@@ -4174,6 +4261,7 @@ let _checkinDate = null; // null = defaults to today() on first render
 let _checkinDateManual = false; // true only when the user explicitly picked a date
 let _summaryRange = 'all';
 let _summaryMinLogs = 1;
+let _summaryFoodsOnly = true;  // Summary tab: hide non-foods from all rankings by default (v65)
 let _summaryCustomFrom = '';
 let _summaryCustomTo = '';
 let _summarySearch = '';
@@ -11090,6 +11178,8 @@ function summaryControlsHTML(totalEntries, shownEntries) {
         <input id="summary-date-to" class="summary-inline-date" type="date" value="${escAttr(_summaryCustomTo)}" onchange="setSummaryCustomRange()">
       </div>
       <div class="summary-control-group" style="margin-left:auto;">
+        <button class="summary-chip-btn ${_summaryFoodsOnly?'active':''}" onclick="toggleSummaryFoodsOnly()" title="Hide non-foods (salt, supplements, CBD, activities) from every Summary ranking">🍽️ Foods only</button>
+        <button class="summary-chip-btn" onclick="openItemTypesModal()" title="Review & fix how each item is classified (food / condiment / supplement / activity)">🏷️ Item types</button>
         <button class="summary-chip-btn" onclick="openFoodIdentity()" title="Fix duplicate spellings: rename a food or merge two names — preview first, snapshot saved, one-step undo">🧬 Merge / rename</button>
         <input class="summary-search-input" type="text" placeholder="Search foods..." value="${escAttr(_summarySearch)}" oninput="setSummarySearch(this.value)">
       </div>
@@ -11312,7 +11402,8 @@ function renderSummary() {
   if (!wrap) return;
   const allEntries = loadMigrated();
   const syms = allSymptoms();
-  const filteredEntries = allEntries.filter(inSummaryRange);
+  let filteredEntries = allEntries.filter(inSummaryRange);
+  if (_summaryFoodsOnly) filteredEntries = filteredEntries.filter(e => effectiveItemType(e) === 'food');
   if (controlsWrap) controlsWrap.innerHTML = summaryControlsHTML(allEntries.length, filteredEntries.length);
 
   if (!filteredEntries.length) {
@@ -13723,6 +13814,14 @@ function runSelfTest() {
   t('item type: explicit e.type overrides the name guess', () =>
     effectiveItemType({ food: '🧂Salt', type: 'food' }) === 'food' &&
     effectiveItemType({ food: '🧂Salt' }) === 'condiment' ? true : 'override/derive mismatch');
+  t('item type: per-food override map beats the name guess (v65)', () => {
+    const prev = _itemTypeMap;
+    _itemTypeMap = { '🥒Cucumber raw test': 'supplement' };   // in-memory only, no write
+    const got = foodBaseType('🥒Cucumber raw test');
+    const guess = foodBaseType('🥒Cucumber plain test');       // no override → inferred 'food'
+    _itemTypeMap = prev;
+    return (got === 'supplement' && guess === 'food') ? true : `map=${got}, guess=${guess}`;
+  });
 
   // ── meal-aware lift (v64) ──
   t('entryBadness: weighted symptoms + reaction windows', () =>
