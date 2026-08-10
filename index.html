@@ -4192,7 +4192,7 @@ function mealSuspectsCard(entries) {
   const best  = rows.slice(-6).reverse();
   const fmt = n => (n >= 0 ? '+' : '') + n.toFixed(1);
   const liftColor = l => l > 0.5 ? '#d03b3b' : (l < -0.5 ? '#0ca30c' : 'var(--muted)');
-  const row = r => `<tr><td class="food-col">${esc(r.food)}${r.soloN ? ` <span title="${r.soloN} clean solo test(s)" style="color:#0ca30c;font-weight:700;">🔬${r.soloN}</span>` : ''}</td>`
+  const row = (r, testable) => `<tr><td class="food-col">${esc(r.food)}${r.soloN ? ` <span title="${r.soloN} clean solo test(s)" style="color:#0ca30c;font-weight:700;">🔬${r.soloN}</span>` : ''}${testable ? ` <button class="verdict-test-btn" title="Start a controlled avoid-and-reintroduce trial on this food" onclick="startExperiment(${escAttr(JSON.stringify(r.food))})">🧪 Test</button>` : ''}</td>`
     + `<td style="text-align:center;">${r.nMeals}</td>`
     + `<td style="text-align:center;">${r.wMean.toFixed(1)}</td>`
     + `<td style="text-align:center;font-weight:800;color:${liftColor(r.lift)};">${fmt(r.lift)}</td></tr>`;
@@ -4200,7 +4200,7 @@ function mealSuspectsCard(entries) {
     <p class="section-title">🍽️ Meal-aware suspects <span style="font-size:11px;color:var(--muted);font-weight:500;">NEW</span></p>
     <div style="font-size:11px;color:var(--muted);margin-bottom:10px;">Ranks each food by how much <b>worse (or better)</b> your meals are when it's present vs absent — so a food isn't blamed just for sharing a plate with the real trigger. <b>Lift</b> in badness points; 🔬 = backed by clean solo tests.</div>
     <div style="overflow-x:auto;"><table class="corr-table"><thead><tr><th class="food-col" style="min-width:180px;">Food</th><th title="meals containing this food">meals</th><th title="avg badness of meals with this food">avg&nbsp;bad</th><th title="badness lift vs meals without it">lift</th></tr></thead>
-    <tbody>${worst.map(row).join('')}<tr><td colspan="4" style="font-size:11px;color:var(--muted);padding:12px 8px 4px;font-weight:600;">Least-suspect — your meals run <b>calmer</b> with these:</td></tr>${best.map(row).join('')}</tbody></table></div>
+    <tbody>${worst.map(r => row(r, true)).join('')}<tr><td colspan="4" style="font-size:11px;color:var(--muted);padding:12px 8px 4px;font-weight:600;">Least-suspect — your meals run <b>calmer</b> with these:</td></tr>${best.map(r => row(r, false)).join('')}</tbody></table></div>
   </div>`;
 }
 
