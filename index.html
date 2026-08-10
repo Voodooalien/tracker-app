@@ -2045,6 +2045,19 @@ details.summary-fold > summary::-webkit-details-marker { display:none; }
 details.summary-fold .fold-chev { display:inline-block; font-size:11px; color:var(--muted); transition:transform .15s; margin-right:2px; }
 details.summary-fold[open] .fold-chev { transform:rotate(90deg); }
 
+/* ── Motion & polish (v67) ── */
+details.summary-fold > .fold-body { animation: foldIn .18s ease; }
+@keyframes foldIn { from { opacity:0; transform:translateY(-5px); } to { opacity:1; transform:none; } }
+#summary-insights-wrap .card { animation: cardIn .22s ease; }
+@keyframes cardIn { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:none; } }
+.sym-btn .sev-sup { display:inline-block; animation: supPop .2s ease; }
+@keyframes supPop { 0% { transform:scale(0.4); } 70% { transform:scale(1.35); } 100% { transform:scale(1); } }
+.bloom-confetti { position:absolute; top:36%; width:7px; height:11px; border-radius:2px; opacity:0; animation: confettiFall 1.15s ease-out forwards; pointer-events:none; }
+@keyframes confettiFall { 0% { opacity:1; transform:translateY(0) rotate(0deg); } 100% { opacity:0; transform:translateY(150px) rotate(320deg); } }
+@media (prefers-reduced-motion: reduce) {
+  details.summary-fold > .fold-body, #summary-insights-wrap .card, .sym-btn .sev-sup, .bloom-confetti { animation:none; }
+}
+
 /* ── Trials / Experiments ── */
 .exp-card.exp-active { border-left: 4px solid var(--w1); }
 .exp-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
@@ -2840,7 +2853,7 @@ try {
     <button class="active" id="nav-checkin-btn" data-tab="checkin" onclick="showTab('checkin',this)" style="color: #FDECEC;">💓 Vitals<span id="checkin-dot" class="nav-dot" style="display:none;"></span>
     </button>
     <span class="nav-sep" aria-hidden="true"></span>
-    <button data-tab="log" onclick="showTab('log',this)" style="color: #FDECEC; ">📑 Logs</button>
+    <button data-tab="log" onclick="showTab('log',this)" style="color: #FDECEC; ">📑 Logs<span id="logs-pending-badge" style="display:none; margin-left:5px; background:#E74C3C; color:#fff; border-radius:10px; padding:1px 6px; font-size:10px; font-weight:800; vertical-align:middle;"></span></button>
     <button data-tab="history" onclick="showTab('history',this)" style="color: #FDECEC; ">📦 History</button>
     <button data-tab="archives2" onclick="showTab('archives2',this)" style="color: #FDECEC; ">📖 Diary</button>
     <button data-tab="profile" onclick="showTab('profile',this)" style="color: #FDECEC; ">📇 Food Profile</button>
@@ -2850,7 +2863,7 @@ try {
   </div>
 
   <div style="margin-left: auto; display: flex; align-items: center; gap: 4px;">
-    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v66</span>
+    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v67</span>
   </div>
 
   <div id="nav-more-tray" style="display:none; flex-basis:100%; flex-wrap:wrap; gap:4px; padding-top:6px; margin-top:4px; border-top:1px dashed rgba(255,255,255,0.18);">
@@ -3032,6 +3045,7 @@ html body select.status-badge-select.status-blacklist {
   
   </style>
 
+  <div id="today-strip"></div>
   <div id="quick-log-card" style="background:var(--card); border:1px solid var(--border); border-radius:12px; padding:14px 16px; box-shadow:0 8px 24px rgba(0,0,0,0.04); margin-bottom:20px; display:none;"></div>
 
 
@@ -4199,7 +4213,8 @@ function entryBadness(e) {
   const s = e.symptoms || {}, w = e.windows || {};
   let b = 0;
   for (const k in _BADW) if (s[k]) b += _BADW[k] * sevMult(s[k]);
-  ['w1','w2','w3','w4'].forEach(x => { if (w[x]) b += 1; });
+  // windows: false = ✕ "had a reaction" (bad); true = ✓ clear; null = unmarked
+  ['w1','w2','w3','w4'].forEach(x => { if (w[x] === false) b += 1; });
   if (s.sleepy) b += 0.5 * sevMult(s.sleepy);
   return b;
 }
@@ -4235,7 +4250,7 @@ let _summaryOpen = {};
 function summaryFold(key, title, inner) {
   return `<details class="card summary-fold" style="margin-bottom:24px;" ${_summaryOpen[key] ? 'open' : ''} ontoggle="_summaryOpen['${key}']=this.open">
     <summary><span class="fold-chev">▶</span> <span class="section-title" style="display:inline;margin:0;padding:0;border:none;">${title} <span style="font-size:11px;color:var(--muted);font-weight:500;">NEW</span></span></summary>
-    <div style="margin-top:10px;">${inner}</div>
+    <div class="fold-body" style="margin-top:10px;">${inner}</div>
   </details>`;
 }
 function mealSuspectsCard(entries) {
@@ -4388,6 +4403,39 @@ function prepPortionSection(entries) {
       : `<div style="font-size:11px;color:var(--muted);">${age.tagged ? `${age.tagged} serving${age.tagged === 1 ? '' : 's'} tagged so far — need ≥5 in at least two age groups.` : 'Not enough data yet — tag the 🕒 Age of cooked batches when logging (fresh / day-2 / day-3+) and this comparison unlocks. It tests the histamine-aging theory directly.'}</div>`}`);
 }
 
+// ── 30-day trend sparklines (v67) ────────────────────────────────────────────
+// Tiny inline SVG, no library. Null gaps are skipped, last point gets a dot.
+function sparklineSVG(vals, color) {
+  const real = vals.filter(x => x != null);
+  if (real.length < 2) return '';
+  const min = Math.min(...real), max = Math.max(...real), span = (max - min) || 1;
+  const W = 140, H = 30, n = vals.length;
+  const pts = []; let last = null;
+  vals.forEach((x, i) => {
+    if (x == null) return;
+    const px = (i / Math.max(1, n - 1)) * W;
+    const py = H - 3 - ((x - min) / span) * (H - 6);
+    pts.push(px.toFixed(1) + ',' + py.toFixed(1));
+    last = [px, py];
+  });
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:${W}px;height:${H}px;overflow:visible;" aria-hidden="true"><polyline points="${pts.join(' ')}" fill="none" stroke="${color}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/><circle cx="${last[0].toFixed(1)}" cy="${last[1].toFixed(1)}" r="2.6" fill="${color}"/></svg>`;
+}
+function trendStripHTML(entries, checkins) {
+  const days = []; for (let i = 29; i >= 0; i--) days.push(addDays(today(), -i));
+  const score = days.map(d => { const c = checkins[d]; return c && c.ci_day_score != null ? c.ci_day_score : null; });
+  const byDay = {}; entries.forEach(e => { (byDay[e.date] || (byDay[e.date] = [])).push(e); });
+  const bad = days.map(d => byDay[d] ? _meanBad(byDay[d]) : null);
+  const s1 = sparklineSVG(score, '#0ca30c'), s2 = sparklineSVG(bad, '#d03b3b');
+  if (!s1 && !s2) return '';
+  const lastScore = [...score].reverse().find(x => x != null);
+  const lastBad = [...bad].reverse().find(x => x != null);
+  return `<div class="card" style="margin-bottom:24px; display:flex; gap:22px; flex-wrap:wrap; align-items:center;">
+    ${s1 ? `<div><div style="font-size:10.5px;color:var(--muted);font-weight:700;letter-spacing:.4px;">DAY SCORE · 30d${lastScore != null ? ' · now ' + lastScore : ''}</div>${s1}</div>` : ''}
+    ${s2 ? `<div><div style="font-size:10.5px;color:var(--muted);font-weight:700;letter-spacing:.4px;">MEAL BADNESS · 30d${lastBad != null ? ' · now ' + lastBad.toFixed(1) : ''}</div>${s2}</div>` : ''}
+    <div style="font-size:10.5px;color:var(--muted);">green up = better days · red down = calmer meals</div>
+  </div>`;
+}
+
 // ── Symptom fingerprints (v66) ───────────────────────────────────────────────
 // Your negative tags aren't 17 independent things — they co-occur in a few
 // recurring SYNDROMES. Cluster them by co-occurrence (Jaccard, average-link
@@ -4429,7 +4477,8 @@ function timingConsistency(entriesOfFood) {
   const counts = { w1: 0, w2: 0, w3: 0, w4: 0 }; let tot = 0;
   entriesOfFood.forEach(e => {
     const w = e.windows || {};
-    ['w1', 'w2', 'w3', 'w4'].forEach(k => { if (w[k]) { counts[k]++; tot++; } });
+    // false = ✕ reacted in that window (true = clear, null = unmarked)
+    ['w1', 'w2', 'w3', 'w4'].forEach(k => { if (w[k] === false) { counts[k]++; tot++; } });
   });
   if (tot < 5) return null;
   const best = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
@@ -4640,6 +4689,15 @@ function toast(msg) {
 function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function escAttr(s) { return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function hasPending(e) { return WINDOWS.some(w => e.windows[w.key] === null || e.windows[w.key] === undefined); }
+// v67: nav badge — how many recent entries (last 3 days) still need window marks
+function updateLogsPendingBadge() {
+  const el = document.getElementById('logs-pending-badge');
+  if (!el) return;
+  const cutoff = addDays(today(), -2);
+  const n = loadMigrated().filter(e => e.date >= cutoff && hasPending(e)).length;
+  el.style.display = n ? '' : 'none';
+  el.textContent = n > 99 ? '99+' : String(n);
+}
 function mealBadgeHTML(mt) {
   if (!mt) return '';
   const labels = { breakfast:'🌅 Breakfast', lunch:'☀️ Lunch', snack:'🍎 Snack', dinner:'🌙 Dinner' };
@@ -5305,6 +5363,16 @@ function celebrationBloom(label, emoji) {
   const el = document.createElement('div');
   el.id = 'bloom-overlay';
   el.innerHTML = `<div class="bloom-badge"><div class="bloom-circle">${emoji || '✓'}</div><div class="bloom-label">${esc(label)}</div></div>`;
+  // v67: confetti burst layered over the bloom badge
+  const confColors = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#e34948'];
+  for (let i = 0; i < 26; i++) {
+    const c = document.createElement('div');
+    c.className = 'bloom-confetti';
+    c.style.left = (50 + (Math.random() * 44 - 22)) + '%';
+    c.style.background = confColors[i % confColors.length];
+    c.style.animationDelay = (Math.random() * 0.25).toFixed(2) + 's';
+    el.appendChild(c);
+  }
   document.body.appendChild(el);
   setTimeout(() => { if (el.parentNode) el.remove(); }, 1600);
 }
@@ -7998,12 +8066,123 @@ function repeatYesterdayMeal(mealKey) {
   // entries all morning and shifted every reaction window
   const n = new Date();
   const nowTime = `${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}`;
+  const mealId = uid();  // v67: repeated foods form ONE meal for meal-aware analysis
   for (let i = fresh.length - 1; i >= 0; i--) {
     const s = fresh[i];
-    entries.unshift({ id: uid(), date: t, mealType: s.mealType || '', food: s.food, logTime: nowTime, windows: { w1: null, w2: null, w3: null, w4: null }, symptoms: blankSymptoms() });
+    entries.unshift({ id: uid(), date: t, mealType: s.mealType || '', food: s.food, logTime: nowTime, mealId, windows: { w1: null, w2: null, w3: null, w4: null }, symptoms: blankSymptoms() });
   }
   save(entries);
   toast(`Logged ${fresh.length} from yesterday ✓`);
+  render();
+}
+
+// v67: "Today" strip — one glanceable line at the top of Logs: items, meals,
+// pending marks, day score (tap → check-in), logging streak.
+function renderTodayStrip() {
+  const el = document.getElementById('today-strip');
+  if (!el) return;
+  const t = today();
+  const es = loadMigrated();
+  const todays = es.filter(e => e.date === t);
+  const meals = new Set(todays.map(mealKeyOf)).size;
+  const cutoff = addDays(t, -2);
+  const pend = es.filter(e => e.date >= cutoff && hasPending(e)).length;
+  const ci = loadCheckins()[t] || {};
+  const score = ci.ci_day_score;
+  const days = new Set(es.map(e => e.date));
+  let streak = 0, d = t;
+  while (days.has(d)) { streak++; d = addDays(d, -1); }
+  el.innerHTML = `<div style="display:flex; gap:14px; flex-wrap:wrap; align-items:center; background:var(--card); border:1px solid var(--border); border-radius:10px; padding:8px 14px; margin-bottom:14px; font-size:12.5px;">
+    <span>🧾 <b>${todays.length}</b> item${todays.length === 1 ? '' : 's'} today</span>
+    <span>🍽️ <b>${meals}</b> meal${meals === 1 ? '' : 's'}</span>
+    <span style="${pend ? 'color:#E74C3C;font-weight:700;' : 'color:var(--muted);'}">⏳ ${pend} pending mark${pend === 1 ? '' : 's'}</span>
+    <span style="cursor:pointer;" onclick="showTab('checkin', document.getElementById('nav-checkin-btn'))" title="Open today's check-in">📈 day score <b>${score != null ? score : '—'}</b></span>
+    <span title="consecutive days with at least one log">🔥 ${streak}d</span>
+  </div>`;
+}
+
+// v67: re-log one past entry as eaten right now (fresh id + mealId, today/now)
+function relogEntryNow(id) {
+  const entries = loadMigrated();
+  const src = entries.find(e => e.id === id);
+  if (!src) return;
+  const n = new Date();
+  const nowTime = `${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}`;
+  entries.unshift({ id: uid(), date: today(), mealType: src.mealType || '', food: src.food, logTime: nowTime, mealId: uid(), windows: { w1: null, w2: null, w3: null, w4: null }, symptoms: blankSymptoms() });
+  save(entries);
+  toast(`Logged "${src.food}" again ✓`);
+  hapticTick();
+  render();
+}
+
+// v67: swipe left/right to change tabs (phone). The gesture is ignored when it
+// starts inside anything horizontally scrollable (tables), an SVG (face map),
+// or a form control — those own their touches.
+let _swipeX = null, _swipeY = null, _swipeOk = false;
+document.addEventListener('touchstart', (ev) => {
+  _swipeX = ev.touches[0].clientX; _swipeY = ev.touches[0].clientY;
+  _swipeOk = true;
+  let node = ev.target;
+  while (node && node !== document.body) {
+    const tag = (node.tagName || '').toLowerCase();
+    if (tag === 'svg' || tag === 'input' || tag === 'select' || tag === 'textarea') { _swipeOk = false; break; }
+    if (node.nodeType === 1) {
+      const st = getComputedStyle(node);
+      if ((st.overflowX === 'auto' || st.overflowX === 'scroll') && node.scrollWidth > node.clientWidth + 4) { _swipeOk = false; break; }
+    }
+    node = node.parentNode;
+  }
+}, { passive: true });
+document.addEventListener('touchend', (ev) => {
+  if (!_swipeOk || _swipeX == null) return;
+  const dx = ev.changedTouches[0].clientX - _swipeX;
+  const dy = ev.changedTouches[0].clientY - _swipeY;
+  _swipeX = null;
+  if (Math.abs(dx) < 70 || Math.abs(dy) > 60) return;
+  const btns = [...document.querySelectorAll('nav button[data-tab]')].filter(b => b.offsetParent !== null);
+  const active = document.querySelector('.tab-content.active');
+  if (!active) return;
+  const idx = btns.findIndex(b => b.dataset.tab === active.id.replace(/^tab-/, ''));
+  if (idx < 0) return;
+  const next = btns[idx + (dx < 0 ? 1 : -1)];
+  if (!next) return;
+  showTab(next.dataset.tab, next);
+  hapticTick();
+}, { passive: true });
+
+// v67: desktop "/" focuses the food input (jumping to Logs if needed)
+document.addEventListener('keydown', (ev) => {
+  if (ev.key !== '/' || ev.ctrlKey || ev.metaKey || ev.altKey) return;
+  const a = document.activeElement;
+  if (a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.tagName === 'SELECT' || a.isContentEditable)) return;
+  const logTab = document.getElementById('tab-log');
+  if (logTab && !logTab.classList.contains('active')) {
+    const btn = document.querySelector('nav button[data-tab="log"]');
+    if (btn) showTab('log', btn);
+  }
+  const inp = document.getElementById('inp-food');
+  if (inp) { ev.preventDefault(); inp.focus(); }
+});
+
+// v67: repeat the most recent meal group (any day) — one tap re-logs it now.
+function repeatLastMeal() {
+  const entries = loadMigrated();
+  if (!entries.length) return;
+  const key = mealKeyOf(entries[0]);
+  const src = entries.filter(e => mealKeyOf(e) === key);
+  const label = src[0].mealType || 'meal';
+  if (!confirm(`Log ${src.length} item(s) again from your last ${label}?`)) return;
+  const t = today();
+  const n = new Date();
+  const nowTime = `${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}`;
+  const mealId = uid();
+  for (let i = src.length - 1; i >= 0; i--) {
+    const s = src[i];
+    entries.unshift({ id: uid(), date: t, mealType: s.mealType || '', food: s.food, logTime: nowTime, mealId, windows: { w1: null, w2: null, w3: null, w4: null }, symptoms: blankSymptoms() });
+  }
+  save(entries);
+  toast(`Logged ${src.length} again ✓`);
+  hapticTick();
   render();
 }
 
@@ -8035,8 +8214,13 @@ function renderQuickLog() {
       const done = todayFoods[k].size > 0;
       return `<button class="quick-log-btn${done ? ' quick-done' : ''}" onclick="repeatYesterdayMeal('${k}')" title="${done ? 'Already has items today — duplicates are skipped' : ''}">${icon} ${name} ×${ydCount[k]}${done ? ' ✓' : ''}</button>`;
     }).join('');
-  if (repeatBtns) {
-    html += `<div class="quick-log-title">↻ Repeat yesterday</div><div class="quick-log-row">${repeatBtns}</div>`;
+  // v67: "last meal" chip — repeat the newest meal group from any day
+  const lastGroup = entries.length ? entries.filter(e => mealKeyOf(e) === mealKeyOf(entries[0])) : [];
+  const lastBtn = lastGroup.length
+    ? `<button class="quick-log-btn" onclick="repeatLastMeal()" title="${escAttr(lastGroup.map(e => e.food).join(', '))}">🔁 Last meal ×${lastGroup.length}</button>`
+    : '';
+  if (lastBtn || repeatBtns) {
+    html += `<div class="quick-log-title">↻ Repeat</div><div class="quick-log-row">${lastBtn}${repeatBtns}</div>`;
   }
 
   const bundles = loadBundles();
@@ -8183,8 +8367,9 @@ function logBundle(id) {
   const logTime = (document.getElementById('inp-time').value || bundle.logTime || '').trim();
   const mealType = (bundle.mealType || document.getElementById('inp-meal').value || '').trim();
   const entries = loadMigrated();
+  const mealId = uid();  // v67: a bundle logs as ONE meal for meal-aware analysis
   bundle.items.slice().reverse().forEach(food => {
-    entries.unshift({ id:uid(), date, mealType, food: canonicalFoodName(food), logTime, windows:{w1:null,w2:null,w3:null,w4:null}, symptoms:blankSymptoms() });
+    entries.unshift({ id:uid(), date, mealType, food: canonicalFoodName(food), logTime, mealId, windows:{w1:null,w2:null,w3:null,w4:null}, symptoms:blankSymptoms() });
   });
   save(entries);
   saveLastMealType(mealType);
@@ -11210,12 +11395,13 @@ function render() {
   renderCheckinReminder();
   renderBackupNag();
   renderTrialNudge();
+  updateLogsPendingBadge();
   // Render ONLY the visible tab. Rendering all ~19 sections on every tap
   // rebuilt the entire app per interaction — the main source of mobile jank.
   // Every tab switch routes through showTab() → render(), so a newly-opened
   // tab always renders fresh from storage.
   const byTab = {
-    'tab-log':         [renderPending, renderQuickLog, renderBundles],
+    'tab-log':         [renderTodayStrip, renderPending, renderQuickLog, renderBundles],
     'tab-history':     [renderHistory],
     'tab-checkin':     [renderCheckin, renderTrends],
     'tab-Timeline':    [renderTimeline],
@@ -11270,7 +11456,7 @@ function symptomsHTML(entry) {
   // If expanded, build all the symptom chips
   const btns = syms.map(s => {
     const on = entry.symptoms && entry.symptoms[s.key];
-    const sev = on === 2 ? ' <b style="font-size:10px;">²</b>' : on === 3 ? ' <b style="font-size:10px;">³</b>' : '';
+    const sev = on === 2 ? ' <b class="sev-sup" style="font-size:10px;color:#E67E22;">²</b>' : on === 3 ? ' <b class="sev-sup" style="font-size:10px;color:#E74C3C;">³</b>' : '';
     return `<button class="sym-btn${on?' active':''}" onclick="markSymptom('${entry.id}','${s.key}')" title="${escAttr(s.label)} — tap cycles: mild → strong ² → severe ³ → off">${esc(s.label)}${sev}</button>`;
   }).join('');
 
@@ -11469,6 +11655,7 @@ return `
           <div class="entry-actions" style="margin:0; flex:0 0 120px; display:flex; flex-direction:column; align-items:flex-start; gap:6px;">
             <button class="edit-btn" onclick="deleteEntry('${e.id}')">❌ Remove</button>
             <button class="edit-btn" onclick="openEditModal('${e.id}')">✏️ Edit</button>
+            <button class="edit-btn" onclick="relogEntryNow('${e.id}')" title="Log this food again, right now">🔁 Again</button>
           </div>
 
           <div style="flex:1 1 360px; display:flex; flex-direction:column; align-items:center; padding:0 12px; min-width:0;">
@@ -11534,6 +11721,7 @@ function renderHistory() {
           <div class="entry-actions" style="margin:0; flex:0 0 120px; display:flex; flex-direction:column; align-items:flex-start; gap:6px;">
             <button class="edit-btn" onclick="deleteEntry('${e.id}')">❌ Remove</button>
             <button class="edit-btn" onclick="openEditModal('${e.id}')">✏️ Edit</button>
+            <button class="edit-btn" onclick="relogEntryNow('${e.id}')" title="Log this food again, right now">🔁 Again</button>
           </div>
 
           <div style="flex:1 1 360px; display:flex; flex-direction:column; align-items:center; padding:0 12px; min-width:0;">
@@ -12046,6 +12234,9 @@ function renderSummary() {
     if (_ng) _iw.insertAdjacentHTML('beforeend', _ng);
     const _fp = symptomFingerprintsCard(filteredEntries);
     if (_fp) _iw.insertAdjacentHTML('beforeend', _fp);
+    // v67: fixed 30-day trend strip pinned to the very top (ignores range chips)
+    const _tr = trendStripHTML(allEntries.filter(e => effectiveItemType(e) === 'food'), loadCheckins());
+    if (_tr) _iw.insertAdjacentHTML('afterbegin', _tr);
   }
   renderSymptomSpecificAnalysis(summaryFoods, syms);
   renderFoodCompare(summaryFoods, syms);
@@ -14337,15 +14528,15 @@ function runSelfTest() {
   });
 
   // ── meal-aware lift (v64) ──
-  t('entryBadness: weighted symptoms + reaction windows', () =>
-    entryBadness({ symptoms:{ c_strong_pain:true, c_buildup:true }, windows:{ w1:true, w2:true, w3:true } }) === 8
-      || 'got ' + entryBadness({ symptoms:{ c_strong_pain:true, c_buildup:true }, windows:{ w1:true, w2:true, w3:true } }));
+  t('entryBadness: weighted symptoms + reacted (✕=false) windows', () =>
+    entryBadness({ symptoms:{ c_strong_pain:true, c_buildup:true }, windows:{ w1:false, w2:false, w3:false, w4:true } }) === 8
+      || 'got ' + entryBadness({ symptoms:{ c_strong_pain:true, c_buildup:true }, windows:{ w1:false, w2:false, w3:false, w4:true } }));
   t('mealKeyOf: uses mealId, else date|meal|time', () =>
     mealKeyOf({ mealId:'m1' }) === 'm1' &&
     mealKeyOf({ date:'2026-01-01', mealType:'lunch', logTime:'12:00' }) === '2026-01-01|lunch|12:00'
       ? true : 'key mismatch');
   t('foodMealLift: a trigger outranks a bystander sharing its meals', () => {
-    const hi = { c_strong_pain:true, c_buildup:true }, hw = { w1:true, w2:true, w3:true };
+    const hi = { c_strong_pain:true, c_buildup:true }, hw = { w1:false, w2:false, w3:false };
     const E = [
       { date:'2026-01-01', mealType:'lunch', logTime:'12:00', food:'A', symptoms:hi, windows:hw },
       { date:'2026-01-01', mealType:'lunch', logTime:'12:00', food:'B', symptoms:{}, windows:{} },
@@ -14369,6 +14560,13 @@ function runSelfTest() {
     for (let i=0;i<6;i++) E.push({ mealId:'f'+i, date:'2026-02-0'+(i+1), food:'🍚White Rice 100g (fresh)', symptoms:{}, windows:{} });
     const c = prepVariants(E).find(x => x.base === 'white rice');
     return (c && c.variants.length === 2 && c.variants[0].lift < c.variants[1].lift && c.variants[0].label.includes('fresh')) ? true : 'variants not split/ranked by lift (got ' + (c ? c.variants.length : 0) + ')';
+  });
+
+  // ── sparklines (v67) ──
+  t('sparkline: polyline for ≥2 points, empty for fewer, null gaps skipped', () => {
+    const ok = sparklineSVG([1, null, 3, 2], '#000');
+    const empty = sparklineSVG([5], '#000');
+    return (ok.includes('<polyline') && (ok.match(/,/g) || []).length >= 3 && empty === '') ? true : 'svg build failed';
   });
 
   // ── severity + batch age (v66) ──
@@ -14400,7 +14598,7 @@ function runSelfTest() {
     return (together && together.includes('bloating') && !together.includes('c_brain_fog')) ? true : JSON.stringify(cl);
   });
   t('timing consistency: reactions always in one window score share 1', () => {
-    const es = Array.from({ length: 6 }, () => ({ windows: { w2: true }, symptoms: {} }));
+    const es = Array.from({ length: 6 }, () => ({ windows: { w2: false }, symptoms: {} }));
     const tc = timingConsistency(es);
     return (tc && tc.win === 'W2' && tc.share === 1) ? true : JSON.stringify(tc);
   });
