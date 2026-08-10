@@ -2039,6 +2039,12 @@ body.dark .verdict-section-head.v-gentler .verdict-section-title { color: #4ADE8
 .diet-change-list { margin: 0; padding-left: 20px; list-style: disc; }
 .diet-change-list li { font-size: 13px; line-height: 1.7; }
 
+/* ── Collapsible Summary analysis sections (v66) ── */
+details.summary-fold > summary { cursor:pointer; list-style:none; user-select:none; }
+details.summary-fold > summary::-webkit-details-marker { display:none; }
+details.summary-fold .fold-chev { display:inline-block; font-size:11px; color:var(--muted); transition:transform .15s; margin-right:2px; }
+details.summary-fold[open] .fold-chev { transform:rotate(90deg); }
+
 /* ── Trials / Experiments ── */
 .exp-card.exp-active { border-left: 4px solid var(--w1); }
 .exp-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
@@ -4222,6 +4228,16 @@ function foodMealLift(entries) {
   rows.sort((a, b) => b.lift - a.lift);
   return rows;
 }
+// ── Collapsible Summary sections (v66): the five analysis cards ship folded so
+// the tab stays scannable; tap a header to expand. Open state lives in memory,
+// so it survives the full re-renders that range/filter chips trigger.
+let _summaryOpen = {};
+function summaryFold(key, title, inner) {
+  return `<details class="card summary-fold" style="margin-bottom:24px;" ${_summaryOpen[key] ? 'open' : ''} ontoggle="_summaryOpen['${key}']=this.open">
+    <summary><span class="fold-chev">▶</span> <span class="section-title" style="display:inline;margin:0;padding:0;border:none;">${title} <span style="font-size:11px;color:var(--muted);font-weight:500;">NEW</span></span></summary>
+    <div style="margin-top:10px;">${inner}</div>
+  </details>`;
+}
 function mealSuspectsCard(entries) {
   const rows = foodMealLift(entries).filter(r => r.nMeals >= 5);
   if (rows.length < 3) return '';
@@ -4233,12 +4249,10 @@ function mealSuspectsCard(entries) {
     + `<td style="text-align:center;">${r.nMeals}</td>`
     + `<td style="text-align:center;">${r.wMean.toFixed(1)}</td>`
     + `<td style="text-align:center;font-weight:800;color:${liftColor(r.lift)};">${fmt(r.lift)}</td></tr>`;
-  return `<div class="card" style="margin-bottom:24px;">
-    <p class="section-title">🍽️ Meal-aware suspects <span style="font-size:11px;color:var(--muted);font-weight:500;">NEW</span></p>
+  return summaryFold('meal', '🍽️ Meal-aware suspects', `
     <div style="font-size:11px;color:var(--muted);margin-bottom:10px;">Ranks each food by how much <b>worse (or better)</b> your meals are when it's present vs absent — so a food isn't blamed just for sharing a plate with the real trigger. <b>Lift</b> in badness points; 🔬 = backed by clean solo tests.</div>
     <div style="overflow-x:auto;"><table class="corr-table"><thead><tr><th class="food-col" style="min-width:180px;">Food</th><th title="meals containing this food">meals</th><th title="avg badness of meals with this food">avg&nbsp;bad</th><th title="badness lift vs meals without it">lift</th></tr></thead>
-    <tbody>${worst.map(r => row(r, true)).join('')}<tr><td colspan="4" style="font-size:11px;color:var(--muted);padding:12px 8px 4px;font-weight:600;">Least-suspect — your meals run <b>calmer</b> with these:</td></tr>${best.map(r => row(r, false)).join('')}</tbody></table></div>
-  </div>`;
+    <tbody>${worst.map(r => row(r, true)).join('')}<tr><td colspan="4" style="font-size:11px;color:var(--muted);padding:12px 8px 4px;font-weight:600;">Least-suspect — your meals run <b>calmer</b> with these:</td></tr>${best.map(r => row(r, false)).join('')}</tbody></table></div>`);
 }
 
 // ── Prep & portion comparator (v65) ──────────────────────────────────────────
@@ -4361,8 +4375,7 @@ function prepPortionSection(entries) {
         ? `📈 <b>Dose-linked</b> (r ${c.r.toFixed(2)}) — more = worse. That slope is genuine trigger evidence.`
         : (c.spread <= -0.8 ? `📉 Larger portions actually ran <b>calmer</b> here (r ${c.r.toFixed(2)}) — portion isn't the problem.` : `➖ No consistent dose effect (r ${c.r.toFixed(2)}).`)}</div>
     </div>`).join('');
-  return `<div class="card" style="margin-bottom:24px;">
-    <p class="section-title">🍳 Prep &amp; portion — how you make it matters <span style="font-size:11px;color:var(--muted);font-weight:500;">NEW</span></p>
+  return summaryFold('prep', '🍳 Prep &amp; portion — how you make it matters', `
     <div style="font-size:11px;color:var(--muted);margin-bottom:12px;">Same food, different technique or size. <b>Prep</b> is compared by meal-aware lift (how much your meals shift with each version — lower/greener = calmer); <b>dose-response</b> checks whether more grams = worse reaction, the classic causal signature. Only variants with enough logs appear.</div>
     ${prep.length ? `<div style="font-size:12px;font-weight:700;margin-bottom:6px;">🔪 Prep variants</div>${prepHTML}` : ''}
     ${port.length ? `<div style="font-size:12px;font-weight:700;margin:10px 0 6px;">⚖️ Dose-response (portion)</div>${portHTML}` : ''}
@@ -4372,8 +4385,7 @@ function prepPortionSection(entries) {
           <div style="font-size:12px;">${age.groups.map(g => `${g.lbl}: <b style="color:${bc(g.bad)};">${g.bad.toFixed(1)}</b> <span style="color:var(--muted);font-size:11px;">×${g.n}</span>`).join(' &nbsp;&middot;&nbsp; ')}</div>
           <div style="font-size:11px;color:var(--muted);margin-top:4px;">If older batches run hotter, that's direct histamine-intolerance evidence — worth showing a clinician.</div>
         </div>`
-      : `<div style="font-size:11px;color:var(--muted);">${age.tagged ? `${age.tagged} serving${age.tagged === 1 ? '' : 's'} tagged so far — need ≥5 in at least two age groups.` : 'Not enough data yet — tag the 🕒 Age of cooked batches when logging (fresh / day-2 / day-3+) and this comparison unlocks. It tests the histamine-aging theory directly.'}</div>`}
-  </div>`;
+      : `<div style="font-size:11px;color:var(--muted);">${age.tagged ? `${age.tagged} serving${age.tagged === 1 ? '' : 's'} tagged so far — need ≥5 in at least two age groups.` : 'Not enough data yet — tag the 🕒 Age of cooked batches when logging (fresh / day-2 / day-3+) and this comparison unlocks. It tests the histamine-aging theory directly.'}</div>`}`);
 }
 
 // ── Symptom fingerprints (v66) ───────────────────────────────────────────────
@@ -4457,11 +4469,9 @@ function symptomFingerprintsCard(entries) {
     </div>`;
   }).filter(Boolean);
   if (!parts.length) return '';
-  return `<div class="card" style="margin-bottom:24px;">
-    <p class="section-title">🧬 Symptom fingerprints <span style="font-size:11px;color:var(--muted);font-weight:500;">NEW</span></p>
+  return summaryFold('fingerprints', '🧬 Symptom fingerprints', `
     <div style="font-size:11px;color:var(--muted);margin-bottom:10px;">Your negative tags grouped into the syndromes they actually form (by co-occurrence), with the foods that raise each syndrome most (+pp above its base rate). ⏱ = timing consistency: a real trigger hits the same window; noise scatters.</div>
-    ${parts.join('')}
-  </div>`;
+    ${parts.join('')}`);
 }
 
 // ── Day-level drivers + natural gaps (v66) ───────────────────────────────────
@@ -4559,12 +4569,10 @@ function dayDriversCard(entries, checkins) {
       ? `📌 Your day score moves more with <b>${top.lbl.replace(/^[^\s]+\s/, '')}</b> (Δ${Math.abs(top.delta).toFixed(1)}) than with any single food (best: ${esc(bestFood.food)}, Δ${Math.abs(bestFood.delta).toFixed(1)}) — <b>state &amp; load matter more than ingredients</b>.`
       : `📌 Your strongest single-food day effect (${esc(bestFood.food)}, Δ${Math.abs(bestFood.delta).toFixed(1)}) rivals the lifestyle drivers — both matter.`)
     : '';
-  return `<div class="card" style="margin-bottom:24px;">
-    <p class="section-title">🧭 What drives your bad days <span style="font-size:11px;color:var(--muted);font-weight:500;">NEW</span></p>
+  return summaryFold('drivers', '🧭 What drives your bad days', `
     <div style="font-size:11px;color:var(--muted);margin-bottom:10px;">Days split in half on each factor; Δ = Overall Daily Score difference (high-half minus low-half, 1-5 scale). Correlation, not proof — but it says where to look first.</div>
     ${rows}
-    ${verdict ? `<div style="font-size:12px;margin-top:10px;line-height:1.5;">${verdict}</div>` : ''}
-  </div>`;
+    ${verdict ? `<div style="font-size:12px;margin-top:10px;line-height:1.5;">${verdict}</div>` : ''}`);
 }
 // Natural elimination mining: stretches where a staple was skipped ≥2 days are
 // free retroactive avoidance trials. Gap day = absent today AND yesterday.
@@ -4601,12 +4609,10 @@ function naturalGapsCard(entries, checkins) {
       <div style="font-weight:800;color:${suspect ? '#d03b3b' : '#0ca30c'};min-width:40px;text-align:right;">${(r.delta >= 0 ? '+' : '') + r.delta.toFixed(1)}</div>
       ${suspect ? `<button class="verdict-test-btn" title="Confirm with a controlled trial" onclick="startExperiment(${escAttr(JSON.stringify(r.food))})">🧪 Test</button>` : ''}
     </div>`;
-  return `<div class="card" style="margin-bottom:24px;">
-    <p class="section-title">⛏️ Natural elimination findings <span style="font-size:11px;color:var(--muted);font-weight:500;">NEW</span></p>
+  return summaryFold('gaps', '⛏️ Natural elimination findings', `
     <div style="font-size:11px;color:var(--muted);margin-bottom:10px;">Mined from history: days you happened to skip a staple for ≥2 days in a row, scored against days you ate it (Overall Daily Score, washout day excluded). Observational — confirm with 🧪 trials.</div>
     ${sus.length ? `<div style="font-size:12px;font-weight:700;margin-bottom:4px;">Days were BETTER without:</div>${sus.map(r => row(r, true)).join('')}` : ''}
-    ${fine.length ? `<div style="font-size:12px;font-weight:700;margin:10px 0 4px;">Days were WORSE without (probably fine):</div>${fine.map(r => row(r, false)).join('')}` : ''}
-  </div>`;
+    ${fine.length ? `<div style="font-size:12px;font-weight:700;margin:10px 0 4px;">Days were WORSE without (probably fine):</div>${fine.map(r => row(r, false)).join('')}` : ''}`);
 }
 
 // ─── All symptoms (builtin + custom) ─────────────────────────────────────────
