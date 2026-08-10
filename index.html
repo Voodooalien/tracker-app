@@ -4204,6 +4204,100 @@ function mealSuspectsCard(entries) {
   </div>`;
 }
 
+// ── Prep & portion comparator (v65) ──────────────────────────────────────────
+// Same food, different technique or size — compared head-to-head. This is where
+// the data pays off: reheated vs fresh rice, raw-skin vs peeled cucumber, small
+// vs large veg portions. Groups by a coarse BASE name (prep + quantity + filler
+// stripped) so variants of one food line up. All PURE — self-tested.
+function stripCosmetic(food) {
+  let x = (food || '').replace(/[^\x00-\x7F]/g, '');             // drop emoji/unicode
+  x = x.replace(/\[[^\]]*\]/g, ' ');                              // [brand] only — KEEP (parens): they hold prep notes
+  x = x.replace(/\bx\d+(\.\d+)?\b/ig, ' ');                       // x1, x0.5
+  x = x.replace(/\d+([.\-]\d+)?\s*(kg|mg|ml|g|l|tbsp|tsp|pcs|cups?|fists?|units?)?\b/ig, ' '); // quantities
+  return x.replace(/[^a-zA-Z ]/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
+}
+const _PREP_NOISE = new Set(('raw cooked baked roasted steamed boiled soaked reheated heated fresh frozen defrosted peeled soft micro anyday fridge skin overnight sauteed grilled fried well warm cold hot dried whole ground mashed pureed puree'
+  + ' after before and the with without no per meal mid pre post method of in on at a an to for plus').split(' '));
+function baseFoodName(food) {
+  return stripCosmetic(food).split(' ').filter(w => w && !_PREP_NOISE.has(w)).join(' ');
+}
+function gramsOf(food) {
+  const m = (food || '').match(/(\d+)(?:[.\-](\d+))?\s*g\b/i);
+  return m ? (m[2] ? (+m[1] + +m[2]) / 2 : +m[1]) : null;
+}
+function _meanBad(es) { return es.reduce((a, e) => a + entryBadness(e), 0) / es.length; }
+function prepVariants(entries) {
+  // Compare prep variants by meal-aware LIFT (not raw badness) so effects buried
+  // in mixed meals still surface — reheated vs fresh rice look identical in
+  // isolation but differ once you account for the meals they ride in.
+  const vEntries = entries.map(e => ({ date: e.date, mealType: e.mealType, logTime: e.logTime, mealId: e.mealId, solo: e.solo, symptoms: e.symptoms, windows: e.windows, food: stripCosmetic(e.food) }));
+  const liftBy = {}; foodMealLift(vEntries).forEach(r => { liftBy[r.food] = r; });
+  const bases = {}, origBy = {};
+  entries.forEach(e => {
+    const v = stripCosmetic(e.food); if (!v) return;
+    const base = baseFoodName(e.food); if (!base) return;
+    (bases[base] || (bases[base] = new Set())).add(v);
+    (origBy[v] || (origBy[v] = {}))[e.food] = (origBy[v][e.food] || 0) + 1;
+  });
+  const cards = [];
+  Object.keys(bases).forEach(base => {
+    const variants = [...bases[base]].map(v => {
+      const r = liftBy[v]; if (!r || r.nMeals < 5) return null;
+      return { v, n: r.nMeals, bad: r.wMean, lift: r.lift,
+        label: Object.entries(origBy[v]).sort((a, b) => b[1] - a[1])[0][0] };
+    }).filter(Boolean);
+    if (variants.length < 2) return;
+    variants.sort((a, b) => a.lift - b.lift);   // calmest (lowest lift) first
+    const spread = variants[variants.length - 1].lift - variants[0].lift;
+    if (spread < 1.0) return;
+    cards.push({ base, variants, spread });
+  });
+  return cards.sort((a, b) => b.spread - a.spread);
+}
+function portionVariants(entries) {
+  const byVar = {};
+  entries.forEach(e => { const g = gramsOf(e.food); if (g == null) return;
+    const v = stripCosmetic(e.food); (byVar[v] || (byVar[v] = [])).push({ e, g }); });
+  const cards = [];
+  Object.entries(byVar).forEach(([label, arr]) => {
+    if (arr.length < 10) return;
+    const gs = arr.map(x => x.g).slice().sort((a, b) => a - b);
+    const med = gs[Math.floor(gs.length / 2)];
+    const small = arr.filter(x => x.g < med).map(x => x.e);
+    const large = arr.filter(x => x.g >= med).map(x => x.e);
+    if (small.length < 4 || large.length < 4) return;
+    const sb = _meanBad(small), lb = _meanBad(large);
+    if (Math.abs(lb - sb) < 1.0) return;
+    cards.push({ label, med, smallBad: sb, largeBad: lb, n: arr.length, diff: lb - sb });
+  });
+  return cards.sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff));
+}
+function prepPortionSection(entries) {
+  const prep = prepVariants(entries).slice(0, 6);
+  const port = portionVariants(entries).slice(0, 4);
+  if (!prep.length && !port.length) return '';
+  const bc = b => b >= 8 ? '#d03b3b' : (b >= 6.5 ? '#ec835a' : (b >= 5.5 ? '#fab219' : '#0ca30c'));
+  const lc = l => l > 0.5 ? '#d03b3b' : (l < -0.5 ? '#0ca30c' : 'var(--muted)');
+  const prepHTML = prep.map(c => `<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:10px;">
+      <div style="font-weight:700;font-size:13px;margin-bottom:6px;text-transform:capitalize;">${esc(c.base)}</div>
+      ${c.variants.map(v => `<div style="display:flex;align-items:center;gap:8px;margin:3px 0;">
+        <div style="flex:1;min-width:0;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escAttr(v.label)}">${esc(v.label)} <span style="color:var(--muted);">&times;${v.n} meals</span></div>
+        <div style="font-weight:800;color:${lc(v.lift)};font-size:13px;">${(v.lift >= 0 ? '+' : '') + v.lift.toFixed(1)}</div></div>`).join('')}
+      <div style="font-size:11px;color:var(--muted);margin-top:6px;">✅ Best prep runs <b>${c.spread.toFixed(1)}</b> lift-pts calmer than the worst.</div>
+    </div>`).join('');
+  const portHTML = port.map(c => `<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:10px;">
+      <div style="font-weight:700;font-size:13px;text-transform:capitalize;">${esc(c.label)}</div>
+      <div style="font-size:12px;margin-top:4px;">smaller (&lt;${Math.round(c.med)}g): <b style="color:${bc(c.smallBad)};">${c.smallBad.toFixed(1)}</b> &nbsp;&middot;&nbsp; larger (&ge;${Math.round(c.med)}g): <b style="color:${bc(c.largeBad)};">${c.largeBad.toFixed(1)}</b></div>
+      <div style="font-size:11px;color:var(--muted);margin-top:4px;">⚖️ ${c.diff > 0 ? 'Larger' : 'Smaller'} portions run <b>${Math.abs(c.diff).toFixed(1)}</b> pts worse.</div>
+    </div>`).join('');
+  return `<div class="card" style="margin-bottom:24px;">
+    <p class="section-title">🍳 Prep &amp; portion — how you make it matters <span style="font-size:11px;color:var(--muted);font-weight:500;">NEW</span></p>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:12px;">Same food, different technique or size. <b>Prep</b> is compared by meal-aware lift (how much your meals shift with each version — lower/greener = calmer); <b>portion</b> by average badness. Only variants with enough logs appear.</div>
+    ${prep.length ? `<div style="font-size:12px;font-weight:700;margin-bottom:6px;">🔪 Prep variants</div>${prepHTML}` : ''}
+    ${port.length ? `<div style="font-size:12px;font-weight:700;margin:10px 0 6px;">⚖️ Portion size</div>${portHTML}` : ''}
+  </div>`;
+}
+
 // ─── All symptoms (builtin + custom) ─────────────────────────────────────────
 function allSymptoms() {
   return [...BUILTIN_SYMPTOMS, ...loadCustomSyms()];
@@ -11534,6 +11628,8 @@ function renderSummary() {
   const _mealCard = mealSuspectsCard(filteredEntries.filter(e => effectiveItemType(e) === 'food'));
   const _iw = document.getElementById('summary-insights-wrap');
   if (_iw && _mealCard) _iw.insertAdjacentHTML('afterbegin', _mealCard);
+  // v65: prep & portion comparator — same food, different technique/size
+  if (_iw) { const _pp = prepPortionSection(filteredEntries); if (_pp) _iw.insertAdjacentHTML('beforeend', _pp); }
   renderSymptomSpecificAnalysis(summaryFoods, syms);
   renderFoodCompare(summaryFoods, syms);
   renderAnalysisDigest(filteredEntries);
@@ -13844,6 +13940,18 @@ function runSelfTest() {
     const rows = foodMealLift(E);
     const a = rows.find(r => r.food === 'A'), b = rows.find(r => r.food === 'B');
     return (a && b && a.lift > b.lift && a.lift > 0) ? true : 'A should outrank bystander B';
+  });
+
+  // ── prep & portion (v65) ──
+  t('base food name strips prep + quantity + parens so variants group together', () =>
+    baseFoodName('🍚White Rice Jasmin 75-100g (heated after fridge) [HoMali]') === baseFoodName('🍚White Rice Jasmin 150g (Anyday-Micro) [HoMali]')
+      ? true : `${baseFoodName('🍚White Rice Jasmin 75-100g (heated after fridge) [HoMali]')} != ${baseFoodName('🍚White Rice Jasmin 150g (Anyday-Micro) [HoMali]')}`);
+  t('prep comparator: parenthetical prep makes distinct variants, ranked calmest first by lift', () => {
+    const E = [];
+    for (let i=0;i<6;i++) E.push({ mealId:'r'+i, date:'2026-01-0'+(i+1), food:'🍚White Rice 100g (heated after fridge)', symptoms:{ c_strong_pain:true, c_buildup:true }, windows:{} });
+    for (let i=0;i<6;i++) E.push({ mealId:'f'+i, date:'2026-02-0'+(i+1), food:'🍚White Rice 100g (fresh)', symptoms:{}, windows:{} });
+    const c = prepVariants(E).find(x => x.base === 'white rice');
+    return (c && c.variants.length === 2 && c.variants[0].lift < c.variants[1].lift && c.variants[0].label.includes('fresh')) ? true : 'variants not split/ranked by lift (got ' + (c ? c.variants.length : 0) + ')';
   });
 
   // ── face map ──
