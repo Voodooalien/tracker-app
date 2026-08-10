@@ -2844,7 +2844,7 @@ try {
   </div>
 
   <div style="margin-left: auto; display: flex; align-items: center; gap: 4px;">
-    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v65</span>
+    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v66</span>
   </div>
 
   <div id="nav-more-tray" style="display:none; flex-basis:100%; flex-wrap:wrap; gap:4px; padding-top:6px; margin-top:4px; border-top:1px dashed rgba(255,255,255,0.18);">
@@ -3055,6 +3055,14 @@ html body select.status-badge-select.status-blacklist {
         </div>
         <div class="form-group" style="flex: 0 1 auto; min-width: 0; margin: 0;">
           <button type="button" id="log-solo-btn" onclick="toggleLogSolo(this)" title="Mark the next entry as a SOLO test — a food eaten alone, so its reaction is clean, un-confounded data" style="border-radius:8px; padding:8px 12px; font-size:12px; font-weight:700; cursor:pointer; border:1px solid var(--border); background:var(--card); color:var(--muted); height:100%;">🔬 Solo</button>
+        </div>
+        <div class="form-group" style="flex: 0 1 auto; min-width: 0; margin: 0;">
+          <select id="log-age-sel" onchange="_logAge=this.value" title="Batch age — how old is this cooked batch? Histamine grows as food ages; tagging this tests it directly" class="elegant-log-input" style="max-width:110px; border-radius:8px; padding:8px; font-size:12px; font-weight:600;">
+            <option value="">🕒 Age —</option>
+            <option value="fresh">🍳 Fresh</option>
+            <option value="d2">🕒 Day-2</option>
+            <option value="d3">🕰️ Day-3+</option>
+          </select>
         </div>
       </div>
     </div>
@@ -3650,6 +3658,15 @@ html body select.status-badge-select.status-blacklist {
       </label>
     </div>
     <div class="form-group">
+      <label>Batch Age</label>
+      <select id="edit-age">
+        <option value="">— not tagged —</option>
+        <option value="fresh">🍳 Fresh</option>
+        <option value="d2">🕒 Day-2</option>
+        <option value="d3">🕰️ Day-3+</option>
+      </select>
+    </div>
+    <div class="form-group">
       <label>Time Logged</label>
       <input type="time" id="edit-time">
     </div>
@@ -4167,12 +4184,17 @@ function toggleCorrSoloOnly()  { _corrSoloOnly  = !_corrSoloOnly;  renderCorrela
 const _BADW = { c_strong_pain:3,c_wrecked:3,c_delayed_pain:3,c_liver_pain:3,
   c_buildup:2,c_burns:2,c_sint_pain:2,c_brain_fog:2,c_hypoglycemia:2,c_heartburn:2,c_delayed_i:2,
   c__minor_pain:1,c_short_pain:1,bloating:1,gas:1,c_burps:1,c__weak:1 };
+// Severity (v66): symptom values are false | true | 2 | 3. Legacy `true` = mild
+// (×1) so every historical number is unchanged; 2 = strong (×1.5), 3 = severe
+// (×2). Numbers stay truthy, so every existing `if (s[k])` check still works.
+function cycleSeverity(v) { return !v ? true : (v === true ? 2 : (v === 2 ? 3 : false)); }
+function sevMult(v) { return v === 2 ? 1.5 : (v === 3 ? 2 : 1); }
 function entryBadness(e) {
   const s = e.symptoms || {}, w = e.windows || {};
   let b = 0;
-  for (const k in _BADW) if (s[k]) b += _BADW[k];
+  for (const k in _BADW) if (s[k]) b += _BADW[k] * sevMult(s[k]);
   ['w1','w2','w3','w4'].forEach(x => { if (w[x]) b += 1; });
-  if (s.sleepy) b += 0.5;
+  if (s.sleepy) b += 0.5 * sevMult(s.sleepy);
   return b;
 }
 // Foods logged together share a mealId; legacy entries fall back to a synthetic
@@ -4274,30 +4296,55 @@ function prepVariants(entries) {
   });
   return cards.sort((a, b) => b.spread - a.spread);
 }
-function portionVariants(entries) {
+// Dose-response (v66): a genuine trigger should get WORSE as the dose rises;
+// a bystander stays flat. Slope across gram levels is stronger causal evidence
+// than any presence/absence stat. Levels come from the gram bands in the names.
+function _pearson(pts) {
+  const n = pts.length; if (n < 8) return 0;
+  let sx = 0, sy = 0, sxx = 0, syy = 0, sxy = 0;
+  pts.forEach(([x, y]) => { sx += x; sy += y; sxx += x * x; syy += y * y; sxy += x * y; });
+  const cov = sxy / n - (sx / n) * (sy / n);
+  const vx = sxx / n - (sx / n) ** 2, vy = syy / n - (sy / n) ** 2;
+  return vx > 0 && vy > 0 ? cov / Math.sqrt(vx * vy) : 0;
+}
+function doseResponse(entries) {
   const byVar = {};
-  entries.forEach(e => { const g = gramsOf(e.food); if (g == null) return;
-    const v = stripCosmetic(e.food); (byVar[v] || (byVar[v] = [])).push({ e, g }); });
-  const cards = [];
-  Object.values(byVar).forEach(arr => {
-    if (arr.length < 10) return;
-    const gs = arr.map(x => x.g).slice().sort((a, b) => a - b);
-    const med = gs[Math.floor(gs.length / 2)];
-    const small = arr.filter(x => x.g < med).map(x => x.e);
-    const large = arr.filter(x => x.g >= med).map(x => x.e);
-    if (small.length < 4 || large.length < 4) return;
-    const sb = _meanBad(small), lb = _meanBad(large);
-    if (Math.abs(lb - sb) < 1.0) return;
-    const oc = {}; arr.forEach(x => { oc[x.e.food] = (oc[x.e.food] || 0) + 1; });
-    const label = Object.entries(oc).sort((a, b) => b[1] - a[1])[0][0];  // your logged name (with icon)
-    cards.push({ label, med, smallBad: sb, largeBad: lb, n: arr.length, diff: lb - sb });
+  entries.forEach(e => {
+    const g = gramsOf(e.food); if (g == null) return;
+    const v = stripCosmetic(e.food); if (!v) return;
+    const d = byVar[v] || (byVar[v] = { levels: {}, orig: {} });
+    (d.levels[g] || (d.levels[g] = [])).push(e);
+    d.orig[e.food] = (d.orig[e.food] || 0) + 1;
   });
-  return cards.sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff));
+  const cards = [];
+  Object.values(byVar).forEach(d => {
+    const lvls = Object.entries(d.levels).map(([g, es]) => ({ g: +g, n: es.length, bad: _meanBad(es) }))
+      .filter(l => l.n >= 5).sort((a, b) => a.g - b.g);
+    if (lvls.length < 2) return;
+    const pts = [];
+    lvls.forEach(l => d.levels[l.g].forEach(e => pts.push([l.g, entryBadness(e)])));
+    const r = _pearson(pts);
+    const spread = lvls[lvls.length - 1].bad - lvls[0].bad;
+    if (Math.abs(r) < 0.08 && Math.abs(spread) < 0.8) return;   // nothing to say
+    const label = Object.entries(d.orig).sort((a, b) => b[1] - a[1])[0][0];
+    cards.push({ label, lvls, r, spread, n: pts.length, doseLinked: r >= 0.12 && spread >= 0.8 });
+  });
+  return cards.sort((a, b) => Math.abs(b.r) - Math.abs(a.r));
+}
+// Batch age (v66): histamine grows as cooked food ages — compare fresh vs
+// day-2 vs day-3+ servings, overall. Data comes from the 🕒 Age tag at logging.
+function batchAgeStats(entries) {
+  const AGES = [{ k: 'fresh', lbl: '🍳 Fresh' }, { k: 'd2', lbl: '🕒 Day-2' }, { k: 'd3', lbl: '🕰️ Day-3+' }];
+  const groups = AGES.map(a => ({ ...a, es: entries.filter(e => e.age === a.k) }))
+    .map(a => ({ k: a.k, lbl: a.lbl, n: a.es.length, bad: a.es.length ? _meanBad(a.es) : null }));
+  const tagged = groups.reduce((s, g) => s + g.n, 0);
+  return { groups: groups.filter(g => g.n >= 5), tagged };
 }
 function prepPortionSection(entries) {
   const prep = prepVariants(entries).slice(0, 6);
-  const port = portionVariants(entries).slice(0, 4);
-  if (!prep.length && !port.length) return '';
+  const port = doseResponse(entries).slice(0, 5);
+  const age = batchAgeStats(entries);
+  if (!prep.length && !port.length && !age.tagged) return '';
   const bc = b => b >= 8 ? '#d03b3b' : (b >= 6.5 ? '#ec835a' : (b >= 5.5 ? '#fab219' : '#0ca30c'));
   const lc = l => l > 0.5 ? '#d03b3b' : (l < -0.5 ? '#0ca30c' : 'var(--muted)');
   const prepHTML = prep.map(c => `<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:10px;">
@@ -4309,14 +4356,256 @@ function prepPortionSection(entries) {
     </div>`).join('');
   const portHTML = port.map(c => `<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:10px;">
       <div style="font-weight:700;font-size:13px;">${esc(c.label)}</div>
-      <div style="font-size:12px;margin-top:4px;">smaller (&lt;${Math.round(c.med)}g): <b style="color:${bc(c.smallBad)};">${c.smallBad.toFixed(1)}</b> &nbsp;&middot;&nbsp; larger (&ge;${Math.round(c.med)}g): <b style="color:${bc(c.largeBad)};">${c.largeBad.toFixed(1)}</b></div>
-      <div style="font-size:11px;color:var(--muted);margin-top:4px;">⚖️ ${c.diff > 0 ? 'Larger' : 'Smaller'} portions run <b>${Math.abs(c.diff).toFixed(1)}</b> pts worse.</div>
+      <div style="font-size:12px;margin-top:4px;">${c.lvls.map(l => `~${Math.round(l.g)}g: <b style="color:${bc(l.bad)};">${l.bad.toFixed(1)}</b> <span style="color:var(--muted);font-size:11px;">×${l.n}</span>`).join(' &nbsp;&middot;&nbsp; ')}</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:4px;">${c.doseLinked
+        ? `📈 <b>Dose-linked</b> (r ${c.r.toFixed(2)}) — more = worse. That slope is genuine trigger evidence.`
+        : (c.spread <= -0.8 ? `📉 Larger portions actually ran <b>calmer</b> here (r ${c.r.toFixed(2)}) — portion isn't the problem.` : `➖ No consistent dose effect (r ${c.r.toFixed(2)}).`)}</div>
     </div>`).join('');
   return `<div class="card" style="margin-bottom:24px;">
     <p class="section-title">🍳 Prep &amp; portion — how you make it matters <span style="font-size:11px;color:var(--muted);font-weight:500;">NEW</span></p>
-    <div style="font-size:11px;color:var(--muted);margin-bottom:12px;">Same food, different technique or size. <b>Prep</b> is compared by meal-aware lift (how much your meals shift with each version — lower/greener = calmer); <b>portion</b> by average badness. Only variants with enough logs appear.</div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:12px;">Same food, different technique or size. <b>Prep</b> is compared by meal-aware lift (how much your meals shift with each version — lower/greener = calmer); <b>dose-response</b> checks whether more grams = worse reaction, the classic causal signature. Only variants with enough logs appear.</div>
     ${prep.length ? `<div style="font-size:12px;font-weight:700;margin-bottom:6px;">🔪 Prep variants</div>${prepHTML}` : ''}
-    ${port.length ? `<div style="font-size:12px;font-weight:700;margin:10px 0 6px;">⚖️ Portion size</div>${portHTML}` : ''}
+    ${port.length ? `<div style="font-size:12px;font-weight:700;margin:10px 0 6px;">⚖️ Dose-response (portion)</div>${portHTML}` : ''}
+    <div style="font-size:12px;font-weight:700;margin:10px 0 6px;">🕒 Batch age (histamine test)</div>
+    ${age.groups.length >= 2
+      ? `<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px;">
+          <div style="font-size:12px;">${age.groups.map(g => `${g.lbl}: <b style="color:${bc(g.bad)};">${g.bad.toFixed(1)}</b> <span style="color:var(--muted);font-size:11px;">×${g.n}</span>`).join(' &nbsp;&middot;&nbsp; ')}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px;">If older batches run hotter, that's direct histamine-intolerance evidence — worth showing a clinician.</div>
+        </div>`
+      : `<div style="font-size:11px;color:var(--muted);">${age.tagged ? `${age.tagged} serving${age.tagged === 1 ? '' : 's'} tagged so far — need ≥5 in at least two age groups.` : 'Not enough data yet — tag the 🕒 Age of cooked batches when logging (fresh / day-2 / day-3+) and this comparison unlocks. It tests the histamine-aging theory directly.'}</div>`}
+  </div>`;
+}
+
+// ── Symptom fingerprints (v66) ───────────────────────────────────────────────
+// Your negative tags aren't 17 independent things — they co-occur in a few
+// recurring SYNDROMES. Cluster them by co-occurrence (Jaccard, average-link
+// agglomerative), then rank foods per cluster and stamp each with timing
+// consistency: a real trigger hits the same reaction window; noise scatters.
+function clusterSymptoms(entries, keys) {
+  const sets = {}; keys.forEach(k => { sets[k] = new Set(); });
+  entries.forEach((e, i) => {
+    const s = e.symptoms || {};
+    keys.forEach(k => { if (s[k]) sets[k].add(i); });
+  });
+  const used = keys.filter(k => sets[k].size >= 25);
+  const jac = (a, b) => {
+    const A = sets[a], B = sets[b];
+    const [S, L] = A.size < B.size ? [A, B] : [B, A];
+    let inter = 0; S.forEach(x => { if (L.has(x)) inter++; });
+    return inter / (A.size + B.size - inter || 1);
+  };
+  const avgLink = (c1, c2) => {
+    let s = 0, n = 0;
+    c1.forEach(a => c2.forEach(b => { s += jac(a, b); n++; }));
+    return s / (n || 1);
+  };
+  let clusters = used.map(k => [k]);
+  while (clusters.length > 2) {
+    let bi = -1, bj = -1, bv = -1;
+    for (let i = 0; i < clusters.length; i++)
+      for (let j = i + 1; j < clusters.length; j++) {
+        const v = avgLink(clusters[i], clusters[j]);
+        if (v > bv) { bv = v; bi = i; bj = j; }
+      }
+    if (bv < 0.18 && clusters.length <= 5) break;   // nothing similar left
+    clusters[bi] = clusters[bi].concat(clusters[bj]);
+    clusters.splice(bj, 1);
+  }
+  return clusters.map(c => c.sort((a, b) => sets[b].size - sets[a].size));
+}
+function timingConsistency(entriesOfFood) {
+  const counts = { w1: 0, w2: 0, w3: 0, w4: 0 }; let tot = 0;
+  entriesOfFood.forEach(e => {
+    const w = e.windows || {};
+    ['w1', 'w2', 'w3', 'w4'].forEach(k => { if (w[k]) { counts[k]++; tot++; } });
+  });
+  if (tot < 5) return null;
+  const best = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
+  return { win: best[0].toUpperCase(), share: best[1] / tot, n: tot };
+}
+function symptomFingerprintsCard(entries) {
+  const clusters = clusterSymptoms(entries, Object.keys(_BADW)).filter(c => c.length >= 2);
+  if (!clusters.length) return '';
+  const lab = {}; allSymptoms().forEach(s => { lab[s.key] = s.label; });
+  const byFood = {};
+  entries.forEach(e => { (byFood[e.food] || (byFood[e.food] = [])).push(e); });
+  const parts = clusters.map(cl => {
+    const hasCl = e => { const s = e.symptoms || {}; return cl.some(k => s[k]); };
+    const base = entries.filter(hasCl).length / (entries.length || 1);
+    const rows = Object.entries(byFood)
+      .filter(([, es]) => es.length >= 10)
+      .map(([food, es]) => ({ food, n: es.length, rate: es.filter(hasCl).length / es.length }))
+      .map(r => ({ ...r, liftPP: (r.rate - base) * 100 }))
+      .filter(r => r.liftPP >= 8)
+      .sort((a, b) => b.liftPP - a.liftPP).slice(0, 3);
+    if (!rows.length) return '';
+    const title = cl.slice(0, 2).map(k => lab[k] || k).join(' · ') + (cl.length > 2 ? ' +' + (cl.length - 2) : '');
+    const members = cl.map(k => lab[k] || k).join(', ');
+    const rowHTML = rows.map(r => {
+      const tc = timingConsistency(byFood[r.food]);
+      const badge = tc ? (tc.share >= 0.5 ? `<span title="${Math.round(tc.share * 100)}% of its reactions land in ${tc.win}" style="color:#0F6E56;font-size:10.5px;font-weight:700;">⏱ mostly ${tc.win}</span>` : `<span style="color:var(--muted);font-size:10.5px;">⏱ scattered</span>`) : '';
+      return `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:12.5px;">
+        <div style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escAttr(r.food)}">${esc(r.food)} <span style="color:var(--muted);font-size:11px;">×${r.n}</span></div>
+        ${badge}
+        <div style="font-weight:800;color:#d03b3b;min-width:44px;text-align:right;">+${r.liftPP.toFixed(0)}pp</div>
+      </div>`;
+    }).join('');
+    return `<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:10px;">
+      <div style="font-weight:700;font-size:13px;">${esc(title)}</div>
+      <div style="font-size:10.5px;color:var(--muted);margin:2px 0 6px;">${esc(members)} — hits ${Math.round(base * 100)}% of servings overall</div>
+      ${rowHTML}
+    </div>`;
+  }).filter(Boolean);
+  if (!parts.length) return '';
+  return `<div class="card" style="margin-bottom:24px;">
+    <p class="section-title">🧬 Symptom fingerprints <span style="font-size:11px;color:var(--muted);font-weight:500;">NEW</span></p>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:10px;">Your negative tags grouped into the syndromes they actually form (by co-occurrence), with the foods that raise each syndrome most (+pp above its base rate). ⏱ = timing consistency: a real trigger hits the same window; noise scatters.</div>
+    ${parts.join('')}
+  </div>`;
+}
+
+// ── Day-level drivers + natural gaps (v66) ───────────────────────────────────
+// One question four months of food-hunting never asked: what actually predicts
+// a bad DAY — total load, sleep, timing — or a specific food? Day frame joins
+// the food log to check-ins (outcome = Overall Daily Score, 1-5 higher better).
+// All PURE — self-tested.
+function _avg(a) { return a.length ? a.reduce((x, y) => x + y, 0) / a.length : null; }
+function buildDayFrame(entries, checkins) {
+  const byDay = {};
+  entries.forEach(e => {
+    if (!e.date) return;
+    const d = byDay[e.date] || (byDay[e.date] = { grams: 0, gramsN: 0, meals: new Set(), n: 0, morning: 0 });
+    d.n++;
+    d.meals.add(mealKeyOf(e));
+    const g = gramsOf(e.food);
+    if (g != null) {
+      d.grams += g; d.gramsN++;
+      const hh = parseInt((e.logTime || '').slice(0, 2), 10);
+      if (!isNaN(hh) && hh < 12) d.morning += g;
+    }
+  });
+  const gByDate = {};
+  Object.keys(byDay).forEach(dt => { gByDate[dt] = byDay[dt].grams; });
+  const rows = [];
+  Object.keys(checkins).forEach(date => {
+    const ci = checkins[date];
+    if (ci.ci_day_score == null) return;
+    const d = byDay[date];
+    rows.push({
+      date, score: ci.ci_day_score,
+      sleep: ci.ci_last_nights_sleep != null ? ci.ci_last_nights_sleep : null,
+      grams: d ? d.grams : 0,
+      grams48: (d ? d.grams : 0) + (gByDate[addDays(date, -1)] || 0),
+      mealsN: d ? d.meals.size : 0,
+      itemsN: d ? d.n : 0,
+      morningShare: d && d.grams > 0 ? d.morning / d.grams : null,
+    });
+  });
+  return rows.sort((a, b) => a.date < b.date ? -1 : 1);
+}
+// Median-split each driver: Δ = mean score of high-half minus low-half days.
+function dayDrivers(frame) {
+  const DRIVERS = [
+    { k: 'sleep',        lbl: '🛌 Last night\'s sleep' },
+    { k: 'grams48',      lbl: '⚖️ Food load over 48h (g)' },
+    { k: 'grams',        lbl: '🍽️ Total food that day (g)' },
+    { k: 'mealsN',       lbl: '🔢 Number of meals' },
+    { k: 'itemsN',       lbl: '🧾 Items logged' },
+    { k: 'morningShare', lbl: '🌅 Share of food before noon' },
+  ];
+  return DRIVERS.map(dr => {
+    const rows = frame.filter(r => r[dr.k] != null);
+    if (rows.length < 16) return null;
+    const sorted = [...rows].sort((a, b) => a[dr.k] - b[dr.k]);
+    const half = Math.floor(sorted.length / 2);
+    const lo = sorted.slice(0, half), hi = sorted.slice(sorted.length - half);
+    const loS = _avg(lo.map(r => r.score)), hiS = _avg(hi.map(r => r.score));
+    return { k: dr.k, lbl: dr.lbl, n: rows.length, loScore: loS, hiScore: hiS, delta: hiS - loS };
+  }).filter(Boolean).sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
+}
+// Strongest single-food day effect, for comparison against the drivers.
+function bestFoodDayEffect(entries, checkins) {
+  const daysByFood = {};
+  entries.forEach(e => { if (e.date) (daysByFood[e.food] || (daysByFood[e.food] = new Set())).add(e.date); });
+  const ciDates = Object.keys(checkins).filter(d => checkins[d].ci_day_score != null);
+  let best = null;
+  Object.entries(daysByFood).forEach(([food, dset]) => {
+    const on = [], off = [];
+    ciDates.forEach(d => (dset.has(d) ? on : off).push(checkins[d].ci_day_score));
+    if (on.length < 12 || off.length < 12) return;
+    const delta = _avg(on) - _avg(off);
+    if (!best || Math.abs(delta) > Math.abs(best.delta)) best = { food, delta, onN: on.length };
+  });
+  return best;
+}
+function dayDriversCard(entries, checkins) {
+  const frame = buildDayFrame(entries, checkins);
+  if (frame.length < 16) return '';
+  const drivers = dayDrivers(frame);
+  if (!drivers.length) return '';
+  const bestFood = bestFoodDayEffect(entries, checkins);
+  const dCol = d => Math.abs(d) >= 0.4 ? (d > 0 ? '#0ca30c' : '#d03b3b') : (Math.abs(d) >= 0.2 ? '#ec835a' : 'var(--muted)');
+  const tail = (dr) => Math.abs(dr.delta) < 0.2 ? 'no clear effect'
+    : (dr.delta > 0 ? 'more = better days' : 'more = worse days');
+  const rows = drivers.map(dr => `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:12.5px;">
+      <div style="flex:1;min-width:0;">${dr.lbl} <span style="color:var(--muted);font-size:11px;">· ${dr.n} days</span></div>
+      <div style="color:var(--muted);font-size:12px;white-space:nowrap;">low ${dr.loScore.toFixed(1)} → high ${dr.hiScore.toFixed(1)}</div>
+      <div style="font-weight:800;min-width:44px;text-align:right;color:${dCol(dr.delta)};">${(dr.delta >= 0 ? '+' : '') + dr.delta.toFixed(1)}</div>
+    </div>
+    <div style="font-size:10.5px;color:var(--muted);padding:0 0 4px;">${tail(dr)}</div>`).join('');
+  const top = drivers[0];
+  const verdict = bestFood
+    ? (Math.abs(top.delta) > Math.abs(bestFood.delta) + 0.1
+      ? `📌 Your day score moves more with <b>${top.lbl.replace(/^[^\s]+\s/, '')}</b> (Δ${Math.abs(top.delta).toFixed(1)}) than with any single food (best: ${esc(bestFood.food)}, Δ${Math.abs(bestFood.delta).toFixed(1)}) — <b>state &amp; load matter more than ingredients</b>.`
+      : `📌 Your strongest single-food day effect (${esc(bestFood.food)}, Δ${Math.abs(bestFood.delta).toFixed(1)}) rivals the lifestyle drivers — both matter.`)
+    : '';
+  return `<div class="card" style="margin-bottom:24px;">
+    <p class="section-title">🧭 What drives your bad days <span style="font-size:11px;color:var(--muted);font-weight:500;">NEW</span></p>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:10px;">Days split in half on each factor; Δ = Overall Daily Score difference (high-half minus low-half, 1-5 scale). Correlation, not proof — but it says where to look first.</div>
+    ${rows}
+    ${verdict ? `<div style="font-size:12px;margin-top:10px;line-height:1.5;">${verdict}</div>` : ''}
+  </div>`;
+}
+// Natural elimination mining: stretches where a staple was skipped ≥2 days are
+// free retroactive avoidance trials. Gap day = absent today AND yesterday.
+function naturalGaps(entries, checkins) {
+  const daysByFood = {};
+  entries.forEach(e => { if (e.date) (daysByFood[e.food] || (daysByFood[e.food] = new Set())).add(e.date); });
+  const ciDates = Object.keys(checkins).filter(d => checkins[d].ci_day_score != null).sort();
+  if (ciDates.length < 10) return [];
+  const out = [];
+  // Staples only: eaten on ≥35% of check-in days. Looser bars let occasional
+  // foods in, where "absent days" ≈ the whole calendar and the comparison just
+  // inherits whichever era the food belonged to (month-level confounding).
+  const stapleMin = Math.max(15, Math.ceil(ciDates.length * 0.35));
+  Object.entries(daysByFood).forEach(([food, dset]) => {
+    if (dset.size < stapleMin) return;
+    const gap = [], exp = [];
+    ciDates.forEach(d => {
+      if (dset.has(d)) exp.push(checkins[d].ci_day_score);
+      else if (!dset.has(addDays(d, -1))) gap.push(checkins[d].ci_day_score);
+    });
+    if (gap.length < 3 || exp.length < 5) return;
+    out.push({ food, gapN: gap.length, expN: exp.length, gapScore: _avg(gap), expScore: _avg(exp), delta: _avg(gap) - _avg(exp) });
+  });
+  return out.filter(r => Math.abs(r.delta) >= 0.3).sort((a, b) => b.delta - a.delta);
+}
+function naturalGapsCard(entries, checkins) {
+  const rows = naturalGaps(entries, checkins);
+  if (!rows.length) return '';
+  const sus = rows.filter(r => r.delta > 0).slice(0, 6);
+  const fine = rows.filter(r => r.delta < 0).slice(-4).reverse();
+  const row = (r, suspect) => `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:12.5px;">
+      <div style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escAttr(r.food)}">${esc(r.food)}</div>
+      <div style="color:var(--muted);font-size:11.5px;white-space:nowrap;">avoided ${r.gapN}d ${r.gapScore.toFixed(1)} vs eaten ${r.expScore.toFixed(1)}</div>
+      <div style="font-weight:800;color:${suspect ? '#d03b3b' : '#0ca30c'};min-width:40px;text-align:right;">${(r.delta >= 0 ? '+' : '') + r.delta.toFixed(1)}</div>
+      ${suspect ? `<button class="verdict-test-btn" title="Confirm with a controlled trial" onclick="startExperiment(${escAttr(JSON.stringify(r.food))})">🧪 Test</button>` : ''}
+    </div>`;
+  return `<div class="card" style="margin-bottom:24px;">
+    <p class="section-title">⛏️ Natural elimination findings <span style="font-size:11px;color:var(--muted);font-weight:500;">NEW</span></p>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:10px;">Mined from history: days you happened to skip a staple for ≥2 days in a row, scored against days you ate it (Overall Daily Score, washout day excluded). Observational — confirm with 🧪 trials.</div>
+    ${sus.length ? `<div style="font-size:12px;font-weight:700;margin-bottom:4px;">Days were BETTER without:</div>${sus.map(r => row(r, true)).join('')}` : ''}
+    ${fine.length ? `<div style="font-size:12px;font-weight:700;margin:10px 0 4px;">Days were WORSE without (probably fine):</div>${fine.map(r => row(r, false)).join('')}` : ''}
   </div>`;
 }
 
@@ -4403,6 +4692,7 @@ let _corrSearch = '';
 let _corrFoodsOnly = true;   // Correlations: hide non-food items by default (v63)
 let _corrSoloOnly  = false;  // Correlations: restrict to clean solo tests (v63)
 let _logSolo       = false;  // Log form: next Add Entry marks a solo test (v63)
+let _logAge        = '';     // Log form: batch age of the next entry — ''|'fresh'|'d2'|'d3' (v66)
 window._ExpSearch = '';
 let _pendingMealFilter = '';
 
@@ -4979,11 +5269,13 @@ function addEntry() {
     const e = { id:uid(), date, mealType, food: foods[i], logTime, windows:{w1:null,w2:null,w3:null,w4:null}, symptoms:blankSymptoms() };
     e.mealId = mealId;
     if (_logSolo) e.solo = true;
+    if (_logAge) e.age = _logAge;
     entries.unshift(e);
   }
   save(entries);
   saveLastMealType(mealType);
   if (_logSolo) { _logSolo = false; setSoloBtnStyle(document.getElementById('log-solo-btn'), false); }
+  if (_logAge) { _logAge = ''; const sel = document.getElementById('log-age-sel'); if (sel) sel.value = ''; }
   document.getElementById('inp-food').value = '';
   document.getElementById('inp-date').value = today();
   const n = new Date();
@@ -5136,7 +5428,9 @@ function markSymptom(id, symKey) {
   const entry = entries.find(e => e.id === id);
   if (!entry) return;
   const targets = getBulkTargets(entries, entry);
-  const nextValue = !(entry.symptoms && entry.symptoms[symKey]);
+  // v66: tap cycles severity — off → mild → strong(²) → severe(³) → off.
+  // The clicked entry's current value decides the next; bulk targets follow it.
+  const nextValue = cycleSeverity(entry.symptoms && entry.symptoms[symKey]);
   targets.forEach(target => {
     if (!target.symptoms) target.symptoms = blankSymptoms();
     target.symptoms[symKey] = nextValue;
@@ -5255,6 +5549,7 @@ function openEditModal(id) {
   document.getElementById('edit-meal').value  = entry.mealType || '';
   document.getElementById('edit-type').value  = ITEM_TYPES.includes(entry.type) ? entry.type : '';
   document.getElementById('edit-solo').checked = !!entry.solo;
+  document.getElementById('edit-age').value   = ['fresh','d2','d3'].includes(entry.age) ? entry.age : '';
   document.getElementById('edit-time').value  = entry.logTime || '';
   const editDate = document.getElementById('edit-date');
   editDate.value = entry.date || today();
@@ -5307,6 +5602,8 @@ function saveEdit(renameAll) {
         const t = document.getElementById('edit-type').value;
         if (t) e.type = t; else delete e.type;        // '' = Auto (derive from name)
         if (document.getElementById('edit-solo').checked) e.solo = true; else delete e.solo;
+        const ag = document.getElementById('edit-age').value;
+        if (ag) e.age = ag; else delete e.age;
       }
 
       changed++;
@@ -10967,7 +11264,8 @@ function symptomsHTML(entry) {
   // If expanded, build all the symptom chips
   const btns = syms.map(s => {
     const on = entry.symptoms && entry.symptoms[s.key];
-    return `<button class="sym-btn${on?' active':''}" onclick="markSymptom('${entry.id}','${s.key}')" title="${escAttr(s.label)}">${esc(s.label)}</button>`;
+    const sev = on === 2 ? ' <b style="font-size:10px;">²</b>' : on === 3 ? ' <b style="font-size:10px;">³</b>' : '';
+    return `<button class="sym-btn${on?' active':''}" onclick="markSymptom('${entry.id}','${s.key}')" title="${escAttr(s.label)} — tap cycles: mild → strong ² → severe ³ → off">${esc(s.label)}${sev}</button>`;
   }).join('');
 
   return toggleBtn + `<div class="symptoms-row" style="margin-top: 8px; padding-top: 0; border-top: none; justify-content: center;">
@@ -11732,6 +12030,17 @@ function renderSummary() {
   if (_iw && _mealCard) _iw.insertAdjacentHTML('afterbegin', _mealCard);
   // v65: prep & portion comparator — same food, different technique/size
   if (_iw) { const _pp = prepPortionSection(filteredEntries); if (_pp) _iw.insertAdjacentHTML('beforeend', _pp); }
+  // v66: day-level analyses (drivers + natural gaps) against range-filtered check-ins
+  if (_iw) {
+    const _ci = {};
+    Object.entries(loadCheckins()).forEach(([d, v]) => { if (inSummaryRange({ date: d })) _ci[d] = v; });
+    const _dd = dayDriversCard(filteredEntries, _ci);
+    if (_dd) _iw.insertAdjacentHTML('beforeend', _dd);
+    const _ng = naturalGapsCard(filteredEntries, _ci);
+    if (_ng) _iw.insertAdjacentHTML('beforeend', _ng);
+    const _fp = symptomFingerprintsCard(filteredEntries);
+    if (_fp) _iw.insertAdjacentHTML('beforeend', _fp);
+  }
   renderSymptomSpecificAnalysis(summaryFoods, syms);
   renderFoodCompare(summaryFoods, syms);
   renderAnalysisDigest(filteredEntries);
@@ -14054,6 +14363,83 @@ function runSelfTest() {
     for (let i=0;i<6;i++) E.push({ mealId:'f'+i, date:'2026-02-0'+(i+1), food:'🍚White Rice 100g (fresh)', symptoms:{}, windows:{} });
     const c = prepVariants(E).find(x => x.base === 'white rice');
     return (c && c.variants.length === 2 && c.variants[0].lift < c.variants[1].lift && c.variants[0].label.includes('fresh')) ? true : 'variants not split/ranked by lift (got ' + (c ? c.variants.length : 0) + ')';
+  });
+
+  // ── severity + batch age (v66) ──
+  t('severity: tap cycles off → mild → strong(2) → severe(3) → off', () => {
+    const chain = [cycleSeverity(false), cycleSeverity(true), cycleSeverity(2), cycleSeverity(3)];
+    return JSON.stringify(chain) === JSON.stringify([true, 2, 3, false]) ? true : JSON.stringify(chain);
+  });
+  t('severity: legacy true unchanged; 2/3 scale the badness weights', () => {
+    const legacy = entryBadness({ symptoms: { c_strong_pain: true, c_buildup: true }, windows: {} });
+    const scaled = entryBadness({ symptoms: { c_strong_pain: true, c_buildup: 3 }, windows: {} });
+    return (legacy === 5 && scaled === 7) ? true : `legacy=${legacy}, scaled=${scaled}`;
+  });
+  t('batch age: groups with ≥5 servings each compare by mean badness', () => {
+    const E = [];
+    for (let i = 0; i < 6; i++) E.push({ age: 'fresh', symptoms: {}, windows: {} });
+    for (let i = 0; i < 6; i++) E.push({ age: 'd3', symptoms: { c_burns: true, c_buildup: true }, windows: {} });
+    const a = batchAgeStats(E);
+    const fresh = a.groups.find(g => g.k === 'fresh'), d3 = a.groups.find(g => g.k === 'd3');
+    return (a.tagged === 12 && fresh && d3 && d3.bad > fresh.bad) ? true : JSON.stringify(a);
+  });
+
+  // ── fingerprints + dose-response (v66) ──
+  t('symptom clustering: co-occurring tags land in one cluster, independent ones apart', () => {
+    const E = [];
+    for (let i = 0; i < 30; i++) E.push({ symptoms: { c_burns: true, bloating: true }, windows: {} });
+    for (let i = 0; i < 30; i++) E.push({ symptoms: { c_brain_fog: true }, windows: {} });
+    const cl = clusterSymptoms(E, ['c_burns', 'bloating', 'c_brain_fog']);
+    const together = cl.find(c => c.includes('c_burns'));
+    return (together && together.includes('bloating') && !together.includes('c_brain_fog')) ? true : JSON.stringify(cl);
+  });
+  t('timing consistency: reactions always in one window score share 1', () => {
+    const es = Array.from({ length: 6 }, () => ({ windows: { w2: true }, symptoms: {} }));
+    const tc = timingConsistency(es);
+    return (tc && tc.win === 'W2' && tc.share === 1) ? true : JSON.stringify(tc);
+  });
+  t('dose-response: higher grams with worse reactions flags dose-linked', () => {
+    const E = [];
+    for (let i = 0; i < 6; i++) E.push({ food: 'Rice test 50g', symptoms: {}, windows: {} });
+    for (let i = 0; i < 6; i++) E.push({ food: 'Rice test 150g', symptoms: { c_strong_pain: true, c_buildup: true }, windows: {} });
+    const c = doseResponse(E)[0];
+    return (c && c.doseLinked && c.r > 0.5 && c.lvls.length === 2) ? true : JSON.stringify(c || 'none');
+  });
+
+  // ── day-level drivers + natural gaps (v66) ──
+  t('day frame: sums grams per day and computes 48h trailing load', () => {
+    const E = [
+      { date: '2026-01-01', food: 'Rice 100g', logTime: '08:00', windows: {}, symptoms: {} },
+      { date: '2026-01-01', food: 'Veg 50g',   logTime: '13:00', windows: {}, symptoms: {} },
+      { date: '2026-01-02', food: 'Rice 200g', logTime: '09:00', windows: {}, symptoms: {} },
+    ];
+    const CI = { '2026-01-01': { ci_day_score: 3 }, '2026-01-02': { ci_day_score: 2 } };
+    const f = buildDayFrame(E, CI);
+    const d2 = f.find(r => r.date === '2026-01-02');
+    return (f.length === 2 && d2.grams === 200 && d2.grams48 === 350) ? true : JSON.stringify(d2);
+  });
+  t('day drivers: heavy-load days scoring worse yields a negative load delta', () => {
+    const E = [], CI = {};
+    for (let i = 1; i <= 20; i++) {
+      const d = '2026-03-' + String(i).padStart(2, '0');
+      const heavy = i % 2 === 0;
+      E.push({ date: d, food: heavy ? 'Meal 400g' : 'Meal 100g', logTime: '10:00', windows: {}, symptoms: {} });
+      CI[d] = { ci_day_score: heavy ? 2 : 4 };
+    }
+    const drs = dayDrivers(buildDayFrame(E, CI));
+    const g = drs.find(x => x.k === 'grams');
+    return (g && g.delta < -1) ? true : 'grams delta: ' + (g && g.delta);
+  });
+  t('natural gaps: staple absent ≥2 days with better scores flags as suspect', () => {
+    const E = [], CI = {};
+    for (let i = 1; i <= 28; i++) {
+      const d = '2026-04-' + String(i).padStart(2, '0');
+      const eaten = i <= 18;                       // 18 eaten days, then a 10-day gap
+      if (eaten) E.push({ date: d, food: 'Staple X', logTime: '10:00', windows: {}, symptoms: {} });
+      CI[d] = { ci_day_score: eaten ? 2 : 4 };     // clearly better while avoiding
+    }
+    const r = naturalGaps(E, CI).find(x => x.food === 'Staple X');
+    return (r && r.delta >= 1.5 && r.gapN === 9) ? true : JSON.stringify(r || 'none');
   });
 
   // ── face map ──
