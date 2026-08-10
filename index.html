@@ -3108,7 +3108,7 @@ html body select.status-badge-select.status-blacklist {
       A controlled test the app scores for you. <b>Avoid</b> one food for a few days while it watches your check-in scores against your recent baseline, then optionally <b>reintroduce</b> it to confirm. Because you log everything, it can verify you actually stuck to the trial.
     </div>
     <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-      <input type="text" id="exp-food-input" list="exp-food-list" placeholder="Food to test (type or pick)..." style="flex:1; min-width:180px;" onkeydown="if(event.key==='Enter'){event.preventDefault();startExperimentFromInput();}">
+      <input type="text" id="exp-food-input" list="exp-food-list" placeholder="Food to test — use ; to start several..." style="flex:1; min-width:180px;" onkeydown="if(event.key==='Enter'){event.preventDefault();startExperimentFromInput();}">
       <datalist id="exp-food-list"></datalist>
       <button class="btn-primary" onclick="startExperimentFromInput()" style="padding:9px 16px; font-size:13px;">Start trial</button>
     </div>
@@ -10531,10 +10531,35 @@ function startExperiment(food) {
   render();
   showTab('experiments', document.querySelector('nav button[onclick*="experiments"]'));
 }
+// Create a trial with NO UI side-effects — the batch primitive for multi-start.
+// Returns 'started' | 'nomatch' | 'dup' | 'empty'.
+function startExperimentCore(food) {
+  food = String(food || '').trim();
+  if (!food) return 'empty';
+  const exps = loadExperiments();
+  if (exps.some(e => normFood(e.food) === normFood(food) && (e.status === 'eliminating' || e.status === 'reintroducing'))) return 'dup';
+  exps.unshift({
+    id: uid(), food, status: 'eliminating',
+    elimStart: today(), elimDays: EXP_ELIM_DAYS, washoutDays: EXP_WASHOUT_DAYS,
+    reintroStart: null, reintroDays: EXP_REINTRO_DAYS,
+    targetSyms: pickTargetSyms(food), createdAt: today()
+  });
+  saveExperiments(exps);
+  return loadMigrated().some(e => foodMatchesTrial(e.food, normFood(food))) ? 'started' : 'nomatch';
+}
 function startExperimentFromInput() {
   const el = document.getElementById('exp-food-input');
-  startExperiment(el.value);
+  // Multi-start: "chicken leg; white rice; beets" starts a trial for each (';' like the log form).
+  const foods = String(el.value || '').split(';').map(s => s.trim()).filter(Boolean);
+  if (!foods.length) { toast('Pick a food to test'); return; }
+  if (foods.length === 1) { startExperiment(foods[0]); el.value = ''; return; }  // single: keep the adherence confirm
+  let started = 0, dup = 0, nomatch = 0;
+  foods.forEach(f => { const r = startExperimentCore(f); if (r === 'dup') dup++; else { started++; if (r === 'nomatch') nomatch++; } });
   el.value = '';
+  computeTrialSuggestion();
+  render();
+  showTab('experiments', document.querySelector('nav button[onclick*="experiments"]'));
+  toast(`🧪 ${started} trial${started === 1 ? '' : 's'} started` + (dup ? `, ${dup} already running` : '') + (nomatch ? `, ${nomatch} unmatched` : ''));
 }
 function beginReintro(id) {
   const exps = loadExperiments();
@@ -10568,7 +10593,11 @@ function renderExperiments() {
   const listEl = document.getElementById('experiments-list');
   const dl = document.getElementById('exp-food-list');
   if (!listEl) return;
-  if (dl) dl.innerHTML = foodsForDatalist().slice(0, 200).map(f => `<option value="${escAttr(f)}"></option>`).join('');
+  if (dl) {
+    const running = new Set(loadExperiments().filter(e => e.status === 'eliminating' || e.status === 'reintroducing').map(e => normFood(e.food)));
+    dl.innerHTML = foodsForDatalist().slice(0, 200).map(f =>
+      `<option value="${escAttr(f)}">${running.has(normFood(f)) ? '🧪 running' : ''}</option>`).join('');
+  }
 
   const exps = loadExperiments();
   if (!exps.length) {
