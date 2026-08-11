@@ -4766,11 +4766,14 @@ function hasDuePending(e) {
   return WINDOWS.some(w => e.windows[w.key] == null && isWindowDue(e, w.key));
 }
 function updateLogsPendingBadge() {
-  const el = document.getElementById('logs-pending-badge');
-  if (!el) return;
   const n = loadMigrated().filter(hasDuePending).length;
-  el.style.display = n ? '' : 'none';
-  el.textContent = n > 99 ? '99+' : String(n);
+  // both navs: top (desktop) + bottom bar (phone) — same pattern as updateCheckinDot
+  ['logs-pending-badge', 'logs-pending-badge-m'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.style.display = n ? '' : 'none';
+    el.textContent = n > 99 ? '99+' : String(n);
+  });
 }
 function mealBadgeHTML(mt) {
   if (!mt) return '';
@@ -4964,7 +4967,7 @@ function initBottomNav() {
   if (!bar || !sheet) return;
   bar.innerHTML = NAV_ITEMS.filter(i => i.bar).map(i =>
     `<button class="bnav-btn${i.tab === 'checkin' ? ' active' : ''}" data-tab="${i.tab}" onclick="showTab('${i.tab}')">
-       <span class="bnav-ico">${i.ico}</span>${i.label}${i.tab === 'checkin' ? '<span id="checkin-dot-m" class="nav-dot" style="display:none;"></span>' : ''}</button>`
+       <span class="bnav-ico">${i.ico}</span>${i.label}${i.tab === 'checkin' ? '<span id="checkin-dot-m" class="nav-dot" style="display:none;"></span>' : ''}${i.tab === 'log' ? '<span id="logs-pending-badge-m" style="display:none; position:absolute; top:3px; right:calc(50% - 24px); background:#E74C3C; color:#fff; border-radius:9px; padding:0 5px; font-size:9px; font-weight:800; line-height:14px;"></span>' : ''}</button>`
   ).join('') +
   `<button class="bnav-btn" id="bnav-more-btn" onclick="toggleBottomSheet()"><span class="bnav-ico">⋯</span>More</button>`;
   sheet.innerHTML = `<div class="bsheet-grab"></div>` + NAV_ITEMS.filter(i => !i.bar).map(i =>
@@ -8280,14 +8283,21 @@ document.addEventListener('touchend', (ev) => {
     }
     node = node.parentNode;
   }
-  const btns = [...document.querySelectorAll('nav button[data-tab]')].filter(b => b.offsetParent !== null);
+  // top nav on desktop; on the phone it's hidden and the bottom bar takes over
+  // (v68 fix — swipe was dead on mobile, the device it was built for)
+  let btns = [...document.querySelectorAll('nav button[data-tab]')].filter(b => b.offsetParent !== null);
+  let fromBar = false;
+  if (!btns.length) {
+    btns = [...document.querySelectorAll('#bottom-nav .bnav-btn[data-tab]')].filter(b => b.offsetParent !== null);
+    fromBar = true;
+  }
   const active = document.querySelector('.tab-content.active');
-  if (!active) return;
+  if (!active || !btns.length) return;
   const idx = btns.findIndex(b => b.dataset.tab === active.id.replace(/^tab-/, ''));
   if (idx < 0) return;
   const next = btns[idx + (dx < 0 ? 1 : -1)];
   if (!next) return;
-  showTab(next.dataset.tab, next);
+  if (fromBar) showTab(next.dataset.tab); else showTab(next.dataset.tab, next);
   hapticTick();
 }, { passive: true });
 
@@ -11090,7 +11100,8 @@ function computeExperiment(exp) {
 
   // per-symptom baseline vs measured elimination
   const syms = allCheckinSymptoms();
-  const rows = exp.targetSyms.map(key => {
+  const rows = exp.targetSyms.map(rawKey => {
+    const key = rawKey === 'diarrhea' ? 'ci_focus' : rawKey;   // v68 legacy-key alias — old trials keep scoring
     const sym = syms.find(s => s.key === key);
     const base = meanCheckin(checkins, baseFrom, baseTo, key);
     const elim = meanCheckin(checkins, measFrom, measTo, key);
@@ -12893,7 +12904,7 @@ function normalizeImportedBackupData(rawData) {
         reintroStart: /^\d{4}-\d{2}-\d{2}$/.test(x.reintroStart || '') ? x.reintroStart : null,
         reintroDays: Number.isFinite(Number(x.reintroDays)) ? Number(x.reintroDays) : EXP_REINTRO_DAYS,
         endedAt: /^\d{4}-\d{2}-\d{2}$/.test(x.endedAt || '') ? x.endedAt : null,
-        targetSyms: Array.isArray(x.targetSyms) ? x.targetSyms.map(String) : [],
+        targetSyms: Array.isArray(x.targetSyms) ? x.targetSyms.map(k => String(k) === 'diarrhea' ? 'ci_focus' : String(k)) : [],
         createdAt: typeof x.createdAt === 'string' ? x.createdAt : ''
       }))
     : [];
@@ -14749,6 +14760,11 @@ function runSelfTest() {
     return (changed === true && c['2026-04-11'].ci_focus === 2 && !('diarrhea' in c['2026-04-11'])
       && c['2026-04-11'].energy === 3 && migrateCheckinKeys(c) === false)
       ? true : JSON.stringify(c);
+  });
+  t('backup import: legacy diarrhea key in trial targetSyms aliases to ci_focus', () => {
+    const n = normalizeImportedBackupData({ experiments: [{ id: 'e1', food: 'X', status: 'done', targetSyms: ['diarrhea', 'energy'] }] });
+    return (n.experiments[0] && JSON.stringify(n.experiments[0].targetSyms) === '["ci_focus","energy"]')
+      ? true : JSON.stringify(n.experiments[0] && n.experiments[0].targetSyms);
   });
   t('backup import: legacy diarrhea key aliases to ci_focus', () => {
     const n = normalizeImportedBackupData({ checkins: { '2026-04-11': { diarrhea: 2 } } });
