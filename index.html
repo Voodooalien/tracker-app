@@ -2058,6 +2058,19 @@ details.summary-fold > .fold-body { animation: foldIn .18s ease; }
   details.summary-fold > .fold-body, #summary-insights-wrap .card, .sym-btn .sev-sup, .bloom-confetti { animation:none; }
 }
 
+/* ── Doctor report print mode (v68) ── */
+#doctor-report-page { display:none; }
+body.doctor-print #doctor-report-page { display:block; position:fixed; inset:0; background:#fff; color:#111; overflow:auto; z-index:999999; padding:26px 30px; font-size:13px; line-height:1.55; font-family:system-ui,-apple-system,"Segoe UI",sans-serif; }
+#doctor-report-page .dr-h { font-size:15px; font-weight:800; margin:18px 0 6px; border-bottom:1px solid #bbb; padding-bottom:3px; }
+#doctor-report-page table td { vertical-align:top; }
+#doctor-report-page .dr-close { float:right; display:flex; gap:8px; }
+#doctor-report-page .dr-close button { padding:7px 14px; border-radius:7px; border:1px solid #999; background:#f4f4f4; color:#111; font-weight:700; cursor:pointer; }
+@media print {
+  body.doctor-print > *:not(#doctor-report-page) { display:none !important; }
+  body.doctor-print #doctor-report-page { position:static; overflow:visible; padding:0; }
+  #doctor-report-page .dr-close { display:none !important; }
+}
+
 /* ── Trials / Experiments ── */
 .exp-card.exp-active { border-left: 4px solid var(--w1); }
 .exp-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
@@ -2890,6 +2903,10 @@ try {
 <div id="backup-nag" style="display:none;"></div>
 <!-- Trial phase nudges + suggestions (filled by renderTrialNudge) -->
 <div id="trial-nudge" style="display:none;"></div>
+<!-- Due window-marks nudge (v68) -->
+<div id="marks-nudge" style="display:none;"></div>
+<!-- Doctor report page (v68) — filled on demand, print-only styling -->
+<div id="doctor-report-page"></div>
 
 <!-- ═══ LOG TAB ═══ -->
 <div id="tab-log" class="tab-content">
@@ -3077,7 +3094,7 @@ html body select.status-badge-select.status-blacklist {
           <button type="button" id="log-solo-btn" onclick="toggleLogSolo(this)" title="Mark the next entry as a SOLO test — a food eaten alone, so its reaction is clean, un-confounded data" style="border-radius:8px; padding:8px 12px; font-size:12px; font-weight:700; cursor:pointer; border:1px solid var(--border); background:var(--card); color:var(--muted); height:100%;">🔬 Solo</button>
         </div>
         <div class="form-group" style="flex: 0 1 auto; min-width: 0; margin: 0;">
-          <select id="log-age-sel" onchange="_logAge=this.value" title="Batch age — how old is this cooked batch? Histamine grows as food ages; tagging this tests it directly" class="elegant-log-input" style="max-width:110px; border-radius:8px; padding:8px; font-size:12px; font-weight:600;">
+          <select id="log-age-sel" onchange="setLogAge(this.value)" title="Batch age — how old is this cooked batch? Histamine grows as food ages; tagging this tests it directly" class="elegant-log-input" style="max-width:110px; border-radius:8px; padding:8px; font-size:12px; font-weight:600;">
             <option value="">🕒 Age —</option>
             <option value="fresh">🍳 Fresh</option>
             <option value="d2">🕒 Day-2</option>
@@ -3852,12 +3869,29 @@ window.__fstStorageReady = (function () {
   }
   function flushNow() { if (_timer != null) clearTimeout(_timer); flush(); }
 
+  // Cross-instance sync for OVERFLOW keys (audit-2): a key too big for native
+  // localStorage fires no 'storage' event in the other tab — without this lane
+  // a second open instance keeps stale data and can clobber the newer write.
+  let _bc = null;
+  try { _bc = new BroadcastChannel('fst-overflow-sync'); } catch (e) {}
+  if (_bc) _bc.onmessage = function (ev) {
+    const m = ev && ev.data;
+    if (!m || !m.k || typeof m.v !== 'string') return;
+    if (_mem[m.k] === m.v) return;
+    _mem[m.k] = m.v;
+    delete _putQ[m.k]; delete _delQ[m.k]; // the writing instance owns the IndexedDB write
+    if (typeof window.__fstExternalChange === 'function') window.__fstExternalChange(m.k);
+  };
+
   LS.getItem = function (k) { k = String(k); return Object.prototype.hasOwnProperty.call(_mem, k) ? _mem[k] : null; };
   LS.setItem = function (k, v) {
     k = String(k); v = String(v);
     _mem[k] = v; _putQ[k] = v; delete _delQ[k]; schedule();
     try { nSet(k, v); }
-    catch (e) { try { nDel(k); } catch (e2) {} } // too big for localStorage → drop stale copy; IndexedDB carries it
+    catch (e) {
+      try { nDel(k); } catch (e2) {} // too big for localStorage → drop stale copy; IndexedDB carries it
+      if (_bc) { try { _bc.postMessage({ k, v }); } catch (e3) {} } // overflow keys sync via the channel instead
+    }
   };
   LS.removeItem = function (k) { k = String(k); delete _mem[k]; _delQ[k] = 1; delete _putQ[k]; schedule(); try { nDel(k); } catch (e) {} };
   LS.clear = function () {
@@ -4215,7 +4249,21 @@ function setSoloBtnStyle(btn, on) {
   btn.style.color       = on ? '#fff' : 'var(--muted)';
   btn.style.borderColor = on ? 'var(--navy)' : 'var(--border)';
 }
-function toggleLogSolo(btn) { _logSolo = !_logSolo; setSoloBtnStyle(btn, _logSolo); }
+function toggleLogSolo(btn) {
+  _logSolo = !_logSolo;
+  setSoloBtnStyle(btn, _logSolo);
+  if (_logSolo && !localStorage.getItem('fst_solo_hint')) {
+    try { localStorage.setItem('fst_solo_hint', '1'); } catch (e) {}
+    toast('🔬 Solo: for a food eaten ALONE — clean, un-confounded trigger evidence');
+  }
+}
+function setLogAge(v) {
+  _logAge = v;
+  if (v && !localStorage.getItem('fst_age_hint')) {
+    try { localStorage.setItem('fst_age_hint', '1'); } catch (e) {}
+    toast('🕒 Batch age: fresh vs day-2/3+ servings get compared — a direct histamine test');
+  }
+}
 function toggleCorrFoodsOnly() { _corrFoodsOnly = !_corrFoodsOnly; renderCorrelations(); }
 function toggleCorrSoloOnly()  { _corrSoloOnly  = !_corrSoloOnly;  renderCorrelations(); }
 
@@ -4292,19 +4340,50 @@ function foodMealLift(entries) {
 // so it survives the full re-renders that range/filter chips trigger.
 let _summaryOpen = {};
 function summaryFold(key, title, inner) {
-  return `<details class="card summary-fold" style="margin-bottom:24px;" ${_summaryOpen[key] ? 'open' : ''} ontoggle="_summaryOpen['${key}']=this.open">
-    <summary><span class="fold-chev">▶</span> <span class="section-title" style="display:inline;margin:0;padding:0;border:none;">${title} <span style="font-size:11px;color:var(--muted);font-weight:500;">NEW</span></span></summary>
+  // NEW badge only until first opened (audit-2: it was permanent, carrying no signal)
+  let seen = false;
+  try { seen = !!localStorage.getItem('fst_fold_seen_' + key); } catch (e) {}
+  return `<details class="card summary-fold" style="margin-bottom:24px;" ${_summaryOpen[key] ? 'open' : ''} ontoggle="_summaryOpen['${key}']=this.open; if(this.open){try{localStorage.setItem('fst_fold_seen_${key}','1')}catch(e){}}">
+    <summary><span class="fold-chev">▶</span> <span class="section-title" style="display:inline;margin:0;padding:0;border:none;">${title}${seen ? '' : ' <span style="font-size:11px;color:var(--muted);font-weight:500;">NEW</span>'}</span></summary>
     <div class="fold-body" style="margin-top:10px;">${inner}</div>
   </details>`;
+}
+// v68 enhancement: trial state per food — analysis cards stop offering "Test"
+// for foods already proven, cleared, or being tested right now, and instead
+// show the same conclusion the Learned tab reached.
+function trialStateMap() {
+  const map = {};
+  loadExperiments().forEach(e => {
+    const k = normFood(e.food);
+    if (e.status === 'eliminating' || e.status === 'reintroducing') { map[k] = { s: 'active' }; return; }
+    if (e.status === 'done' && !(map[k] && map[k].s === 'active')) {
+      const prev = map[k];
+      if (!prev || prev.s !== 'done' || e.elimStart > prev.start) {
+        map[k] = { s: 'done', v: computeExperiment(e).verdict, start: e.elimStart };
+      }
+    }
+  });
+  return map;
+}
+function trialBadgeHTML(food, tmap) {
+  const t = tmap[normFood(food)];
+  const testBtn = ` <button class="verdict-test-btn" title="Start a controlled avoid-and-reintroduce trial on this food" onclick="startExperiment(${escAttr(JSON.stringify(food))})">🧪 Test</button>`;
+  if (!t) return testBtn;
+  if (t.s === 'active') return ' <span style="font-size:10.5px;font-weight:700;color:#0F6E56;white-space:nowrap;">🧪 testing now</span>';
+  if (t.v === 'helped') return ' <span title="a finished trial: you improved while avoiding it" style="font-size:10.5px;font-weight:700;color:#d03b3b;white-space:nowrap;">🧪 likely trigger</span>';
+  if (t.v === 'nochange') return ' <span title="a finished trial: no change while avoiding it" style="font-size:10.5px;font-weight:700;color:#0ca30c;white-space:nowrap;">🧪 cleared</span>';
+  if (t.v === 'worse') return ' <span title="a finished trial: you got worse while avoiding it — inconclusive" style="font-size:10.5px;font-weight:700;color:var(--muted);white-space:nowrap;">🧪 inconclusive</span>';
+  return testBtn;   // done-but-verdict-less → worth a proper re-test
 }
 function mealSuspectsCard(entries) {
   const rows = foodMealLift(entries).filter(r => r.nMeals >= 5);
   if (rows.length < 3) return '';
+  const tmap = trialStateMap();
   const worst = rows.slice(0, 12);
   const best  = rows.slice(-6).reverse();
   const fmt = n => (n >= 0 ? '+' : '') + n.toFixed(1);
   const liftColor = l => l > 0.5 ? '#d03b3b' : (l < -0.5 ? '#0ca30c' : 'var(--muted)');
-  const row = (r, testable) => `<tr><td class="food-col">${esc(r.food)}${r.soloN ? ` <span title="${r.soloN} clean solo test(s)" style="color:#0ca30c;font-weight:700;">🔬${r.soloN}</span>` : ''}${testable ? ` <button class="verdict-test-btn" title="Start a controlled avoid-and-reintroduce trial on this food" onclick="startExperiment(${escAttr(JSON.stringify(r.food))})">🧪 Test</button>` : ''}</td>`
+  const row = (r, testable) => `<tr><td class="food-col">${esc(r.food)}${r.soloN ? ` <span title="${r.soloN} clean solo test(s)" style="color:#0ca30c;font-weight:700;">🔬${r.soloN}</span>` : ''}${testable ? trialBadgeHTML(r.food, tmap) : ''}</td>`
     + `<td style="text-align:center;">${r.nMeals}</td>`
     + `<td style="text-align:center;">${r.wMean.toFixed(1)}</td>`
     + `<td style="text-align:center;font-weight:800;color:${liftColor(r.lift)};">${fmt(r.lift)}</td></tr>`;
@@ -4485,7 +4564,7 @@ function trendStripHTML(entries, checkins) {
   return `<div class="card" style="margin-bottom:24px; display:flex; gap:22px; flex-wrap:wrap; align-items:center;">
     ${s1 ? `<div><div style="font-size:10.5px;color:var(--muted);font-weight:700;letter-spacing:.4px;">DAY SCORE · 30d${lastScore != null ? ' · now ' + lastScore : ''}</div>${s1}</div>` : ''}
     ${s2 ? `<div><div style="font-size:10.5px;color:var(--muted);font-weight:700;letter-spacing:.4px;">MEAL BADNESS · 30d${lastBad != null ? ' · now ' + lastBad.toFixed(1) : ''}</div>${s2}</div>` : ''}
-    <div style="font-size:10.5px;color:var(--muted);">green up = better days · red down = calmer meals</div>
+    <div style="font-size:10.5px;color:var(--muted);">always last 30 days — the range chips don't apply here · green up = better days · red down = calmer meals</div>
   </div>`;
 }
 
@@ -4548,6 +4627,7 @@ function timingConsistency(entriesOfFood) {
   return { win: best[0].toUpperCase(), share: best[1] / tot, n: tot };
 }
 function symptomFingerprintsCard(entries) {
+  entries = entries.filter(e => !isUnscoredEntry(e));   // same dilution rule as every sibling engine
   const clusters = clusterSymptoms(entries, Object.keys(_BADW)).filter(c => c.length >= 2);
   if (!clusters.length) return '';
   const lab = {}; allSymptoms().forEach(s => { lab[s.key] = s.label; });
@@ -4606,8 +4686,13 @@ function buildDayFrame(entries, checkins) {
       if (!isNaN(hh) && hh < 12) d.morning += g;
     }
   });
+  // per-day gated grams (null = coverage too poor to trust) — yesterday must
+  // pass the SAME gate before feeding grams48, else "untagged" reads as "fasted"
   const gByDate = {};
-  Object.keys(byDay).forEach(dt => { gByDate[dt] = byDay[dt].grams; });
+  Object.keys(byDay).forEach(dt => {
+    const d = byDay[dt];
+    gByDate[dt] = (d.gramsN > 0 && d.gramsN >= d.n * 0.5) ? d.grams : null;
+  });
   const rows = [];
   Object.keys(checkins).forEach(date => {
     const ci = checkins[date];
@@ -4621,7 +4706,7 @@ function buildDayFrame(entries, checkins) {
       date, score: ci.ci_day_score,
       sleep: ci.ci_last_nights_sleep != null ? ci.ci_last_nights_sleep : null,
       grams: gramsOk ? d.grams : null,
-      grams48: gramsOk ? d.grams + (gByDate[addDays(date, -1)] || 0) : null,
+      grams48: (gramsOk && gByDate[addDays(date, -1)] != null) ? d.grams + gByDate[addDays(date, -1)] : null,
       mealsN: d ? d.meals.size : 0,
       itemsN: d ? d.n : 0,
       morningShare: d && d.grams > 0 ? d.morning / d.grams : null,
@@ -4657,7 +4742,9 @@ function bestFoodDayEffect(entries, checkins) {
   let best = null;
   Object.entries(daysByFood).forEach(([food, dset]) => {
     const on = [], off = [];
-    ciDates.forEach(d => (dset.has(d) ? on : off).push(checkins[d].ci_day_score));
+    // exposure counts toward the eaten day AND the following one — a late
+    // dinner's reaction windows land on the next calendar day (audit-2)
+    ciDates.forEach(d => ((dset.has(d) || dset.has(addDays(d, -1))) ? on : off).push(checkins[d].ci_day_score));
     if (on.length < 12 || off.length < 12) return;
     const delta = _avg(on) - _avg(off);
     if (!best || Math.abs(delta) > Math.abs(best.delta)) best = { food, delta, onN: on.length };
@@ -4717,13 +4804,14 @@ function naturalGaps(entries, checkins) {
 function naturalGapsCard(entries, checkins) {
   const rows = naturalGaps(entries, checkins);
   if (!rows.length) return '';
+  const tmap = trialStateMap();
   const sus = rows.filter(r => r.delta > 0).slice(0, 6);
   const fine = rows.filter(r => r.delta < 0).slice(-4).reverse();
   const row = (r, suspect) => `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:12.5px;">
       <div style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escAttr(r.food)}">${esc(r.food)}</div>
       <div style="color:var(--muted);font-size:11.5px;white-space:nowrap;">avoided ${r.gapN}d ${r.gapScore.toFixed(1)} vs eaten ${r.expScore.toFixed(1)}</div>
       <div style="font-weight:800;color:${suspect ? '#d03b3b' : '#0ca30c'};min-width:40px;text-align:right;">${(r.delta >= 0 ? '+' : '') + r.delta.toFixed(1)}</div>
-      ${suspect ? `<button class="verdict-test-btn" title="Confirm with a controlled trial" onclick="startExperiment(${escAttr(JSON.stringify(r.food))})">🧪 Test</button>` : ''}
+      ${suspect ? trialBadgeHTML(r.food, tmap) : ''}
     </div>`;
   return summaryFold('gaps', '⛏️ Natural elimination findings', `
     <div style="font-size:11px;color:var(--muted);margin-bottom:10px;">Mined from history: days you happened to skip a staple for ≥2 days in a row, scored against days you ate it (Overall Daily Score, washout day excluded). Observational — confirm with 🧪 trials.</div>
@@ -4758,6 +4846,88 @@ function toast(msg) {
 function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function escAttr(s) { return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function hasPending(e) { return WINDOWS.some(w => e.windows[w.key] === null || e.windows[w.key] === undefined); }
+// v68 enhancement: 🩺 Doctor report — one tap turns 119+ days of logging into a
+// printable clinical summary from the engines that already exist. STRICTLY
+// on-device: fills a local div and opens the system print dialog (save-as-PDF);
+// nothing is uploaded anywhere (hard privacy rule).
+function openDoctorReport() {
+  const el = document.getElementById('doctor-report-page');
+  if (!el) return;
+  const E = loadMigrated().filter(e => effectiveItemType(e) === 'food');
+  const CI = loadCheckins();
+  const dates = E.map(e => e.date).sort();
+  const nDays = new Set(dates).size;
+  const rows = foodMealLift(E).filter(r => r.nMeals >= 8);
+  const worst = rows.slice(0, 8), best = rows.slice(-6).reverse();
+  const trials = loadExperiments().filter(x => x.status === 'done')
+    .map(x => ({ x, v: computeExperiment(x).verdict }))
+    .filter(t => t.v === 'helped' || t.v === 'nochange' || t.v === 'worse');
+  const dose = doseResponse(E).filter(c => c.doseLinked);
+  const age = batchAgeStats(E);
+  const drs = dayDrivers(buildDayFrame(E, CI));
+  const lab = {}; allSymptoms().forEach(s => { lab[s.key] = s.label; });
+  const clusters = clusterSymptoms(E, Object.keys(_BADW)).filter(c => c.length >= 2);
+  const mo = {};
+  Object.entries(CI).forEach(([d, v]) => { if (v.ci_day_score != null) (mo[d.slice(0, 7)] || (mo[d.slice(0, 7)] = [])).push(v.ci_day_score); });
+  const days30 = []; for (let i = 29; i >= 0; i--) days30.push(addDays(today(), -i));
+  const score30 = days30.map(d => { const c = CI[d]; return c && c.ci_day_score != null ? c.ci_day_score : null; });
+  const fmt = n => (n >= 0 ? '+' : '') + n.toFixed(1);
+  el.innerHTML = `
+    <div class="dr-close"><button onclick="window.print()">🖨️ Print / Save PDF</button><button onclick="closeDoctorReport()">✕ Close</button></div>
+    <h2 style="margin:0 0 2px;">Food &amp; Symptom Tracker — Clinical Summary</h2>
+    <div style="color:#555;">Generated ${today()} · data ${esc(dates[0] || '—')} → ${esc(dates[dates.length - 1] || '—')} · ${nDays} tracked days · ${E.length} food servings · ${Object.keys(CI).length} daily check-ins. Self-reported, single-subject, observational.</div>
+    <div class="dr-h">Overall daily score by month (1 = severe … 5 = good)</div>
+    <div>${Object.keys(mo).sort().map(m => `${m}: <b>${(mo[m].reduce((a, b) => a + b, 0) / mo[m].length).toFixed(2)}</b> (${mo[m].length}d)`).join(' · ') || '—'}</div>
+    <div style="margin-top:4px;">Last 30 days: ${sparklineSVG(score30, '#0a7a4f') || '(insufficient data)'}</div>
+    <div class="dr-h">Foods most associated with worse meals (meal-aware lift; + = worse when present)</div>
+    <table>${worst.map(r => `<tr><td style="padding:1px 12px 1px 0;">${esc(r.food)}</td><td style="padding:1px 8px;"><b>${fmt(r.lift)}</b></td><td style="color:#555;">${r.nMeals} meals</td></tr>`).join('') || '<tr><td>—</td></tr>'}</table>
+    <div class="dr-h">Best tolerated (meals run calmer when present)</div>
+    <table>${best.map(r => `<tr><td style="padding:1px 12px 1px 0;">${esc(r.food)}</td><td style="padding:1px 8px;"><b>${fmt(r.lift)}</b></td><td style="color:#555;">${r.nMeals} meals</td></tr>`).join('') || '<tr><td>—</td></tr>'}</table>
+    <div class="dr-h">Controlled avoidance trials (finished, conclusive)</div>
+    ${trials.length ? trials.map(t => `<div>• <b>${esc(t.x.food)}</b> — avoided from ${esc(t.x.elimStart)}${t.x.endedAt ? ' to ' + esc(t.x.endedAt) : ''}: ${t.v === 'helped' ? '<b>improved while avoiding (likely trigger)</b>' : t.v === 'nochange' ? 'no change (probably not a trigger)' : 'worse while avoiding (inconclusive)'}</div>`).join('') : '<div style="color:#555;">None finished yet.</div>'}
+    <div class="dr-h">Dose-response signals (more grams → worse reaction)</div>
+    ${dose.length ? dose.map(c => `<div>• ${esc(c.label)} — r ${c.r.toFixed(2)} across ${c.n} servings</div>`).join('') : '<div style="color:#555;">No statistically clear dose-response yet.</div>'}
+    <div class="dr-h">Cooked-batch age comparison (histamine screen)</div>
+    ${age.groups.length >= 2 ? age.groups.map(g => `${esc(g.lbl)}: <b>${g.bad.toFixed(1)}</b> (${g.n} servings)`).join(' · ') : '<div style="color:#555;">Not enough age-tagged servings yet.</div>'}
+    <div class="dr-h">Day-level drivers (median split on daily score; Δ = high-half − low-half)</div>
+    ${drs.map(d => `<div>• ${esc(d.lbl.replace(/^[^\s]+\s/, ''))}: <b>${fmt(d.delta)}</b> (${d.n} days)</div>`).join('') || '—'}
+    <div class="dr-h">Symptom co-occurrence clusters</div>
+    ${clusters.map(c => `<div>• ${c.map(k => esc(lab[k] || k)).join(', ')}</div>`).join('') || '—'}
+    <div class="dr-h">Method note</div>
+    <div style="color:#555;">"Lift" compares mean meal-badness (weighted symptom + reaction-window score) for meals containing a food vs meals without it; unrated servings are excluded. Reaction windows: 0–4 / 5–8 / 9–13 / 14–17 h post-meal, marked ✓ clear or ✕ reacted. Symptom severity mild/strong/severe weighted ×1/×1.5/×2. Generated entirely on-device.</div>`;
+  document.body.classList.add('doctor-print');
+  el.scrollTop = 0;
+}
+function closeDoctorReport() {
+  document.body.classList.remove('doctor-print');
+  const el = document.getElementById('doctor-report-page');
+  if (el) el.innerHTML = '';
+}
+
+// v68 enhancement: due-marks nudge — unmarked windows are EXCLUDED from every
+// analysis (isUnscoredEntry), so letting them pile up silently loses trigger
+// evidence. Nags like the check-in/backup bars do, dismissable per day.
+function renderMarksNudge() {
+  const el = document.getElementById('marks-nudge');
+  if (!el) return;
+  const logTab = document.getElementById('tab-log');
+  const onLog = logTab && logTab.classList.contains('active');
+  const n = loadMigrated().filter(hasDuePending).length;
+  let dismissed = false;
+  try { dismissed = localStorage.getItem('fst_marks_nudge_dismissed') === today(); } catch (e) {}
+  if (onLog || n < 5 || dismissed) { el.style.display = 'none'; el.innerHTML = ''; return; }
+  el.style.display = '';
+  el.innerHTML = `<div class="reminder-bar trial">
+    <span class="reminder-text">⏱ ${n} window marks are due — unmarked windows don't count in any analysis.</span>
+    <button class="reminder-fill" onclick="showTab('log', document.querySelector('nav button[data-tab=&quot;log&quot;]'))">Open Logs</button>
+    <button class="reminder-dismiss" onclick="dismissMarksNudge()" title="Hide for today">✕</button>
+  </div>`;
+}
+function dismissMarksNudge() {
+  try { localStorage.setItem('fst_marks_nudge_dismissed', today()); } catch (e) {}
+  renderMarksNudge();
+}
+
 // v68: ONE definition of "pending work" everywhere — an entry counts when at
 // least one unmarked window is actually DUE (fully elapsed, per isWindowDue).
 // The badge, the Today strip, and "✓ All due" now agree (audit batch 2); the
@@ -5604,6 +5774,11 @@ function markSymptom(id, symKey) {
     target.symptoms[symKey] = nextValue;
   });
   save(entries);
+  // first-use hint (audit-2): mobile users never see title tooltips
+  if (nextValue === 2 && !localStorage.getItem('fst_sev_hint')) {
+    try { localStorage.setItem('fst_sev_hint', '1'); } catch (e) {}
+    toast('Severity ²: tap again for severe ³, once more to clear');
+  }
   renderAfterMark();
 }
 
@@ -5816,7 +5991,7 @@ function saveEdit(renameAll) {
 // merge can be reverted one step without touching anything logged afterwards.
 function migrateFoodReferences(oldName, newName, undo) {
   const oldNorm = normFood(oldName);
-  const report = { notes: 0, status: 0, bundles: 0, experiments: 0, dictionary: 0, faceMap: 0 };
+  const report = { notes: 0, status: 0, bundles: 0, experiments: 0, dictionary: 0, faceMap: 0, itemTypes: 0 };
 
   // notes/status maps can hold stray keys under old casings — move them all
   const notes = loadFoodNotes();
@@ -5889,6 +6064,22 @@ function migrateFoodReferences(oldName, newName, undo) {
     report.faceMap = hitMarks.length;
   }
 
+  // per-food item-type overrides are keyed by exact name too (v68 audit-2) —
+  // a rename used to orphan the override and silently reclassify the item.
+  const typeMap = loadItemTypeMap();
+  const typeKeys = Object.keys(typeMap).filter(k => normFood(k) === oldNorm && k !== newName);
+  if (typeKeys.length) {
+    if (undo && undo.itemTypes) {
+      typeKeys.forEach(k => { if (!(k in undo.itemTypes)) undo.itemTypes[k] = typeMap[k]; });
+      if (!(newName in undo.itemTypes)) undo.itemTypes[newName] = (newName in typeMap) ? typeMap[newName] : null;
+    }
+    const m = { ...typeMap };
+    if (m[newName] === undefined) m[newName] = m[typeKeys[0]];  // the target's own override wins
+    typeKeys.forEach(k => delete m[k]);
+    saveItemTypeMap(m);   // also invalidates the _typeByName cache
+    report.itemTypes = typeKeys.length;
+  }
+
   return report;
 }
 
@@ -5911,6 +6102,7 @@ function collectFoodImpact(from, to) {
     exps: exps.length,
     activeTrial: exps.some(x => x.status === 'eliminating' || x.status === 'reintroducing'),
     dict: loadFoodDictionary().filter(n => normFood(n) === fromNorm).length,
+    typeOverrides: Object.keys(loadItemTypeMap()).filter(k => normFood(k) === fromNorm && k !== to).length,
     faceMarks: loadFaceMap().filter(m => m && normFood(m.food) === fromNorm && m.food !== to).length
   };
 }
@@ -5973,6 +6165,9 @@ function undoFoodMerge() {
   const status = loadFoodStatus();
   Object.keys(u.status || {}).forEach(k => { if (u.status[k] === null) delete status[k]; else status[k] = u.status[k]; });
   saveFoodStatus(status);
+  const tmap = { ...loadItemTypeMap() };
+  Object.keys(u.itemTypes || {}).forEach(k => { if (u.itemTypes[k] === null) delete tmap[k]; else tmap[k] = u.itemTypes[k]; });
+  saveItemTypeMap(tmap);
   const bundles = loadBundles();
   (u.bundles || []).forEach(pi => { const b = bundles.find(x => x.id === pi.id); if (b) b.items = pi.items; });
   saveBundles(bundles);
@@ -6153,7 +6348,7 @@ async function confirmFoodMerge() {
     if (!confirm('Could not save a safety snapshot first (' + (e && e.message) + ').\n\nProceed with the merge anyway?')) return;
   }
   // 2. surgical undo record + apply
-  const undo = { ts: Date.now(), from, to, entries: [], notes: {}, status: {}, bundles: [], experiments: [], dictionary: [], faceMap: [] };
+  const undo = { ts: Date.now(), from, to, entries: [], notes: {}, status: {}, bundles: [], experiments: [], dictionary: [], faceMap: [], itemTypes: {} };
   const entries = loadMigrated();
   entries.forEach(e => { if (e.food === from) { undo.entries.push({ id: e.id, food: e.food }); e.food = to; } });
   save(entries);
@@ -8220,6 +8415,9 @@ function repeatYesterdayMeal(mealKey) {
 function renderTodayStrip() {
   const el = document.getElementById('today-strip');
   if (!el) return;
+  // keep the log-form date clamped to today (renders daily; survives midnight)
+  const di = document.getElementById('inp-date');
+  if (di) di.max = today();
   const t = today();
   const es = loadMigrated();
   const todays = es.filter(e => e.date === t);
@@ -8229,6 +8427,7 @@ function renderTodayStrip() {
   const score = ci.ci_day_score;
   const days = new Set(es.map(e => e.date));
   let streak = 0, d = t;
+  if (!days.has(d)) d = addDays(d, -1);   // morning grace — same rule as checkinStreak
   while (days.has(d)) { streak++; d = addDays(d, -1); }
   el.innerHTML = `<div style="display:flex; gap:14px; flex-wrap:wrap; align-items:center; background:var(--card); border:1px solid var(--border); border-radius:10px; padding:8px 14px; margin-bottom:14px; font-size:12.5px;">
     <span>🧾 <b>${todays.length}</b> item${todays.length === 1 ? '' : 's'} today</span>
@@ -9088,10 +9287,16 @@ function renderFactors() {
 }
 
 // ─── Data Management (Fresh Start with Memory) ───────────────────────────────
-window.promptClearLogs = function() {
+window.promptClearLogs = async function() {
   const confirmation = prompt("⚠️ WARNING: This will permanently delete your daily history, but KEEP your food names saved for autocomplete.\n\nYour custom symptoms, bundles, and diary sections will also be kept safe.\n\nTo proceed, make a backup file that stores all data from the previous year so that you can always import it if you ever need to look back on old data, when you are ready type the word DELETE exactly as shown:");
-  
+
   if (confirmation === "DELETE") {
+    // v68 audit-2: same auto-snapshot protection every other destructive flow
+    // has (merge, import, restore) — this was the one with none.
+    try { if (window.__fstTakeSnapshot) await window.__fstTakeSnapshot(false); }
+    catch (e) {
+      if (!confirm('Could not save a safety snapshot first — clear anyway?')) { toast('Deletion cancelled.'); return; }
+    }
     const entries = loadMigrated();
 
     // 1. Keep every unique food name for autocomplete — as a plain name list.
@@ -9367,6 +9572,7 @@ function renderDiary2() {
         <div class="storage-meter-cell"><div class="storage-meter-cell-label">Other App Data</div><div class="storage-meter-cell-value">${esc(formatBytes(meter.parts.extras))}</div></div>
       </div>
       <div style="display:flex; justify-content:flex-end; align-items:center; margin-top:16px; flex-wrap:wrap; gap:10px; padding-top:12px; border-top:1px dashed var(--border);">
+        <button onclick="openDoctorReport()" title="A printable clinical summary of your data — built on-device, print or save as PDF; nothing is uploaded" style="border:1.5px solid var(--border); background:var(--card); color:var(--text); padding:6px 12px; border-radius:6px; font-size:12px; font-weight:700; cursor:pointer;">🩺 Doctor report</button>
         <div style="display:inline-flex; align-items:center; gap:6px;">
           <button class="delete-btn" style="border:1.5px solid var(--neg); padding:6px 12px; border-radius:6px; font-size:12px; font-weight:700;" onclick="promptClearLogs()">
             🛑 Clear Logs & Vitals
@@ -10351,7 +10557,12 @@ function computeAnomalies(opts) {
       a.quiet = [];
     }
     a.trials = experiments.filter(x => x.elimStart && a.date >= x.elimStart
-      && a.date <= addDays(x.elimStart, x.elimDays || 0)).map(x => x.food);
+      && a.date <= (function () {
+        // last REAL avoidance day: elimStart + elimDays − 1, truncated at an
+        // early "Finish now" — same rule computeExperiment applies (audit-2)
+        const planned = addDays(x.elimStart, (x.elimDays || 1) - 1);
+        return (x.endedAt && x.endedAt < planned) ? x.endedAt : planned;
+      })()).map(x => x.food);
     // sparkline: the first moved symptom's scores around the break
     const sk = a.syms[0].key;
     const sFrom = addDays(a.type === 'slide' ? a.from : a.date, a.type === 'slide' ? -4 : -8);
@@ -10524,7 +10735,7 @@ function renderWeekly() {
   const rows = W.scores.map(s => {
     const d = weeklyDelta(s.cur, s.prev);
     return `<div class="weekly-row">
-      <span class="weekly-sym">${s.label}</span>
+      <span class="weekly-sym">${esc(s.label)}</span>
       <span class="weekly-vals">${f1(s.prev)} → <strong>${f1(s.cur)}</strong></span>
       <span class="weekly-delta ${d.cls}">${d.txt}</span>
     </div>`;
@@ -11286,6 +11497,11 @@ function finishExperiment(id) {
   const exps = loadExperiments();
   const e = exps.find(x => x.id === id);
   if (!e) return;
+  // v68 audit-2: finishing while still Collecting permanently locks in a
+  // verdict-less trial (Learned drops those) — warn first, and always give
+  // feedback about where the verdict went.
+  const v = computeExperiment(e).verdict;
+  if (v === 'collecting' && !confirm('No verdict yet — not enough check-in data during avoidance. Finish anyway? (A verdict-less trial contributes no evidence.)')) return;
   e.status = 'done';
   // Cap the measurement window at the finish tap — check-ins after the user
   // resumed eating must not count as "avoidance" days.
@@ -11293,6 +11509,8 @@ function finishExperiment(id) {
   saveExperiments(exps);
   computeTrialSuggestion();
   render();
+  toast(v === 'collecting' ? 'Trial closed (no verdict)' : 'Trial finished — verdict saved, see 🧠 Learned ✓');
+  hapticTick();
 }
 function deleteExperiment(id) {
   if (!confirm('Delete this trial? Your logs and check-ins are not affected.')) return;
@@ -11331,7 +11549,7 @@ function renderExperiments() {
     const phaseLabel = exp.status === 'eliminating' ? `Avoiding · day ${c.elimDayNum} of ${exp.elimDays}`
       : exp.status === 'reintroducing' ? 'Reintroducing' : 'Finished';
 
-    const slipWarn = (exp.status === 'eliminating' && c.slipDays.length)
+    const slipWarn = (c.slipDays.length)   // v68 audit-2: slips stay visible on finished trials too
       ? `<div class="exp-slip">⚠️ Logged on ${c.slipDays.length} day(s) during avoidance — adherence ${exp.elimDays - c.slipDays.length}/${exp.elimDays}. Result shown anyway, but weaker.</div>` : '';
 
     const rowsHtml = c.rows.map(r => {
@@ -11340,7 +11558,7 @@ function renderExperiments() {
       const arrow = d == null ? '' : d >= 0.4 ? `▲ +${d.toFixed(1)}` : d <= -0.4 ? `▼ ${d.toFixed(1)}` : '→';
       const reintroTxt = r.reintro && r.reintro.avg != null ? ` · reintro ${f1(r.reintro.avg)}` : '';
       return `<div class="weekly-row">
-        <span class="weekly-sym">${r.label}</span>
+        <span class="weekly-sym">${esc(r.label)}</span>
         <span class="weekly-vals">base ${f1(r.base.avg)} → avoid <strong>${f1(r.elim.avg)}</strong>${reintroTxt}</span>
         <span class="weekly-delta ${cls}">${arrow}</span>
       </div>`;
@@ -11409,7 +11627,10 @@ function learnedData() {
   loadExperiments().filter(e => e.status === 'done').forEach(e => {
     const t = normFood(e.food);
     const prev = trials[t];
-    if (!prev || e.elimStart > prev.start) trials[t] = { name: e.food, verdict: computeExperiment(e).verdict, start: e.elimStart };
+    if (!prev || e.elimStart > prev.start) {
+      const ce = computeExperiment(e);
+      trials[t] = { name: e.food, verdict: ce.verdict, start: e.elimStart, slips: (ce.slipDays && ce.slipDays.length) || 0 };
+    }
   });
   const statusByNorm = {};
   Object.entries(status).forEach(([k, v]) => { statusByNorm[normFood(k)] = { name: k, label: v }; });
@@ -11438,7 +11659,7 @@ function learnedData() {
     // the Test button) while contributing no evidence at all.
     const conclusive = tr && (tr.verdict === 'helped' || tr.verdict === 'worse' || tr.verdict === 'nochange');
     if (conclusive) {
-      if (tr.verdict === 'helped') avoid.push({ src: 'trial', strength: 3, text: '🧪 Trial: you improved while avoiding it (likely trigger)' });
+      if (tr.verdict === 'helped') avoid.push({ src: 'trial', strength: 3, text: `🧪 Trial: you improved while avoiding it (likely trigger)${tr.slips >= 2 ? ` — but adherence was weak (${tr.slips} slip days), treat with caution` : ''}` });
       // "Worse while avoiding" usually means something ELSE flared that week —
       // weak evidence of safety, not trial-proof (was strength 3, able to
       // outrank the user's own 🚩 label).
@@ -11553,6 +11774,7 @@ function render() {
   renderBackupNag();
   renderTrialNudge();
   updateLogsPendingBadge();
+  renderMarksNudge();
   // Render ONLY the visible tab. Rendering all ~19 sections on every tap
   // rebuilt the entire app per interaction — the main source of mobile jank.
   // Every tab switch routes through showTab() → render(), so a newly-opened
@@ -12614,23 +12836,38 @@ function verifyBackupText(text, fileName) {
     d: _vbDiffMaps(toMap(norm.experiments, x => x.id, x => JSON.stringify(x)),
                    toMap(normalizeImportedBackupData({ experiments: loadExperiments() }).experiments, x => x.id, x => JSON.stringify(x))) });
 
-  sections.push({ label: '🍱 Bundles', unit: 'bundles',
-    fileN: norm.bundles.length, liveN: loadBundles().length,
-    d: _vbDiffMaps(toMap(norm.bundles, b => b.id, b => JSON.stringify({ n: b.name, i: b.items, m: b.mealType, t: b.logTime })),
-                   toMap(loadBundles(), b => b.id, b => JSON.stringify({ n: b.name, i: b.items || [], m: b.mealType || '', t: b.logTime || '' }))) });
+  // v68 audit-2: several sections are NULL for files predating their field —
+  // note it instead of crashing on null.length (restore keeps the live data).
+  const vbNotes = [];
+  if (norm.bundles === null) {
+    vbNotes.push('🍱 This backup predates bundles — restoring it keeps your current bundles.');
+  } else {
+    sections.push({ label: '🍱 Bundles', unit: 'bundles',
+      fileN: norm.bundles.length, liveN: loadBundles().length,
+      d: _vbDiffMaps(toMap(norm.bundles, b => b.id, b => JSON.stringify({ n: b.name, i: b.items, m: b.mealType, t: b.logTime })),
+                     toMap(loadBundles(), b => b.id, b => JSON.stringify({ n: b.name, i: b.items || [], m: b.mealType || '', t: b.logTime || '' }))) });
+  }
 
-  sections.push({ label: '📋 Check-in symptoms', unit: 'symptoms',
-    fileN: norm.checkinSyms.length, liveN: loadCheckinSyms().length,
-    d: _vbDiffMaps(toMap(norm.checkinSyms, s => s.key, s => String(s.label)), toMap(loadCheckinSyms(), s => s.key, s => String(s.label))) });
+  if (norm.checkinSyms === null) {
+    vbNotes.push('📋 This backup predates the check-in symptom list — restoring it keeps your current list.');
+  } else {
+    sections.push({ label: '📋 Check-in symptoms', unit: 'symptoms',
+      fileN: norm.checkinSyms.length, liveN: loadCheckinSyms().length,
+      d: _vbDiffMaps(toMap(norm.checkinSyms, s => s.key, s => String(s.label)), toMap(loadCheckinSyms(), s => s.key, s => String(s.label))) });
+  }
 
   sections.push({ label: '🩺 Entry symptoms (custom)', unit: 'symptoms',
     fileN: norm.customSyms.length, liveN: loadCustomSyms().length,
     d: _vbDiffMaps(toMap(norm.customSyms, s => s.key, s => String(s.label)), toMap(loadCustomSyms(), s => s.key, s => String(s.label))) });
 
-  sections.push({ label: '📓 Diary sections', unit: 'sections',
-    fileN: norm.archives.length, liveN: loadArchives().length,
-    d: _vbDiffMaps(toMap(norm.archives, a => a.id, a => JSON.stringify(a)),
-                   toMap(normalizeImportedBackupData({ archives: loadArchives() }).archives, a => a.id, a => JSON.stringify(a))) });
+  if (norm.archives === null) {
+    vbNotes.push('📓 This backup predates Diary sections — restoring it keeps your current Diary.');
+  } else {
+    sections.push({ label: '📓 Diary sections', unit: 'sections',
+      fileN: norm.archives.length, liveN: loadArchives().length,
+      d: _vbDiffMaps(toMap(norm.archives, a => a.id, a => JSON.stringify(a)),
+                     toMap(normalizeImportedBackupData({ archives: loadArchives() }).archives, a => a.id, a => JSON.stringify(a))) });
+  }
 
   // Dictionary: pre-v58 files simply don't have it (restore keeps the live list)
   let dictNote = null;
@@ -12659,6 +12896,18 @@ function verifyBackupText(text, fileName) {
                      toMap(normalizeImportedBackupData({ faceMap: loadFaceMap() }).faceMap, m => m.id, m => JSON.stringify(m))) });
   }
 
+  // Item-type overrides (v68): pre-v68 files don't carry them (restore keeps live)
+  if (norm.itemTypes === null) {
+    const liveT = Object.keys(loadItemTypeMap()).length;
+    if (liveT) vbNotes.push(`🏷️ This backup predates item-type overrides (${liveT} live) — restoring keeps yours, but re-save a backup to cover them.`);
+  } else {
+    const liveTypeMap = loadItemTypeMap();
+    sections.push({ label: '🏷️ Item-type overrides', unit: 'overrides',
+      fileN: Object.keys(norm.itemTypes).length, liveN: Object.keys(liveTypeMap).length,
+      d: _vbDiffMaps(toMap(Object.keys(norm.itemTypes), k => k, k => String(norm.itemTypes[k])),
+                     toMap(Object.keys(liveTypeMap), k => k, k => String(liveTypeMap[k]))) });
+  }
+
   // Tripwire: any fst_* key in live storage the backup format doesn't cover
   // and we don't recognize as an ephemeral preference = future data at risk.
   const liveKeys = (window.__fstKeys ? window.__fstKeys() : []).filter(k => k.indexOf('fst_') === 0);
@@ -12670,7 +12919,7 @@ function verifyBackupText(text, fileName) {
     if (!isNaN(ts)) exportedAge = { iso: parsed.exportedAt.slice(0, 10), days: Math.floor((Date.now() - ts) / 86400000) };
   }
 
-  return { fileName, version: parsed && parsed.version || '(no version stamp)', exportedAge, sections, dictNote, faceNote, unknownKeys };
+  return { fileName, version: parsed && parsed.version || '(no version stamp)', exportedAge, sections, dictNote, faceNote, notes: vbNotes, unknownKeys };
 }
 
 function renderVerifyReport(R) {
@@ -12702,11 +12951,12 @@ function renderVerifyReport(R) {
   }).join('');
   const dict = R.dictNote ? `<div style="padding:8px 10px; border-radius:7px; margin-bottom:5px; background:rgba(58,124,165,0.08); font-size:12px; line-height:1.5;">📖 ${esc(R.dictNote)}</div>` : '';
   const face = R.faceNote ? `<div style="padding:8px 10px; border-radius:7px; margin-bottom:5px; background:rgba(58,124,165,0.08); font-size:12px; line-height:1.5;">👤 ${esc(R.faceNote)}</div>` : '';
+  const extraNotes = (R.notes || []).map(n => `<div style="padding:8px 10px; border-radius:7px; margin-bottom:5px; background:rgba(58,124,165,0.08); font-size:12px; line-height:1.5;">${esc(n)}</div>`).join('');
   const unknown = R.unknownKeys.length
     ? `<div style="padding:8px 10px; border-radius:7px; margin-bottom:5px; background:rgba(231,76,60,0.10); font-size:12px; line-height:1.5;">
          <b>🚨 Data not covered by ANY backup:</b> ${R.unknownKeys.map(esc).join(', ')} — the backup format doesn't know these keys yet; tell the developer (you 🙂) to add them.</div>`
     : '';
-  el.innerHTML = headline + meta + rows + dict + face + unknown +
+  el.innerHTML = headline + meta + rows + dict + face + extraNotes + unknown +
     `<div style="font-size:11px; color:var(--muted,#7A8898); margin-top:10px;">🔒 This check is read-only — nothing was imported or changed.</div>`;
 }
 
@@ -12782,6 +13032,11 @@ function importCSV(event) {
 function normalizeImportedBackupData(rawData) {
   const data = rawData && typeof rawData === 'object' ? rawData : {};
 
+  // ids are interpolated into inline onclick attributes/JS strings by the
+  // renderers — sanitize ALL of them (entries and bundles included; a crafted
+  // id in a backup was a stored XSS, and a quoted id breaks every button).
+  const safeId = (v, fallback) => (String(v || '').replace(/[^A-Za-z0-9_-]/g, '') || fallback);
+
   const normCustomSyms = Array.isArray(data.customSyms)
     ? data.customSyms
         .filter(s => s && typeof s === 'object')
@@ -12798,7 +13053,7 @@ function normalizeImportedBackupData(rawData) {
         .filter(e => e && typeof e === 'object')
         .map((entry, i) => {
           const clone = JSON.parse(JSON.stringify(entry));
-          clone.id = String(clone.id || uid());
+          clone.id = safeId(clone.id, uid());
           clone.date = typeof clone.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(clone.date) ? clone.date : today();
           clone.food = String(clone.food || clone.logName || clone.name || `Imported item ${i+1}`);
           // whitelist — an arbitrary string here was rendered unescaped into
@@ -12874,9 +13129,6 @@ function normalizeImportedBackupData(rawData) {
     ? data.checkinOrder.map(v => String(v || '').trim()).filter(Boolean)
     : loadCheckinOrder();
 
-  // ids are interpolated into inline onclick attributes by the diary
-  // renderers — sanitize them (a crafted id in a backup was a stored XSS)
-  const safeId = (v, fallback) => (String(v || '').replace(/[^A-Za-z0-9_-]/g, '') || fallback);
   const normArchives = Array.isArray(data.archives)
     ? data.archives.filter(s => s && typeof s === 'object').map((s, i) => ({
         id: safeId(s.id, 'arch_' + i),
@@ -12890,7 +13142,7 @@ function normalizeImportedBackupData(rawData) {
             }))
           : []
       }))
-    : [];
+    : null;   // v68 audit-2: absent field must not wipe the live Diary (absent-vs-empty rule)
   // Trials were silently dropped from every backup before v53 (exported but
   // never restored — actually never exported either).
   const normExperiments = Array.isArray(data.experiments)
@@ -12911,14 +13163,14 @@ function normalizeImportedBackupData(rawData) {
   // (favorites feature removed in v54 — favs in old backups are ignored)
   const normBundles = Array.isArray(data.bundles)
     ? data.bundles.filter(v => v && typeof v === 'object').map((v, i) => ({
-        id: String(v.id || ('bundle_' + i)),
+        id: safeId(v.id, 'bundle_' + i),
         name: String(v.name || `Bundle ${i+1}`),
         items: normalizeBundleItems(v.items),
         mealType: typeof v.mealType === 'string' ? v.mealType : '',
         logTime: typeof v.logTime === 'string' ? v.logTime : '',
         updatedAt: typeof v.updatedAt === 'string' ? v.updatedAt : ''
       })).filter(v => v.name && v.items.length)
-    : [];
+    : null;   // v68 audit-2: absent field must not wipe live bundles
   const normTheme = data.theme === 'dark' ? 'dark' : 'light';
   const savedStyle = typeof data.uiStyle === 'string' ? data.uiStyle : '';
   const normUiStyle = normalizeUiStyle(savedStyle);
@@ -13027,8 +13279,8 @@ async function importFullBackup(text, inputEl) {
     if (data.checkinSyms !== null) saveCheckinSyms(data.checkinSyms); // pre-era backups lack the field — keep the live list
     saveCheckins(data.checkins);
     saveCheckinOrder(data.checkinOrder);
-    saveArchives(data.archives);
-    saveBundles(data.bundles || []);
+    if (data.archives !== null) saveArchives(data.archives); // absent field keeps the live Diary
+    if (data.bundles !== null) saveBundles(data.bundles);    // absent field keeps live bundles
     saveExperiments(data.experiments || []); // restore trials (and clear stale ones when the backup has none)
     if (data.dictionary !== null) saveFoodDictionary(data.dictionary); // pre-v58 backups lack the field — keep the live list
     if (data.faceMap !== null) saveFaceMap(data.faceMap); // pre-v59 backups lack the field — keep the live marks
@@ -13075,7 +13327,9 @@ function importLegacyCSV(text, inputEl) {
     if (cols.length < 4) continue;
     const get = (name) => { const idx = headerCols.indexOf(name); return idx >= 0 ? (cols[idx]||'').trim() : ''; };
     const symptoms = {};
-    BUILTIN_SYMPTOMS.forEach(s => { symptoms[s.key] = get(s.label) === '1'; });
+    // legacy CSVs used plain headers ('Sleepy'), current labels carry emoji
+    // ('😴 Sleepy') — try both, else those columns silently drop (audit-2)
+    BUILTIN_SYMPTOMS.forEach(s => { symptoms[s.key] = (get(s.label) === '1') || (get(s.label.replace(/^\S+\s+/, '')) === '1'); });
 
     headerCols.forEach((h, idx) => {
       if (!['Date','Meal Type','Log Name','Food / Meal','Notes','0-4h+','0-4h-','5-8h+','5-8h-','9-13h+','9-13h-','8-13h+','8-13h-','14-17h+','14-17h-','Sleepy','Energetic'].includes(h) &&
@@ -13114,8 +13368,11 @@ function importLegacyCSV(text, inputEl) {
 
   if (!imported.length) { toast('No valid rows found'); inputEl.value = ''; return; }
   const existing = loadMigrated();
-  const keys = new Set(existing.map(e => e.date+'|'+e.food));
-  const fresh = imported.filter(e => !keys.has(e.date+'|'+e.food));
+  // dedupe per MEAL, not per day — date|food alone discarded legit same-day
+  // repeats (banana at breakfast AND dinner collapsed to one) (audit-2)
+  const dupeKey = e => e.date + '|' + e.food + '|' + (e.mealType || '');
+  const keys = new Set(existing.map(dupeKey));
+  const fresh = imported.filter(e => !keys.has(dupeKey(e)));
   save([...fresh, ...existing]);
 
   const existingCustoms = loadCustomSyms();
@@ -13227,6 +13484,8 @@ setInterval(() => {
   if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.tagName === 'SELECT')) return;
   if (document.getElementById('tab-log').classList.contains('active')) renderPending();
   if (document.getElementById('tab-history').classList.contains('active')) renderHistory();
+  updateLogsPendingBadge();   // v68: windows become "due" as time passes — keep the count live
+  renderMarksNudge();
 }, 60000);
 
 // ─── PWA resume: refresh "now"-dependent UI ──────────────────────────────────
@@ -14280,7 +14539,9 @@ function renderFoodProfile() {
     </div>
     <div class="verdict-evidence">${vrec.why.map(fpWhy).join('')}</div>
     ${vrec.experiment ? `<div class="fp-exp-hint">🔬 ${vrec.experiment}</div>` : ''}
-  </div>` : `<div class="card fp-card"><div class="fp-h">⚖️ Verdict</div><div class="fp-empty">No scored reaction windows yet — mark ✓/✕ on this food's entries in 📑 Logs.</div></div>`;
+  </div>` : (foodBaseType(food) !== 'food'
+    ? `<div class="card fp-card"><div class="fp-h">⚖️ Verdict</div><div class="fp-empty">Classified as <b>${esc(foodBaseType(food))}</b> — excluded from food verdicts on purpose (non-foods only inherit the meals they ride along with). Reclassify via 📋 Summary → 🏷️ Item types if that's wrong.</div></div>`
+    : `<div class="card fp-card"><div class="fp-h">⚖️ Verdict</div><div class="fp-empty">No scored reaction windows yet — mark ✓/✕ on this food's entries in 📑 Logs.</div></div>`);
 
   // ── symptoms & vitals impact ──
   const syms = orderedCheckinSymptoms();
@@ -14753,6 +15014,27 @@ function runSelfTest() {
     return (ids === 'a,b' && off === 1) ? true : `got [${ids}], off=${off}`;
   });
 
+  // ── backup safety (v68 audit-2, batch A) ──
+  t('backup: absent bundles/archives are null (live kept); present ones are arrays', () => {
+    const nAbs = normalizeImportedBackupData({ entries: [] });
+    const nPres = normalizeImportedBackupData({ bundles: [], archives: [] });
+    return (nAbs.bundles === null && nAbs.archives === null
+      && Array.isArray(nPres.bundles) && Array.isArray(nPres.archives)) ? true
+      : JSON.stringify([nAbs.bundles, nAbs.archives]);
+  });
+  t('backup: imported entry + bundle ids are sanitized (quote-safe)', () => {
+    const n = normalizeImportedBackupData({
+      entries: [{ id: "a'b<c>d", date: '2026-01-01', food: 'X' }],
+      bundles: [{ id: 'x\'y"z', name: 'B', items: ['F'] }],
+    });
+    const ok = v => /^[A-Za-z0-9_-]+$/.test(v);
+    return (ok(n.entries[0].id) && ok(n.bundles[0].id)) ? true : JSON.stringify([n.entries[0].id, n.bundles[0].id]);
+  });
+  t('verify: a pre-era backup (missing newer fields) reports notes instead of crashing', () => {
+    const R = verifyBackupText(JSON.stringify({ data: { entries: [] } }), 'old.json');
+    return (R && Array.isArray(R.sections) && Array.isArray(R.notes) && !R.fatal) ? true : 'crashed or wrong shape';
+  });
+
   // ── legacy check-in key rename (v68) ──
   t('checkin key migration: diarrhea scores move to ci_focus, old key removed', () => {
     const c = { '2026-04-11': { diarrhea: 2, energy: 3 }, '2026-04-12': { energy: 4 } };
@@ -14885,6 +15167,18 @@ function runSelfTest() {
     const f = buildDayFrame(E, CI);
     const d2 = f.find(r => r.date === '2026-01-02');
     return (f.length === 2 && d2.grams === 200 && d2.grams48 === 350) ? true : JSON.stringify(d2);
+  });
+  t('day frame: grams48 nulls out when yesterday fails its own coverage gate', () => {
+    const E = [
+      { date: '2026-05-01', food: 'Rice 100g', logTime: '08:00', windows: {}, symptoms: {} },
+      { date: '2026-05-01', food: 'Mystery meal', logTime: '12:00', windows: {}, symptoms: {} },
+      { date: '2026-05-01', food: 'Another mystery', logTime: '18:00', windows: {}, symptoms: {} },
+      { date: '2026-05-02', food: 'Rice 200g', logTime: '09:00', windows: {}, symptoms: {} },
+    ];
+    const CI = { '2026-05-01': { ci_day_score: 3 }, '2026-05-02': { ci_day_score: 2 } };
+    const f = buildDayFrame(E, CI);
+    const d1 = f.find(r => r.date === '2026-05-01'), d2 = f.find(r => r.date === '2026-05-02');
+    return (d1.grams === null && d2.grams === 200 && d2.grams48 === null) ? true : JSON.stringify([d1.grams, d2.grams, d2.grams48]);
   });
   t('day drivers: heavy-load days scoring worse yields a negative load delta', () => {
     const E = [], CI = {};
