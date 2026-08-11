@@ -4005,11 +4005,14 @@ function save(entries) {
       clone.windows = w;
     }
     
-    // 2. Remove 'false' symptoms (assume false if missing)
+    // 2. Remove 'false' symptoms (assume false if missing). MUST keep severity
+    // values 2|3 verbatim — an `=== true` filter here silently destroyed every
+    // strong/severe mark on reload (v67 data-loss bug, fixed via persistSymVal).
     if (clone.symptoms) {
       const s = {};
-      for (let k in clone.symptoms) { 
-        if (clone.symptoms[k] === true) s[k] = true; 
+      for (let k in clone.symptoms) {
+        const v = persistSymVal(clone.symptoms[k]);
+        if (v !== undefined) s[k] = v;
       }
       clone.symptoms = s;
     }
@@ -4209,6 +4212,9 @@ const _BADW = { c_strong_pain:3,c_wrecked:3,c_delayed_pain:3,c_liver_pain:3,
 // (×2). Numbers stay truthy, so every existing `if (s[k])` check still works.
 function cycleSeverity(v) { return !v ? true : (v === true ? 2 : (v === 2 ? 3 : false)); }
 function sevMult(v) { return v === 2 ? 1.5 : (v === 3 ? 2 : 1); }
+// ONE definition of "which symptom values persist": true (mild) | 2 | 3.
+// Used by save() and the backup verifier so they can never disagree again.
+function persistSymVal(v) { return (v === true || v === 2 || v === 3) ? v : undefined; }
 function entryBadness(e) {
   const s = e.symptoms || {}, w = e.windows || {};
   let b = 0;
@@ -8069,7 +8075,9 @@ function repeatYesterdayMeal(mealKey) {
   const mealId = uid();  // v67: repeated foods form ONE meal for meal-aware analysis
   for (let i = fresh.length - 1; i >= 0; i--) {
     const s = fresh[i];
-    entries.unshift({ id: uid(), date: t, mealType: s.mealType || '', food: s.food, logTime: nowTime, mealId, windows: { w1: null, w2: null, w3: null, w4: null }, symptoms: blankSymptoms() });
+    const ne = { id: uid(), date: t, mealType: s.mealType || '', food: s.food, logTime: nowTime, mealId, windows: { w1: null, w2: null, w3: null, w4: null }, symptoms: blankSymptoms() };
+    if (s.type) ne.type = s.type;   // item type describes the item, not the occasion
+    entries.unshift(ne);            // solo/age NOT copied: a repeat is a new occasion, batch age unknown
   }
   save(entries);
   toast(`Logged ${fresh.length} from yesterday ✓`);
@@ -8108,7 +8116,10 @@ function relogEntryNow(id) {
   if (!src) return;
   const n = new Date();
   const nowTime = `${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}`;
-  entries.unshift({ id: uid(), date: today(), mealType: src.mealType || '', food: src.food, logTime: nowTime, mealId: uid(), windows: { w1: null, w2: null, w3: null, w4: null }, symptoms: blankSymptoms() });
+  const ne = { id: uid(), date: today(), mealType: src.mealType || '', food: src.food, logTime: nowTime, mealId: uid(), windows: { w1: null, w2: null, w3: null, w4: null }, symptoms: blankSymptoms() };
+  if (src.type) ne.type = src.type;
+  if (src.solo) ne.solo = true;   // one item re-logged alone is another solo test; age NOT copied
+  entries.unshift(ne);
   save(entries);
   toast(`Logged "${src.food}" again ✓`);
   hapticTick();
@@ -8178,7 +8189,9 @@ function repeatLastMeal() {
   const mealId = uid();
   for (let i = src.length - 1; i >= 0; i--) {
     const s = src[i];
-    entries.unshift({ id: uid(), date: t, mealType: s.mealType || '', food: s.food, logTime: nowTime, mealId, windows: { w1: null, w2: null, w3: null, w4: null }, symptoms: blankSymptoms() });
+    const ne = { id: uid(), date: t, mealType: s.mealType || '', food: s.food, logTime: nowTime, mealId, windows: { w1: null, w2: null, w3: null, w4: null }, symptoms: blankSymptoms() };
+    if (s.type) ne.type = s.type;   // solo/age NOT copied — new occasion, batch unknown
+    entries.unshift(ne);
   }
   save(entries);
   toast(`Logged ${src.length} again ✓`);
@@ -12395,7 +12408,7 @@ const VB_DEVICE_LOCAL = ['fst_last_meal_type','fst_insight_view','fst_timeline_v
 
 function _vbCanonEntry(e) {
   const w = {}; WINDOWS.forEach(x => { const v = e.windows && e.windows[x.key]; if (v === true || v === false) w[x.key] = v; });
-  const s = {}; Object.keys(e.symptoms || {}).sort().forEach(k => { if (e.symptoms[k] === true) s[k] = true; });
+  const s = {}; Object.keys(e.symptoms || {}).sort().forEach(k => { const v = persistSymVal(e.symptoms[k]); if (v !== undefined) s[k] = v; });
   return JSON.stringify({ date: e.date, food: e.food, mealType: e.mealType || '', logTime: e.logTime || '', notes: e.notes || '', w, s });
 }
 function _vbCanonDay(day) {
@@ -14573,6 +14586,16 @@ function runSelfTest() {
   t('severity: tap cycles off → mild → strong(2) → severe(3) → off', () => {
     const chain = [cycleSeverity(false), cycleSeverity(true), cycleSeverity(2), cycleSeverity(3)];
     return JSON.stringify(chain) === JSON.stringify([true, 2, 3, false]) ? true : JSON.stringify(chain);
+  });
+  t('persistSymVal: severity survives the save→reload round trip (v67 data-loss regression)', () => {
+    const keep = persistSymVal(true) === true && persistSymVal(2) === 2 && persistSymVal(3) === 3;
+    const drop = persistSymVal(false) === undefined && persistSymVal(null) === undefined && persistSymVal(0) === undefined;
+    // simulate save()'s strip + JSON round trip + reload migrate on a graded entry
+    const sym = { bloating: 2, gas: 3, sleepy: true, energetic: false };
+    const s = {}; for (const k in sym) { const v = persistSymVal(sym[k]); if (v !== undefined) s[k] = v; }
+    const back = migrate(JSON.parse(JSON.stringify({ id: 'x', date: '2026-01-01', food: 'F', windows: {}, symptoms: s })));
+    return (keep && drop && back.symptoms.bloating === 2 && back.symptoms.gas === 3 && back.symptoms.sleepy === true && back.symptoms.energetic === false)
+      ? true : 'round trip failed: ' + JSON.stringify(back.symptoms);
   });
   t('severity: legacy true unchanged; 2/3 scale the badness weights', () => {
     const legacy = entryBadness({ symptoms: { c_strong_pain: true, c_buildup: true }, windows: {} });
