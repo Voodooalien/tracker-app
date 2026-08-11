@@ -3975,7 +3975,10 @@ const CHECK_IN_SYMPTOMS = [
   { key:'skinReaction', label:'🔴 Skin Reactions',    desc:'1 = Severe flare, 5 = Clear' },
   { key:'skinFlare',    label:'🟣 Skin Chronic Flare', desc:'1 = Severe, 5 = Calm' },
   { key:'constipation', label:'🚽 Bowel Movements',   desc:'1 = Very constipated, 5 = Great' },
-  { key:'diarrhea',     label:'💡 Daily Focus',        desc:'1 = Very poor, 5 = Great' },
+  // key renamed from legacy 'diarrhea' (v68): the slider was repurposed to
+  // "Daily Focus" long before the current data era but kept its old key.
+  // loadCheckins() migrates stored scores; import aliases old backup files.
+  { key:'ci_focus',     label:'💡 Daily Focus',        desc:'1 = Very poor, 5 = Great' },
   { key:'energy',       label:'⚡ Daily Energy',       desc:'1 = Exhausted, 5 = Great' },
 ];
 
@@ -4794,6 +4797,7 @@ let _histShown   = 50; // history pager: how many entry cards are rendered
 let _editId      = null, _editOriginalFood = null;
 let _trendActive = null; // guarded: a corrupted value here used to kill the whole boot
 try { _trendActive = JSON.parse(localStorage.getItem('fst_trend_active')) || null; } catch (e) {}
+if (Array.isArray(_trendActive)) _trendActive = _trendActive.map(k => k === 'diarrhea' ? 'ci_focus' : k);   // v68 legacy-key alias
 let _notesFood   = null;
 let _archiveNoteTarget = null; // { sectionId, entryId } | null
 let _ciSymState  = null; // null | { mode:'add'|'edit', key:string|null, emoji:string, name:string }
@@ -6257,10 +6261,25 @@ function calcStorageMeterLive() {
 }
 
 // ─── Daily check-in storage ───────────────────────────────────────────────────
+// One-shot legacy-key migration (v68): 'diarrhea' → 'ci_focus'. Pure — used by
+// loadCheckins on live data and self-tested directly.
+function migrateCheckinKeys(checkins) {
+  let changed = false;
+  Object.values(checkins).forEach(day => {
+    if (day && day.diarrhea != null) {
+      if (day.ci_focus == null) day.ci_focus = day.diarrhea;
+      delete day.diarrhea;
+      changed = true;
+    }
+  });
+  return changed;
+}
 function loadCheckins() {
   try {
     const v = JSON.parse(localStorage.getItem('fst_checkins') || '{}');
-    return v && typeof v === 'object' && !Array.isArray(v) ? v : {};
+    if (!v || typeof v !== 'object' || Array.isArray(v)) return {};
+    if (migrateCheckinKeys(v)) saveCheckins(v);   // write-back once; never fires again
+    return v;
   }
   catch { return {}; }
 }
@@ -6272,7 +6291,10 @@ function loadCheckinSyms() {
 }
 function saveCheckinSyms(arr) { localStorage.setItem('fst_checkin_syms', JSON.stringify(arr)); }
 function loadCheckinOrder() {
-  try { return JSON.parse(localStorage.getItem('fst_checkin_order') || '[]'); }
+  try {
+    const arr = JSON.parse(localStorage.getItem('fst_checkin_order') || '[]');
+    return arr.map(k => k === 'diarrhea' ? 'ci_focus' : k);   // v68 legacy-key alias
+  }
   catch { return []; }
 }
 function saveCheckinOrder(arr) { localStorage.setItem('fst_checkin_order', JSON.stringify(arr)); }
@@ -12828,9 +12850,10 @@ function normalizeImportedBackupData(rawData) {
       if (!values || typeof values !== 'object') return;
       const dayOut = {};
       Object.entries(values).forEach(([symKey, score]) => {
+        const k = symKey === 'diarrhea' ? 'ci_focus' : symKey;   // v68: old backups carry the legacy key
         const v = Number(score);
-        if (allowed.has(symKey) && Number.isFinite(v) && v >= 1 && v <= 5) {
-          dayOut[symKey] = v;
+        if (allowed.has(k) && Number.isFinite(v) && v >= 1 && v <= 5) {
+          dayOut[k] = v;
         }
       });
       if (Object.keys(dayOut).length) normCheckins[dateKey] = dayOut;  // no phantom empty days
@@ -14707,6 +14730,20 @@ function runSelfTest() {
     for (let i=0;i<6;i++) E.push({ mealId:'f'+i, date:'2026-02-0'+(i+1), food:'🍚White Rice 100g (fresh)', symptoms:{}, windows:{ w1:true } });
     const c = prepVariants(E).find(x => x.base === 'white rice');
     return (c && c.variants.length === 2 && c.variants[0].lift < c.variants[1].lift && c.variants[0].label.includes('fresh')) ? true : 'variants not split/ranked by lift (got ' + (c ? c.variants.length : 0) + ')';
+  });
+
+  // ── legacy check-in key rename (v68) ──
+  t('checkin key migration: diarrhea scores move to ci_focus, old key removed', () => {
+    const c = { '2026-04-11': { diarrhea: 2, energy: 3 }, '2026-04-12': { energy: 4 } };
+    const changed = migrateCheckinKeys(c);
+    return (changed === true && c['2026-04-11'].ci_focus === 2 && !('diarrhea' in c['2026-04-11'])
+      && c['2026-04-11'].energy === 3 && migrateCheckinKeys(c) === false)
+      ? true : JSON.stringify(c);
+  });
+  t('backup import: legacy diarrhea key aliases to ci_focus', () => {
+    const n = normalizeImportedBackupData({ checkins: { '2026-04-11': { diarrhea: 2 } } });
+    return (n.checkins['2026-04-11'] && n.checkins['2026-04-11'].ci_focus === 2
+      && !('diarrhea' in n.checkins['2026-04-11'])) ? true : JSON.stringify(n.checkins);
   });
 
   // ── backup completeness (v68, audit batch 3) ──
