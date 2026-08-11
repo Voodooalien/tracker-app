@@ -5052,11 +5052,10 @@ function getBulkTargets(entries, entry) {
   // date in storage, so one tap could rewrite weeks of history — and because
   // it also required hasPending, a fully-marked clicked entry was excluded
   // from its own bulk action while everything else changed.
-  // v68: a real mealId beats the date+mealType guess — two separate lunches
-  // logged at different times no longer bulk-edit together.
-  const group = entry.mealId
-    ? entries.filter(e => e.mealId === entry.mealId)
-    : entries.filter(e => e.date === entry.date && (e.mealType || '') === mealKey);
+  // Bulk group = same date + same meal type. Deliberately NOT mealId: a meal
+  // logged one item at a time gets a fresh mealId per add, so grouping by
+  // mealId shrank every bulk tap to a single entry (v68 regression, reverted).
+  const group = entries.filter(e => e.date === entry.date && (e.mealType || '') === mealKey);
   return group.length ? group : [entry];
 }
 
@@ -14730,6 +14729,17 @@ function runSelfTest() {
     for (let i=0;i<6;i++) E.push({ mealId:'f'+i, date:'2026-02-0'+(i+1), food:'🍚White Rice 100g (fresh)', symptoms:{}, windows:{ w1:true } });
     const c = prepVariants(E).find(x => x.base === 'white rice');
     return (c && c.variants.length === 2 && c.variants[0].lift < c.variants[1].lift && c.variants[0].label.includes('fresh')) ? true : 'variants not split/ranked by lift (got ' + (c ? c.variants.length : 0) + ')';
+  });
+
+  // ── bulk mode (v68 regression guard) ──
+  t('bulk targets: items logged one-at-a-time (distinct mealIds) still group by date+mealType', () => {
+    const mk = (id, mealId, mealType) => ({ id, date: '2026-08-12', mealType, mealId, food: 'F' + id, windows: {}, symptoms: {} });
+    const es = [mk('a', 'm1', 'lunch'), mk('b', 'm2', 'lunch'), mk('c', 'm3', 'dinner')];
+    const was = _bulkMode; _bulkMode = true;
+    const ids = getBulkTargets(es, es[0]).map(x => x.id).sort().join();
+    const off = (_bulkMode = false, getBulkTargets(es, es[0]).length);
+    _bulkMode = was;
+    return (ids === 'a,b' && off === 1) ? true : `got [${ids}], off=${off}`;
   });
 
   // ── legacy check-in key rename (v68) ──
