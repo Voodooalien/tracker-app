@@ -2863,7 +2863,7 @@ try {
   </div>
 
   <div style="margin-left: auto; display: flex; align-items: center; gap: 4px;">
-    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v67</span>
+    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v68</span>
   </div>
 
   <div id="nav-more-tray" style="display:none; flex-basis:100%; flex-wrap:wrap; gap:4px; padding-top:6px; margin-top:4px; border-top:1px dashed rgba(255,255,255,0.18);">
@@ -3836,9 +3836,18 @@ window.__fstStorageReady = (function () {
     if (!_db) return;
     const puts = _putQ, dels = _delQ; _putQ = {}; _delQ = {};
     try {
-      const st = _db.transaction(KV_STORE, 'readwrite').objectStore(KV_STORE);
+      const tx = _db.transaction(KV_STORE, 'readwrite');
+      const st = tx.objectStore(KV_STORE);
       for (const k in puts) st.put(puts[k], k);
       for (const k in dels) st.delete(k);
+      // v68 (audit): async failures (quota/corruption) used to vanish silently —
+      // re-queue and retry, but never clobber a newer queued value for the key.
+      tx.onabort = tx.onerror = function () {
+        console.warn('IndexedDB write failed — re-queuing', tx.error);
+        for (const k in puts) if (!(k in _putQ) && !(k in _delQ)) _putQ[k] = puts[k];
+        for (const k in dels) if (!(k in _putQ) && !(k in _delQ)) _delQ[k] = 1;
+        schedule();
+      };
     } catch (e) { console.warn('IndexedDB write failed (data still in localStorage)', e); }
   }
   function flushNow() { if (_timer != null) clearTimeout(_timer); flush(); }
@@ -4120,11 +4129,20 @@ function loadItemTypeMap() {
   }
   return _itemTypeMap;
 }
-function saveItemTypeMap(m) { _itemTypeMap = m; localStorage.setItem('fst_item_types', JSON.stringify(m)); }
+function saveItemTypeMap(m) { _itemTypeMap = m; _typeByName = null; localStorage.setItem('fst_item_types', JSON.stringify(m)); }
 // Type for a food NAME: manual per-food override wins over the name guess.
+// Cached per name (audit batch 4): the regex battery ran per ENTRY, three full
+// passes per Summary render. Cache cleared on any override change.
+let _typeByName = null;
 function foodBaseType(foodName) {
-  const o = loadItemTypeMap()[foodName];
-  return ITEM_TYPES.includes(o) ? o : inferItemType(foodName);
+  if (_typeByName === null) _typeByName = new Map();
+  let t = _typeByName.get(foodName);
+  if (t === undefined) {
+    const o = loadItemTypeMap()[foodName];
+    t = ITEM_TYPES.includes(o) ? o : inferItemType(foodName);
+    _typeByName.set(foodName, t);
+  }
+  return t;
 }
 function effectiveItemType(e) {
   if (!e) return 'food';
@@ -4227,24 +4245,41 @@ function entryBadness(e) {
 // Foods logged together share a mealId; legacy entries fall back to a synthetic
 // key (same day + meal + minute = same meal), so history groups with no migration.
 function mealKeyOf(e) { return e.mealId || (e.date + '|' + (e.mealType || '') + '|' + (e.logTime || '')); }
+// An entry with NO window marks and NO symptoms isn't "perfectly calm" — it's
+// simply not rated yet. Counting it as badness 0 diluted every lift ranking
+// and the trend strip toward "calm" (audit finding, v67). Filter these out of
+// reaction averages; load/count metrics (day frame) still include them.
+function isUnscoredEntry(e) {
+  const w = e.windows || {}, s = e.symptoms || {};
+  return ['w1', 'w2', 'w3', 'w4'].every(k => w[k] == null) && !Object.values(s).some(Boolean);
+}
 function foodMealLift(entries) {
+  entries = entries.filter(e => !isUnscoredEntry(e));
   const byKey = {};
   entries.forEach(e => { const k = mealKeyOf(e); (byKey[k] || (byKey[k] = [])).push(e); });
   const meals = Object.values(byKey).map(es => ({
     foods: new Set(es.map(x => x.food)),
     bad: Math.max(...es.map(entryBadness)),          // one reaction per meal
-    solo: es.some(x => x.solo) || new Set(es.map(x => x.food)).size === 1,
+    // 🔬 means EXPLICIT solo test only (audit batch 2) — a one-item meal isn't
+    // automatically a deliberate clean test, and pretending it was inflated badges.
+    solo: es.some(x => x.solo),
   }));
-  const grand = meals.length ? meals.reduce((a, m) => a + m.bad, 0) / meals.length : 0;
-  const allFoods = new Set(); entries.forEach(e => allFoods.add(e.food));
-  const rows = [];
-  allFoods.forEach(f => {
-    const withM = meals.filter(m => m.foods.has(f));
-    const woM   = meals.filter(m => !m.foods.has(f));
-    const wMean = withM.reduce((a, m) => a + m.bad, 0) / (withM.length || 1);
-    const woMean = woM.length ? woM.reduce((a, m) => a + m.bad, 0) / woM.length : grand;
-    rows.push({ food: f, nMeals: withM.length, wMean, woMean, lift: wMean - woMean,
-                soloN: withM.filter(m => m.solo).length });
+  const nMealsTotal = meals.length;
+  const totalBad = meals.reduce((a, m) => a + m.bad, 0);
+  const grand = nMealsTotal ? totalBad / nMealsTotal : 0;
+  // One pass over meals accumulating per-food sums — mathematically identical
+  // to the old per-food meals.filter() loops, minus the O(foods × meals) cost
+  // that ran twice per Summary render (audit batch 4).
+  const acc = {};
+  meals.forEach(m => m.foods.forEach(f => {
+    const a = acc[f] || (acc[f] = { n: 0, sum: 0, soloN: 0 });
+    a.n++; a.sum += m.bad; if (m.solo) a.soloN++;
+  }));
+  const rows = Object.entries(acc).map(([food, a]) => {
+    const wMean = a.sum / (a.n || 1);
+    const woN = nMealsTotal - a.n;
+    const woMean = woN ? (totalBad - a.sum) / woN : grand;
+    return { food, nMeals: a.n, wMean, woMean, lift: wMean - woMean, soloN: a.soloN };
   });
   rows.sort((a, b) => b.lift - a.lift);
   return rows;
@@ -4298,8 +4333,13 @@ function leadingEmoji(food) {   // the icon(s) you logged before the first lette
   return m ? m[0].trim() : '';
 }
 function gramsOf(food) {
-  const m = (food || '').match(/(\d+)(?:[.\-](\d+))?\s*g\b/i);
-  return m ? (m[2] ? (+m[1] + +m[2]) / 2 : +m[1]) : null;
+  // range first ("75-100g" → midpoint), then plain/decimal ("100.5g" → 100.5).
+  // The old single regex treated a decimal point as a range dash: '1.5g' → 3.
+  const f = food || '';
+  const r = f.match(/(\d+(?:\.\d+)?)\s*-\s*(\d+(?:\.\d+)?)\s*g\b/i);
+  if (r) return (+r[1] + +r[2]) / 2;
+  const m = f.match(/(\d+(?:\.\d+)?)\s*g\b/i);
+  return m ? +m[1] : null;
 }
 function _meanBad(es) { return es.reduce((a, e) => a + entryBadness(e), 0) / es.length; }
 function prepVariants(entries) {
@@ -4345,6 +4385,7 @@ function _pearson(pts) {
 function doseResponse(entries) {
   const byVar = {};
   entries.forEach(e => {
+    if (isUnscoredEntry(e)) return;
     const g = gramsOf(e.food); if (g == null) return;
     const v = stripCosmetic(e.food); if (!v) return;
     const d = byVar[v] || (byVar[v] = { levels: {}, orig: {} });
@@ -4362,7 +4403,9 @@ function doseResponse(entries) {
     const spread = lvls[lvls.length - 1].bad - lvls[0].bad;
     if (Math.abs(r) < 0.08 && Math.abs(spread) < 0.8) return;   // nothing to say
     const label = Object.entries(d.orig).sort((a, b) => b[1] - a[1])[0][0];
-    cards.push({ label, lvls, r, spread, n: pts.length, doseLinked: r >= 0.12 && spread >= 0.8 });
+    // cheap significance gate: r alone flags noise at small n; require t ≥ 2
+    const t = pts.length > 2 ? r * Math.sqrt((pts.length - 2) / (1 - r * r || 1e-9)) : 0;
+    cards.push({ label, lvls, r, t, spread, n: pts.length, doseLinked: r >= 0.12 && spread >= 0.8 && t >= 2 });
   });
   return cards.sort((a, b) => Math.abs(b.r) - Math.abs(a.r));
 }
@@ -4370,7 +4413,7 @@ function doseResponse(entries) {
 // day-2 vs day-3+ servings, overall. Data comes from the 🕒 Age tag at logging.
 function batchAgeStats(entries) {
   const AGES = [{ k: 'fresh', lbl: '🍳 Fresh' }, { k: 'd2', lbl: '🕒 Day-2' }, { k: 'd3', lbl: '🕰️ Day-3+' }];
-  const groups = AGES.map(a => ({ ...a, es: entries.filter(e => e.age === a.k) }))
+  const groups = AGES.map(a => ({ ...a, es: entries.filter(e => e.age === a.k && !isUnscoredEntry(e)) }))
     .map(a => ({ k: a.k, lbl: a.lbl, n: a.es.length, bad: a.es.length ? _meanBad(a.es) : null }));
   const tagged = groups.reduce((s, g) => s + g.n, 0);
   return { groups: groups.filter(g => g.n >= 5), tagged };
@@ -4394,7 +4437,8 @@ function prepPortionSection(entries) {
       <div style="font-size:12px;margin-top:4px;">${c.lvls.map(l => `~${Math.round(l.g)}g: <b style="color:${bc(l.bad)};">${l.bad.toFixed(1)}</b> <span style="color:var(--muted);font-size:11px;">×${l.n}</span>`).join(' &nbsp;&middot;&nbsp; ')}</div>
       <div style="font-size:11px;color:var(--muted);margin-top:4px;">${c.doseLinked
         ? `📈 <b>Dose-linked</b> (r ${c.r.toFixed(2)}) — more = worse. That slope is genuine trigger evidence.`
-        : (c.spread <= -0.8 ? `📉 Larger portions actually ran <b>calmer</b> here (r ${c.r.toFixed(2)}) — portion isn't the problem.` : `➖ No consistent dose effect (r ${c.r.toFixed(2)}).`)}</div>
+        : (c.r >= 0.12 && c.spread >= 0.8 ? `↗ Leans dose-linked (r ${c.r.toFixed(2)}) — but too few servings yet to call it.`
+        : (c.spread <= -0.8 ? `📉 Larger portions actually ran <b>calmer</b> here (r ${c.r.toFixed(2)}) — portion isn't the problem.` : `➖ No consistent dose effect (r ${c.r.toFixed(2)}).`))}</div>
     </div>`).join('');
   return summaryFold('prep', '🍳 Prep &amp; portion — how you make it matters', `
     <div style="font-size:11px;color:var(--muted);margin-bottom:12px;">Same food, different technique or size. <b>Prep</b> is compared by meal-aware lift (how much your meals shift with each version — lower/greener = calmer); <b>dose-response</b> checks whether more grams = worse reaction, the classic causal signature. Only variants with enough logs appear.</div>
@@ -4429,7 +4473,7 @@ function sparklineSVG(vals, color) {
 function trendStripHTML(entries, checkins) {
   const days = []; for (let i = 29; i >= 0; i--) days.push(addDays(today(), -i));
   const score = days.map(d => { const c = checkins[d]; return c && c.ci_day_score != null ? c.ci_day_score : null; });
-  const byDay = {}; entries.forEach(e => { (byDay[e.date] || (byDay[e.date] = [])).push(e); });
+  const byDay = {}; entries.forEach(e => { if (!isUnscoredEntry(e)) (byDay[e.date] || (byDay[e.date] = [])).push(e); });
   const bad = days.map(d => byDay[d] ? _meanBad(byDay[d]) : null);
   const s1 = sparklineSVG(score, '#0ca30c'), s2 = sparklineSVG(bad, '#d03b3b');
   if (!s1 && !s2) return '';
@@ -4454,12 +4498,22 @@ function clusterSymptoms(entries, keys) {
     keys.forEach(k => { if (s[k]) sets[k].add(i); });
   });
   const used = keys.filter(k => sets[k].size >= 25);
-  const jac = (a, b) => {
+  // Precompute the pairwise matrix once (audit batch 4) — the merge loop used
+  // to recompute every Jaccard from the raw entry-index Sets on each iteration.
+  const jacRaw = (a, b) => {
     const A = sets[a], B = sets[b];
     const [S, L] = A.size < B.size ? [A, B] : [B, A];
     let inter = 0; S.forEach(x => { if (L.has(x)) inter++; });
     return inter / (A.size + B.size - inter || 1);
   };
+  const J = new Map();
+  for (let i = 0; i < used.length; i++)
+    for (let j = i + 1; j < used.length; j++) {
+      const v = jacRaw(used[i], used[j]);
+      J.set(used[i] + '|' + used[j], v);
+      J.set(used[j] + '|' + used[i], v);
+    }
+  const jac = (a, b) => J.get(a + '|' + b) || 0;
   const avgLink = (c1, c2) => {
     let s = 0, n = 0;
     c1.forEach(a => c2.forEach(b => { s += jac(a, b); n++; }));
@@ -4473,7 +4527,7 @@ function clusterSymptoms(entries, keys) {
         const v = avgLink(clusters[i], clusters[j]);
         if (v > bv) { bv = v; bi = i; bj = j; }
       }
-    if (bv < 0.18 && clusters.length <= 5) break;   // nothing similar left
+    if (bv < 0.18) break;   // nothing similar left — never force-merge unrelated symptoms
     clusters[bi] = clusters[bi].concat(clusters[bj]);
     clusters.splice(bj, 1);
   }
@@ -4556,11 +4610,15 @@ function buildDayFrame(entries, checkins) {
     const ci = checkins[date];
     if (ci.ci_day_score == null) return;
     const d = byDay[date];
+    // grams only count when ≥50% of the day's items carry a gram figure —
+    // otherwise "grams not tagged" masquerades as "ate almost nothing" and
+    // poisons the load driver (audit finding).
+    const gramsOk = d && d.gramsN > 0 && d.gramsN >= d.n * 0.5;
     rows.push({
       date, score: ci.ci_day_score,
       sleep: ci.ci_last_nights_sleep != null ? ci.ci_last_nights_sleep : null,
-      grams: d ? d.grams : 0,
-      grams48: (d ? d.grams : 0) + (gByDate[addDays(date, -1)] || 0),
+      grams: gramsOk ? d.grams : null,
+      grams48: gramsOk ? d.grams + (gByDate[addDays(date, -1)] || 0) : null,
       mealsN: d ? d.meals.size : 0,
       itemsN: d ? d.n : 0,
       morningShare: d && d.grams > 0 ? d.morning / d.grams : null,
@@ -4692,15 +4750,22 @@ function toast(msg) {
   t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 2200);
 }
-function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+// esc also encodes double quotes (audit batch 5): harmless in text nodes, and
+// it turns any future esc/escAttr mix-up inside an attribute into a non-issue.
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function escAttr(s) { return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function hasPending(e) { return WINDOWS.some(w => e.windows[w.key] === null || e.windows[w.key] === undefined); }
-// v67: nav badge — how many recent entries (last 3 days) still need window marks
+// v68: ONE definition of "pending work" everywhere — an entry counts when at
+// least one unmarked window is actually DUE (fully elapsed, per isWindowDue).
+// The badge, the Today strip, and "✓ All due" now agree (audit batch 2); the
+// old 3-day-recency rule counted windows that hadn't even elapsed yet.
+function hasDuePending(e) {
+  return WINDOWS.some(w => e.windows[w.key] == null && isWindowDue(e, w.key));
+}
 function updateLogsPendingBadge() {
   const el = document.getElementById('logs-pending-badge');
   if (!el) return;
-  const cutoff = addDays(today(), -2);
-  const n = loadMigrated().filter(e => e.date >= cutoff && hasPending(e)).length;
+  const n = loadMigrated().filter(hasDuePending).length;
   el.style.display = n ? '' : 'none';
   el.textContent = n > 99 ? '99+' : String(n);
 }
@@ -4983,7 +5048,11 @@ function getBulkTargets(entries, entry) {
   // date in storage, so one tap could rewrite weeks of history — and because
   // it also required hasPending, a fully-marked clicked entry was excluded
   // from its own bulk action while everything else changed.
-  const group = entries.filter(e => e.date === entry.date && (e.mealType || '') === mealKey);
+  // v68: a real mealId beats the date+mealType guess — two separate lunches
+  // logged at different times no longer bulk-edit together.
+  const group = entry.mealId
+    ? entries.filter(e => e.mealId === entry.mealId)
+    : entries.filter(e => e.date === entry.date && (e.mealType || '') === mealKey);
   return group.length ? group : [entry];
 }
 
@@ -5146,7 +5215,7 @@ function renderTrialNudge() {
       <span class="reminder-text">${text}</span>
       <span class="reminder-actions">
         <button class="reminder-fill" onclick="${btnAction}">${btnLabel}</button>
-        <button class="reminder-dismiss" onclick="dismissTrialNudge('${escAttr(key)}')" title="Hide for today">✕</button>
+        <button class="reminder-dismiss" onclick="dismissTrialNudge(${escAttr(JSON.stringify(key))})" title="Hide for today">✕</button>
       </span>
     </div>`;
 }
@@ -5247,6 +5316,18 @@ function executeUndo() {
     save(entries);
     render();
     toast('Entry restored ✓');
+  } else if (state.type === 'cisym') {
+    // v68: restore a deleted check-in symptom + its order slot + every purged score
+    if (state.symDef && !loadCheckinSyms().some(s => s.key === state.key)) {
+      saveCheckinSyms([...loadCheckinSyms(), state.symDef]);
+    }
+    saveCheckinOrder(state.order);
+    const cis = loadCheckins();
+    Object.entries(state.scores || {}).forEach(([d, v]) => { (cis[d] || (cis[d] = {}))[state.key] = v; });
+    saveCheckins(cis);
+    renderCheckin();
+    renderTrends();
+    toast('Symptom + scores restored ✓');
   } else if (state.type === 'checkin') {
     const checkins = loadCheckins();
     checkins[state.date] = state.data;
@@ -5273,6 +5354,7 @@ function executeUndo() {
 function getSuspectFoods() {
   const stats = {};
   loadMigrated().forEach(e => {
+    if (effectiveItemType(e) !== 'food') return;   // audit batch 2: align with Summary/Verdicts
     if (!stats[e.food]) stats[e.food] = { neg: 0, total: 0 };
     WINDOWS.forEach(w => {
       const v = e.windows[w.key];
@@ -5450,7 +5532,7 @@ function markReaction(id, winKey, value) {
   });
   save(entries);
   hapticTick();
-  render();
+  renderAfterMark();
   if (_bulkMode && changes.length > 1) startUndo({ type: 'bulkwin', changes }, `Marked ${changes.length} entries in this meal group`);
   maybeCelebrateWindowsClear(changes.length > 0 && nextValue !== null);
 }
@@ -5516,7 +5598,22 @@ function markSymptom(id, symKey) {
     target.symptoms[symKey] = nextValue;
   });
   save(entries);
-  render();
+  renderAfterMark();
+}
+
+// v68 (audit batch 4): a symptom/window tap on the Logs tab used to rebuild the
+// whole tab (pending list + quick-log + bundles + strip) — at ~43 logs/day
+// that was the main phone jank. Rebuild only what a mark can change; any other
+// tab still gets the full render.
+function renderAfterMark() {
+  const logTab = document.getElementById('tab-log');
+  if (logTab && logTab.classList.contains('active')) {
+    renderPending();
+    renderTodayStrip();
+    updateLogsPendingBadge();
+  } else {
+    render();
+  }
 }
 
 // ─── Custom symptoms ──────────────────────────────────────────────────────────
@@ -5971,7 +6068,7 @@ function renderFoodIdentity() {
     <div style="font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); margin:2px 0 6px;">Possible duplicates <span style="font-weight:600; text-transform:none; letter-spacing:0;">— suggestions only, nothing happens without your confirmation</span></div>
     ${sugg.map(s => `<div style="display:flex; align-items:center; gap:10px; padding:7px 10px; background:rgba(239,159,39,0.08); border:1px solid rgba(239,159,39,0.25); border-radius:8px; margin-bottom:6px; font-size:12.5px;">
         <span style="flex:1; min-width:0;"><b>${esc(s.from)}</b> <span style="color:var(--muted);">(${s.nFrom})</span> vs <b>${esc(s.to)}</b> <span style="color:var(--muted);">(${s.nTo})</span> — ${esc(s.why)}</span>
-        <button onclick="fiReview('${escAttr(s.from)}','${escAttr(s.to)}')" style="background:var(--w1,#3A7CA5); color:#fff; border:none; border-radius:6px; padding:5px 12px; font-family:inherit; font-size:12px; font-weight:700; cursor:pointer; flex-shrink:0;">Review…</button>
+        <button onclick="fiReview(${escAttr(JSON.stringify(s.from))},${escAttr(JSON.stringify(s.to))})" style="background:var(--w1,#3A7CA5); color:#fff; border:none; border-radius:6px; padding:5px 12px; font-family:inherit; font-size:12px; font-weight:700; cursor:pointer; flex-shrink:0;">Review…</button>
       </div>`).join('')}
     <div style="height:10px;"></div>` : '';
 
@@ -5983,7 +6080,7 @@ function renderFoodIdentity() {
     const note = !retired && notes[n] ? ' · 📝' : '';
     return `<div class="fi-row" data-name="${escAttr(n.toLowerCase())}" style="display:flex; align-items:center; gap:10px; padding:6px 10px; border-bottom:1px solid var(--border); font-size:13px;">
       <span style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${esc(n)}<span style="color:var(--muted); font-size:11.5px;"> · ${retired ? 'retired name (autocomplete only)' : statLabel(_fiFoodCountsCache[n] || 0, 'log', 'logs') + st + note}</span></span>
-      <button onclick="fiPick('${escAttr(n)}')" style="background:none; border:1.5px solid var(--border); color:var(--text); border-radius:6px; padding:4px 10px; font-family:inherit; font-size:11.5px; font-weight:700; cursor:pointer; flex-shrink:0;">Rename / merge…</button>
+      <button onclick="fiPick(${escAttr(JSON.stringify(n))})" style="background:none; border:1.5px solid var(--border); color:var(--text); border-radius:6px; padding:4px 10px; font-family:inherit; font-size:11.5px; font-weight:700; cursor:pointer; flex-shrink:0;">Rename / merge…</button>
     </div>`;
   };
   _fiFoodCountsCache = counts;
@@ -6285,12 +6382,21 @@ function confirmCiSym() {
   renderTrends();
 }
 function deleteCheckinSym(key) {
-  if (!confirm('Remove this symptom from all Vitals?')) return;
+  if (!confirm('Remove this symptom from all Vitals? Every historical score for it is removed too (Undo available for a few seconds).')) return;
+  // v68 (audit batch 3): capture everything for undo — this used to be the one
+  // irreversible mass-delete in the app.
+  const symDef = loadCheckinSyms().find(s => s.key === key) || null;
+  const orderBefore = loadCheckinOrder();
   const customs = loadCheckinSyms().filter(s => s.key !== key);
   saveCheckinSyms(customs);
-  saveCheckinOrder(loadCheckinOrder().filter(k => k !== key));
+  saveCheckinOrder(orderBefore.filter(k => k !== key));
   const checkins = loadCheckins();
-  Object.values(checkins).forEach(day => { delete day[key]; });
+  const purged = {};
+  Object.entries(checkins).forEach(([d, day]) => {
+    if (day && day[key] != null) { purged[d] = day[key]; }
+    if (day) delete day[key];
+    if (day && !Object.keys(day).length) delete checkins[d];   // no phantom empty days
+  });
   saveCheckins(checkins);
   if (_ciSymState && _ciSymState.key === key) _ciSymState = null;
   // Drop the key from the persisted trends filter too — dead keys let the
@@ -6301,7 +6407,8 @@ function deleteCheckinSym(key) {
   }
   renderCheckin();
   renderTrends(); // clear the deleted symptom's stale line + legend chip
-  toast('Symptom removed');
+  startUndo({ type: 'cisym', key, symDef, order: orderBefore, scores: purged },
+    `"${(symDef && symDef.label) || key}" removed — ${Object.keys(purged).length} day score(s) purged`);
 }
 
 function openNotesModal(food) {
@@ -8093,8 +8200,7 @@ function renderTodayStrip() {
   const es = loadMigrated();
   const todays = es.filter(e => e.date === t);
   const meals = new Set(todays.map(mealKeyOf)).size;
-  const cutoff = addDays(t, -2);
-  const pend = es.filter(e => e.date >= cutoff && hasPending(e)).length;
+  const pend = es.filter(hasDuePending).length;   // same definition as the nav badge + ✓ All due
   const ci = loadCheckins()[t] || {};
   const score = ci.ci_day_score;
   const days = new Set(es.map(e => e.date));
@@ -8129,27 +8235,30 @@ function relogEntryNow(id) {
 // v67: swipe left/right to change tabs (phone). The gesture is ignored when it
 // starts inside anything horizontally scrollable (tables), an SVG (face map),
 // or a form control — those own their touches.
-let _swipeX = null, _swipeY = null, _swipeOk = false;
+let _swipeX = null, _swipeY = null, _swipeTarget = null;
 document.addEventListener('touchstart', (ev) => {
+  // record only — the (style-recalc-forcing) ancestor walk moved to touchend,
+  // where the cheap dx/dy gate already rejects most gestures (audit batch 4)
   _swipeX = ev.touches[0].clientX; _swipeY = ev.touches[0].clientY;
-  _swipeOk = true;
-  let node = ev.target;
+  _swipeTarget = ev.target;
+}, { passive: true });
+document.addEventListener('touchend', (ev) => {
+  if (_swipeX == null) return;
+  const dx = ev.changedTouches[0].clientX - _swipeX;
+  const dy = ev.changedTouches[0].clientY - _swipeY;
+  const target = _swipeTarget;
+  _swipeX = null; _swipeTarget = null;
+  if (Math.abs(dx) < 70 || Math.abs(dy) > 60) return;
+  let node = target;
   while (node && node !== document.body) {
     const tag = (node.tagName || '').toLowerCase();
-    if (tag === 'svg' || tag === 'input' || tag === 'select' || tag === 'textarea') { _swipeOk = false; break; }
+    if (tag === 'svg' || tag === 'input' || tag === 'select' || tag === 'textarea') return;
     if (node.nodeType === 1) {
       const st = getComputedStyle(node);
-      if ((st.overflowX === 'auto' || st.overflowX === 'scroll') && node.scrollWidth > node.clientWidth + 4) { _swipeOk = false; break; }
+      if ((st.overflowX === 'auto' || st.overflowX === 'scroll') && node.scrollWidth > node.clientWidth + 4) return;
     }
     node = node.parentNode;
   }
-}, { passive: true });
-document.addEventListener('touchend', (ev) => {
-  if (!_swipeOk || _swipeX == null) return;
-  const dx = ev.changedTouches[0].clientX - _swipeX;
-  const dy = ev.changedTouches[0].clientY - _swipeY;
-  _swipeX = null;
-  if (Math.abs(dx) < 70 || Math.abs(dy) > 60) return;
   const btns = [...document.querySelectorAll('nav button[data-tab]')].filter(b => b.offsetParent !== null);
   const active = document.querySelector('.tab-content.active');
   if (!active) return;
@@ -8313,7 +8422,7 @@ function renderBundleSelectedChips() {
     return;
   }
   el.innerHTML = _bundleSelectedItems.map(item =>
-    `<span class="bundle-selected-chip">${esc(item)} <span class="bundle-chip-x" onclick="removeItemFromBundleSelection(${JSON.stringify(item).replace(/"/g,'&quot;')})">✕</span></span>`
+    `<span class="bundle-selected-chip">${esc(item)} <span class="bundle-chip-x" onclick="removeItemFromBundleSelection(${escAttr(JSON.stringify(item))})">✕</span></span>`
   ).join('');
 }
 
@@ -8335,7 +8444,7 @@ function renderBundleModalItems() {
         <div class="bundle-existing-name">${esc(r.food)}</div>
         <div class="bundle-existing-meta">Logged ${r.count} time${r.count===1?'':'s'}${r.lastDate ? ' · last on ' + esc(r.lastDate) : ''}</div>
       </div>
-      <button class="bundle-secondary-btn" onclick="${added ? `removeItemFromBundleSelection(${JSON.stringify(r.food).replace(/"/g,'&quot;')})` : `addItemToBundleSelection(${JSON.stringify(r.food).replace(/"/g,'&quot;')})`}">${added ? 'Remove' : 'Add'}</button>
+      <button class="bundle-secondary-btn" onclick="${added ? `removeItemFromBundleSelection(${escAttr(JSON.stringify(r.food))})` : `addItemToBundleSelection(${escAttr(JSON.stringify(r.food))})`}">${added ? 'Remove' : 'Add'}</button>
     </div>`;
   }).join('');
 }
@@ -9937,7 +10046,7 @@ function renderDetective() {
         <span style="font-size:12px; font-weight:900; color:var(--muted); min-width:26px;">#${i + 1}</span>
         <span style="font-size:14.5px; font-weight:800; flex:1; min-width:120px;">${esc(s.food)}</span>
         <span style="font-size:18px; font-weight:900; color:${s.score >= 60 ? 'var(--neg)' : s.score >= 35 ? '#BA7517' : 'var(--muted)'};">${s.score}%</span>
-        <button class="tf-btn" onclick="startExperiment('${escAttr(s.food)}')" title="Start an avoidance trial to turn suspicion into evidence">🧪 Trial</button>
+        <button class="tf-btn" onclick="startExperiment(${escAttr(JSON.stringify(s.food))})" title="Start an avoidance trial to turn suspicion into evidence">🧪 Trial</button>
       </div>
       <div style="height:8px; background:var(--bg); border-radius:999px; margin:7px 0 6px; overflow:hidden;">
         <div style="height:100%; width:${s.score}%; background:${barColor}; border-radius:999px;"></div>
@@ -10318,7 +10427,7 @@ function renderAnomalies() {
       <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:6px 0; border-top:1px solid var(--border);">
         <span style="font-size:13.5px; font-weight:800;">${esc(t.food)}</span>
         ${t.chips.map(c => `<span style="display:inline-block; font-size:11px; font-weight:700; border:1px solid rgba(231,76,60,0.3); background:rgba(231,76,60,0.09); color:var(--neg); border-radius:999px; padding:2px 9px;">${esc(c)}</span>`).join('')}
-        <button class="tf-btn" style="margin-left:auto;" onclick="startExperiment('${escAttr(t.food)}')" title="Turn this lead into evidence with an avoidance trial">🧪 Trial</button>
+        <button class="tf-btn" style="margin-left:auto;" onclick="startExperiment(${escAttr(JSON.stringify(t.food))})" title="Turn this lead into evidence with an avoidance trial">🧪 Trial</button>
       </div>`).join('');
     const quietRows = a.quiet.map(q => `
       <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:6px 0; border-top:1px solid var(--border);">
@@ -10562,7 +10671,10 @@ function inVerdictRange(dateStr) {
 }
 
 function computeVerdicts() {
-  const entries = loadMigrated().filter(e => inVerdictRange(e.date));
+  // foods only (audit batch 2): supplements/salt/activities were ranking as
+  // "suspects" here and polluting every food's baseline, while Summary already
+  // excluded them — the same food got contradictory numbers between tabs.
+  const entries = loadMigrated().filter(e => inVerdictRange(e.date) && effectiveItemType(e) === 'food');
   const totalDays = new Set(entries.map(e => e.date)).size || 1;
   const totalEntries = entries.length || 1;
 
@@ -11439,6 +11551,7 @@ function render() {
 // updated the in-memory store; refresh whatever is on screen.
 window.__fstExternalChange = function (key) {
   if (!key || !String(key).startsWith('fst_')) return;
+  if (key === 'fst_item_types') { _itemTypeMap = null; _typeByName = null; }   // v68: don't serve a stale type map cross-instance
   try { render(); } catch (e) {}
 };
 
@@ -12325,11 +12438,11 @@ function renderSummary() {
     const clsMap = { 'N/A':'status-na', '🏅 Vital':'status-vital', '✅ Safe':'status-safe', '👍 Positive':'status-positive', '🤷‍♂️ Meh':'status-meh', '🚩 Suspect':'status-suspect', '⚠️ Limit':'status-limit', '⛔ Banned':'status-banned', '🩻 B.List':'status-blacklist' };
     const curCls = clsMap[statusVal] || 'status-na';
     const optionsHTML = Object.keys(clsMap).map(k => `<option value="${k}" ${k===statusVal?'selected':''}>${k}</option>`).join('');
-    const statusSelect = `<select class="status-badge-select ${curCls}" onchange="changeFoodStatus('${esc(food).replace(/'/g,"\\'").replace(/"/g,"&quot;")}', this.value)">${optionsHTML}</select>`;
+    const statusSelect = `<select class="status-badge-select ${curCls}" onchange="changeFoodStatus(${escAttr(JSON.stringify(food))}, this.value)">${optionsHTML}</select>`;
 
     const notesCell = `<td style="vertical-align:middle; width:110px;">
       <div style="display:flex; flex-direction:column; gap:6px; align-items:center;">
-        <button class="notes-btn${hasNote?' has-note':''}" onclick="openNotesModal('${esc(food).replace(/'/g,"\\'").replace(/"/g,"&quot;")}')" style="width:100%;">📝 ${hasNote ? 'View Notes' : 'Add Notes'}</button>
+        <button class="notes-btn${hasNote?' has-note':''}" onclick="openNotesModal(${escAttr(JSON.stringify(food))})" style="width:100%;">📝 ${hasNote ? 'View Notes' : 'Add Notes'}</button>
         ${statusSelect}
       </div>
     </td>`;
@@ -12381,6 +12494,7 @@ function buildBackupJSON() {
       experiments: loadExperiments(),
       dictionary: loadFoodDictionary(), // v58: retired-name autocomplete list now travels too
       faceMap: loadFaceMap(),           // v59: face-map reaction marks travel too
+      itemTypes: loadItemTypeMap(),     // v68: per-food type overrides travel too (audit batch 3)
       theme: localStorage.getItem('fst_theme') || 'light',
       uiStyle: localStorage.getItem('fst_ui_style') || 'current'
     }
@@ -12403,13 +12517,14 @@ function markBackupDone(msg) {
 // Answers "if I restored this file right now, what exactly would change?"
 // The file goes through the SAME normalizer a real restore uses, then every
 // section is diffed against live data. Nothing is written anywhere.
-const VB_COVERED_KEYS = ['fst_entries','fst_custom_syms','fst_food_notes','fst_food_status','fst_checkins','fst_checkin_syms','fst_checkin_order','fst_archives','fst_bundles','fst_experiments','fst_food_dictionary','fst_face_map','fst_theme','fst_ui_style'];
+const VB_COVERED_KEYS = ['fst_entries','fst_custom_syms','fst_food_notes','fst_food_status','fst_checkins','fst_checkin_syms','fst_checkin_order','fst_archives','fst_bundles','fst_experiments','fst_food_dictionary','fst_face_map','fst_item_types','fst_theme','fst_ui_style'];
 const VB_DEVICE_LOCAL = ['fst_last_meal_type','fst_insight_view','fst_timeline_view','fst_trend_active','fst_reminder_dismissed','fst_backup_nag_snooze','fst_trial_nudge_dismissed','fst_streak_milestone','fst_last_celebration','fst_windows_celebration','fst_log_milestone','fst_last_backup','fst_food_merge_undo'];
 
 function _vbCanonEntry(e) {
   const w = {}; WINDOWS.forEach(x => { const v = e.windows && e.windows[x.key]; if (v === true || v === false) w[x.key] = v; });
   const s = {}; Object.keys(e.symptoms || {}).sort().forEach(k => { const v = persistSymVal(e.symptoms[k]); if (v !== undefined) s[k] = v; });
-  return JSON.stringify({ date: e.date, food: e.food, mealType: e.mealType || '', logTime: e.logTime || '', notes: e.notes || '', w, s });
+  // v68: the new fields compare too (defaults keep pre-era files clean)
+  return JSON.stringify({ date: e.date, food: e.food, mealType: e.mealType || '', logTime: e.logTime || '', notes: e.notes || '', mealId: e.mealId || '', solo: !!e.solo, age: e.age || '', type: e.type || '', w, s });
 }
 function _vbCanonDay(day) {
   const out = {}; Object.keys(day || {}).sort().forEach(k => { if (day[k] != null) out[k] = day[k]; });
@@ -12681,6 +12796,8 @@ function normalizeImportedBackupData(rawData) {
 
   const normFoodNotes = data.foodNotes && typeof data.foodNotes === 'object' ? data.foodNotes : {};
   const normFoodStatus = data.foodStatus && typeof data.foodStatus === 'object' ? data.foodStatus : {};
+  // v68 (audit batch 3): null when the field is absent — a pre-era backup must
+  // not wipe the live custom check-in symptom list (same rule as dictionary).
   const normCheckinSyms = Array.isArray(data.checkinSyms)
     ? data.checkinSyms
         .filter(s => s && typeof s === 'object')
@@ -12696,20 +12813,27 @@ function normalizeImportedBackupData(rawData) {
             desc: String(s.desc || '1 = Severe, 5 = Good')
           };
         })
-    : [];
+    : null;
 
-  const allowed = new Set([...CHECK_IN_SYMPTOMS.map(s => s.key), ...normCheckinSyms.map(s => s.key)]);
+  // Allowed score keys = builtin ∪ backup's list ∪ LIVE list — scores for a
+  // symptom the backup file forgot to list used to be silently discarded.
+  const allowed = new Set([
+    ...CHECK_IN_SYMPTOMS.map(s => s.key),
+    ...(normCheckinSyms || []).map(s => s.key),
+    ...loadCheckinSyms().map(s => s.key),
+  ]);
   const normCheckins = {};
   if (data.checkins && typeof data.checkins === 'object') {
     Object.entries(data.checkins).forEach(([dateKey, values]) => {
       if (!values || typeof values !== 'object') return;
-      normCheckins[dateKey] = {};
+      const dayOut = {};
       Object.entries(values).forEach(([symKey, score]) => {
         const v = Number(score);
         if (allowed.has(symKey) && Number.isFinite(v) && v >= 1 && v <= 5) {
-          normCheckins[dateKey][symKey] = v;
+          dayOut[symKey] = v;
         }
       });
+      if (Object.keys(dayOut).length) normCheckins[dateKey] = dayOut;  // no phantom empty days
     });
   }
 
@@ -12792,6 +12916,13 @@ function normalizeImportedBackupData(rawData) {
         })
     : null;
 
+  // v68: item-type overrides travel with backups. Same absent-vs-empty rule.
+  const normItemTypes = data.itemTypes && typeof data.itemTypes === 'object' && !Array.isArray(data.itemTypes)
+    ? Object.fromEntries(Object.entries(data.itemTypes)
+        .filter(([f, t]) => f && ITEM_TYPES.includes(t))
+        .map(([f, t]) => [String(f), t]))
+    : null;
+
   return {
     entries: normEntries,
     customSyms: normCustomSyms,
@@ -12799,6 +12930,7 @@ function normalizeImportedBackupData(rawData) {
     foodStatus: normFoodStatus,
     checkins: normCheckins,
     checkinSyms: normCheckinSyms,
+    itemTypes: normItemTypes,
     checkinOrder: normCheckinOrder,
     archives: normArchives,
     bundles: normBundles,
@@ -12859,7 +12991,7 @@ async function importFullBackup(text, inputEl) {
     save(data.entries);
     saveFoodNotes(data.foodNotes);
     saveFoodStatus(data.foodStatus);
-    saveCheckinSyms(data.checkinSyms);
+    if (data.checkinSyms !== null) saveCheckinSyms(data.checkinSyms); // pre-era backups lack the field — keep the live list
     saveCheckins(data.checkins);
     saveCheckinOrder(data.checkinOrder);
     saveArchives(data.archives);
@@ -12867,6 +12999,7 @@ async function importFullBackup(text, inputEl) {
     saveExperiments(data.experiments || []); // restore trials (and clear stale ones when the backup has none)
     if (data.dictionary !== null) saveFoodDictionary(data.dictionary); // pre-v58 backups lack the field — keep the live list
     if (data.faceMap !== null) saveFaceMap(data.faceMap); // pre-v59 backups lack the field — keep the live marks
+    if (data.itemTypes !== null) saveItemTypeMap(data.itemTypes); // v68: type overrides travel; saveItemTypeMap refreshes the cache
     localStorage.setItem('fst_theme', data.theme);
     applyVisualTheme(data.uiStyle);
 
@@ -14550,13 +14683,14 @@ function runSelfTest() {
       ? true : 'key mismatch');
   t('foodMealLift: a trigger outranks a bystander sharing its meals', () => {
     const hi = { c_strong_pain:true, c_buildup:true }, hw = { w1:false, w2:false, w3:false };
+    const ok = { w1:true };   // scored-clear (unscored entries are excluded from lift)
     const E = [
       { date:'2026-01-01', mealType:'lunch', logTime:'12:00', food:'A', symptoms:hi, windows:hw },
-      { date:'2026-01-01', mealType:'lunch', logTime:'12:00', food:'B', symptoms:{}, windows:{} },
+      { date:'2026-01-01', mealType:'lunch', logTime:'12:00', food:'B', symptoms:{}, windows:ok },
       { date:'2026-01-02', mealType:'lunch', logTime:'12:00', food:'A', symptoms:hi, windows:hw },
-      { date:'2026-01-02', mealType:'lunch', logTime:'12:00', food:'C', symptoms:{}, windows:{} },
-      { date:'2026-01-03', mealType:'lunch', logTime:'12:00', food:'B', symptoms:{}, windows:{} },
-      { date:'2026-01-03', mealType:'lunch', logTime:'12:00', food:'C', symptoms:{}, windows:{} },
+      { date:'2026-01-02', mealType:'lunch', logTime:'12:00', food:'C', symptoms:{}, windows:ok },
+      { date:'2026-01-03', mealType:'lunch', logTime:'12:00', food:'B', symptoms:{}, windows:ok },
+      { date:'2026-01-03', mealType:'lunch', logTime:'12:00', food:'C', symptoms:{}, windows:ok },
     ];
     const rows = foodMealLift(E);
     const a = rows.find(r => r.food === 'A'), b = rows.find(r => r.food === 'B');
@@ -14570,9 +14704,53 @@ function runSelfTest() {
   t('prep comparator: parenthetical prep makes distinct variants, ranked calmest first by lift', () => {
     const E = [];
     for (let i=0;i<6;i++) E.push({ mealId:'r'+i, date:'2026-01-0'+(i+1), food:'🍚White Rice 100g (heated after fridge)', symptoms:{ c_strong_pain:true, c_buildup:true }, windows:{} });
-    for (let i=0;i<6;i++) E.push({ mealId:'f'+i, date:'2026-02-0'+(i+1), food:'🍚White Rice 100g (fresh)', symptoms:{}, windows:{} });
+    for (let i=0;i<6;i++) E.push({ mealId:'f'+i, date:'2026-02-0'+(i+1), food:'🍚White Rice 100g (fresh)', symptoms:{}, windows:{ w1:true } });
     const c = prepVariants(E).find(x => x.base === 'white rice');
     return (c && c.variants.length === 2 && c.variants[0].lift < c.variants[1].lift && c.variants[0].label.includes('fresh')) ? true : 'variants not split/ranked by lift (got ' + (c ? c.variants.length : 0) + ')';
+  });
+
+  // ── backup completeness (v68, audit batch 3) ──
+  t('backup: item-type overrides travel; junk dropped; absent field keeps live map', () => {
+    const n1 = normalizeImportedBackupData({ itemTypes: { 'Salt': 'condiment', 'Rice': 'food', 'Junk': 'nonsense' } });
+    const n2 = normalizeImportedBackupData({ entries: [] });
+    return (n1.itemTypes && n1.itemTypes['Salt'] === 'condiment' && n1.itemTypes['Rice'] === 'food'
+      && !('Junk' in n1.itemTypes) && n2.itemTypes === null && n2.checkinSyms === null)
+      ? true : JSON.stringify([n1.itemTypes, n2.itemTypes, n2.checkinSyms]);
+  });
+  t('backup: builtin check-in scores kept, junk keys dropped, no phantom empty days', () => {
+    const n = normalizeImportedBackupData({ checkins: { '2026-01-01': { energy: 4, zz_unknown: 3 }, '2026-01-02': { zz_unknown: 2 } } });
+    return (n.checkins['2026-01-01'] && n.checkins['2026-01-01'].energy === 4
+      && !('zz_unknown' in n.checkins['2026-01-01']) && !('2026-01-02' in n.checkins))
+      ? true : JSON.stringify(n.checkins);
+  });
+
+  // ── consistency fixes (v68, audit batch 2) ──
+  t('due-pending: elapsed unmarked windows are due, just-eaten ones are not', () => {
+    const now = new Date();
+    const hh = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+    const old = migrate({ id: 'a', food: 'X', date: addDays(today(), -3), logTime: '12:00', windows: {}, symptoms: {} });
+    const fresh = migrate({ id: 'b', food: 'Y', date: today(), logTime: hh, windows: {}, symptoms: {} });
+    return (hasDuePending(old) === true && hasDuePending(fresh) === false) ? true : 'due logic mismatch';
+  });
+
+  // ── analysis-trust fixes (v68, audit batch 1) ──
+  t('unscored entries are excluded from lift — fresh logs no longer read as calm', () => {
+    const un = { date: '2026-01-01', mealType: 'lunch', logTime: '12:00', food: 'X', symptoms: {}, windows: {} };
+    return isUnscoredEntry(un) === true &&
+      isUnscoredEntry({ ...un, windows: { w1: true } }) === false &&
+      isUnscoredEntry({ ...un, symptoms: { gas: true } }) === false &&
+      foodMealLift([un]).length === 0 ? true : 'unscored filter failed';
+  });
+  t('gramsOf: decimals are not ranges — 1.5g stays 1.5, ranges still midpoint', () =>
+    gramsOf('Oil 1.5g') === 1.5 && gramsOf('Rice 75-100g baked') === 87.5 &&
+    gramsOf('Butter 100.5g') === 100.5 && gramsOf('Tea x1 mug') === null
+      ? true : `got ${gramsOf('Oil 1.5g')}, ${gramsOf('Rice 75-100g baked')}, ${gramsOf('Butter 100.5g')}`);
+  t('symptom clustering: independent symptoms are never force-merged (>5 clusters allowed)', () => {
+    const keys = ['c_burns', 'bloating', 'c_brain_fog', 'gas', 'c_buildup', 'c_wrecked'];
+    const E = [];
+    keys.forEach(k => { for (let i = 0; i < 30; i++) E.push({ symptoms: { [k]: true }, windows: {} }); });
+    const cl = clusterSymptoms(E, keys);
+    return cl.length === 6 ? true : 'expected 6 independent clusters, got ' + cl.length;
   });
 
   // ── sparklines (v67) ──
@@ -14604,7 +14782,7 @@ function runSelfTest() {
   });
   t('batch age: groups with ≥5 servings each compare by mean badness', () => {
     const E = [];
-    for (let i = 0; i < 6; i++) E.push({ age: 'fresh', symptoms: {}, windows: {} });
+    for (let i = 0; i < 6; i++) E.push({ age: 'fresh', symptoms: {}, windows: { w1: true } });
     for (let i = 0; i < 6; i++) E.push({ age: 'd3', symptoms: { c_burns: true, c_buildup: true }, windows: {} });
     const a = batchAgeStats(E);
     const fresh = a.groups.find(g => g.k === 'fresh'), d3 = a.groups.find(g => g.k === 'd3');
@@ -14627,7 +14805,7 @@ function runSelfTest() {
   });
   t('dose-response: higher grams with worse reactions flags dose-linked', () => {
     const E = [];
-    for (let i = 0; i < 6; i++) E.push({ food: 'Rice test 50g', symptoms: {}, windows: {} });
+    for (let i = 0; i < 6; i++) E.push({ food: 'Rice test 50g', symptoms: {}, windows: { w1: true } });
     for (let i = 0; i < 6; i++) E.push({ food: 'Rice test 150g', symptoms: { c_strong_pain: true, c_buildup: true }, windows: {} });
     const c = doseResponse(E)[0];
     return (c && c.doseLinked && c.r > 0.5 && c.lvls.length === 2) ? true : JSON.stringify(c || 'none');
