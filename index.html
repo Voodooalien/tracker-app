@@ -3732,6 +3732,15 @@ html body select.status-badge-select.status-blacklist {
   </div>
 </div>
 
+<!-- ═══ Copy meal → another meal of the same day (v69) ═══ -->
+<div id="mealcopy-modal-bg" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:10000; align-items:center; justify-content:center; padding:16px;" onclick="if(event.target===this)closeMealCopy()">
+  <div style="background:var(--card); color:var(--text); border-radius:14px; max-width:420px; width:100%; max-height:82vh; display:flex; flex-direction:column; padding:20px; box-shadow:0 20px 60px rgba(0,0,0,0.45);">
+    <h3 style="margin:0 0 10px;">📋 Copy meal to…</h3>
+    <div id="mealcopy-body" style="overflow-y:auto; flex:1;"></div>
+    <div style="margin-top:14px; text-align:right;"><button onclick="closeMealCopy()" style="padding:8px 16px; border-radius:8px; border:1px solid var(--border); background:var(--card); color:var(--text); cursor:pointer;">Cancel</button></div>
+  </div>
+</div>
+
 <!-- ═══ Pick foods to trial (multi-select) — v65 ═══ -->
 <div id="trialpick-modal-bg" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:10000; align-items:center; justify-content:center; padding:16px;" onclick="if(event.target===this)closeTrialPicker()">
   <div style="background:var(--card); color:var(--text); border-radius:14px; max-width:540px; width:100%; max-height:82vh; display:flex; flex-direction:column; padding:20px; box-shadow:0 20px 60px rgba(0,0,0,0.45);">
@@ -8514,6 +8523,84 @@ document.addEventListener('keydown', (ev) => {
   if (inp) { ev.preventDefault(); inp.focus(); }
 });
 
+// ── Meal actions (v69): copy a meal to another meal of the same day, and turn
+// a meal into a reusable bundle. Both operate on TODAY's items of that meal —
+// the Logs list is where you land right after eating.
+const MEAL_PICK = [['breakfast', '🌅 Breakfast'], ['lunch', '☀️ Lunch'], ['snack', '🍎 Snack'], ['dinner', '🌙 Dinner']];
+function mealLabelOf(k) { const m = MEAL_PICK.find(x => x[0] === k); return m ? m[1] : 'Other / Unset'; }
+function mealEntriesToday(mealKey) {
+  const t = today();
+  return loadMigrated().filter(e => e.date === t && (e.mealType || '') === mealKey);
+}
+// PURE: which source items still need copying (target already has the rest)
+function mealCopyPlan(srcEntries, targetEntries) {
+  const already = new Set((targetEntries || []).map(e => e.food));
+  const seen = new Set();
+  return (srcEntries || []).filter(e => {
+    if (already.has(e.food) || seen.has(e.food)) return false;   // no dupes within the copy either
+    seen.add(e.food);
+    return true;
+  });
+}
+let _mealCopyFrom = null;
+function openMealCopy(mealKey) {
+  const src = mealEntriesToday(mealKey);
+  if (!src.length) { toast('Nothing logged in that meal today'); return; }
+  _mealCopyFrom = mealKey;
+  const bg = document.getElementById('mealcopy-modal-bg');
+  const body = document.getElementById('mealcopy-body');
+  if (!bg || !body) return;
+  const foods = [...new Set(src.map(e => e.food))];
+  body.innerHTML = `<div style="font-size:12px;color:var(--muted);margin-bottom:10px;">Copying <b>${foods.length}</b> item${foods.length === 1 ? '' : 's'} from <b>${esc(mealLabelOf(mealKey))}</b> (today):<br>${foods.map(f => esc(f)).join('<br>')}</div>`
+    + MEAL_PICK.filter(([k]) => k !== mealKey).map(([k, lbl]) =>
+      `<button onclick="copyMealTo(${escAttr(JSON.stringify(mealKey))}, ${escAttr(JSON.stringify(k))})" style="display:block; width:100%; text-align:left; margin-bottom:6px; padding:10px 12px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text); font-size:13px; font-weight:700; cursor:pointer;">${lbl}</button>`).join('');
+  bg.style.display = 'flex';
+}
+function closeMealCopy() {
+  const bg = document.getElementById('mealcopy-modal-bg');
+  if (bg) bg.style.display = 'none';
+  _mealCopyFrom = null;
+}
+function copyMealTo(fromMeal, toMeal) {
+  const src = mealEntriesToday(fromMeal);
+  if (!src.length) { toast('Nothing logged in that meal today'); closeMealCopy(); return; }
+  const entries = loadMigrated();
+  const t = today();
+  // a food already in the target meal today is skipped — double-tap is harmless
+  const fresh = mealCopyPlan(src, entries.filter(e => e.date === t && (e.mealType || '') === toMeal));
+  if (!fresh.length) { toast(`Already in ${mealLabelOf(toMeal)} ✓`); closeMealCopy(); return; }
+  const n = new Date();
+  const nowTime = `${String(n.getHours()).padStart(2, '0')}:${String(n.getMinutes()).padStart(2, '0')}`;
+  const mealId = uid();   // the copy is ONE meal for meal-aware analysis
+  for (let i = fresh.length - 1; i >= 0; i--) {
+    const s = fresh[i];
+    const ne = { id: uid(), date: t, mealType: toMeal, food: s.food, logTime: nowTime, mealId,
+                 windows: { w1: null, w2: null, w3: null, w4: null }, symptoms: blankSymptoms() };
+    if (s.type) ne.type = s.type;   // type describes the item; solo/age belong to the original occasion
+    entries.unshift(ne);
+  }
+  save(entries);
+  closeMealCopy();
+  toast(`${fresh.length} item${fresh.length === 1 ? '' : 's'} copied to ${mealLabelOf(toMeal)} ✓`);
+  hapticTick();
+  render();
+}
+// Reuses the existing bundle modal (its name-dedupe + validation) pre-filled
+// from the meal, so there's only ever one bundle-creation path.
+function bundleFromMealToday(mealKey) {
+  const src = mealEntriesToday(mealKey);
+  if (!src.length) { toast('Nothing logged in that meal today'); return; }
+  openBundleModal('');
+  const bg = document.getElementById('bundle-modal-bg');
+  if (!bg || !bg.classList.contains('open')) return;   // openBundleModal bailed
+  _bundleSelectedItems = normalizeBundleItems([...new Set(src.map(e => e.food))]);
+  const mealSel = document.getElementById('bundle-modal-meal');
+  if (mealSel) mealSel.value = mealKey;
+  const nameEl = document.getElementById('bundle-modal-name');
+  if (nameEl) nameEl.value = `${mealLabelOf(mealKey)} ${fmt(today())}`;
+  renderBundleModalItems();
+}
+
 // v67: repeat the most recent meal group (any day) — one tap re-logs it now.
 function repeatLastMeal() {
   const entries = loadMigrated();
@@ -12022,7 +12109,11 @@ function renderPending() {
     if (!group.length) return;
     if (!firstSection) html += `<div class="meal-section-gap"></div>`;
     firstSection = false;
-    html += `<div class="meal-section-header">${mealLabels[mealKey]}</div>`;
+    // v69: meal actions — only when that meal has items logged TODAY
+    const mealActs = mealEntriesToday(mealKey).length ? `
+      <button onclick="openMealCopy(${escAttr(JSON.stringify(mealKey))})" title="Copy today's items of this meal into another meal of today" style="text-transform:none; letter-spacing:0; font-size:11px; font-weight:700; padding:3px 9px; border-radius:6px; border:1px solid var(--border); background:var(--card); color:var(--muted); cursor:pointer;">📋 Copy to…</button>
+      <button onclick="bundleFromMealToday(${escAttr(JSON.stringify(mealKey))})" title="Save today's items of this meal as a reusable bundle" style="text-transform:none; letter-spacing:0; font-size:11px; font-weight:700; padding:3px 9px; border-radius:6px; border:1px solid var(--border); background:var(--card); color:var(--muted); cursor:pointer;">🍱 Bundle</button>` : '';
+    html += `<div class="meal-section-header">${mealLabels[mealKey]}${mealActs}</div>`;
     html += group.map(e => {
       const agoTag = hoursAgoLabel(e.date, e.logTime);
       const suspectTag = suspectFoods.has(e.food) ? `<span class="suspect-flag" style="margin:0;" title="${(s => s ? `${s.neg} of ${s.total} rated windows reacted (50%+) — all-time history` : '')(suspectFoods.get(e.food))}">⚠️</span>` : '';
@@ -15013,6 +15104,15 @@ function runSelfTest() {
     _bulkMode = was;
     return (ids === 'a,b' && off === 1) ? true : `got [${ids}], off=${off}`;
   });
+
+  // ── meal copy (v69) ──
+  t('meal copy: skips foods already in the target meal and de-dupes within the copy', () => {
+    const src = [{ food: 'Rice' }, { food: 'Lettuce' }, { food: 'Rice' }];
+    const plan = mealCopyPlan(src, [{ food: 'Lettuce' }]);
+    return (plan.length === 1 && plan[0].food === 'Rice') ? true : JSON.stringify(plan.map(x => x.food));
+  });
+  t('meal copy: an empty target copies everything once', () =>
+    mealCopyPlan([{ food: 'A' }, { food: 'B' }], []).length === 2 ? true : 'expected 2');
 
   // ── backup safety (v68 audit-2, batch A) ──
   t('backup: absent bundles/archives are null (live kept); present ones are arrays', () => {
