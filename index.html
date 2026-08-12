@@ -3157,6 +3157,7 @@ html body select.status-badge-select.status-blacklist {
       <datalist id="exp-food-list"></datalist>
       <button class="btn-primary" onclick="startExperimentFromInput()" style="padding:9px 16px; font-size:13px;">Start trial</button>
       <button class="btn-primary" onclick="openTrialPicker()" title="Search once, tick many foods, and start a trial for each" style="padding:9px 16px; font-size:13px;">☑️ Pick several</button>
+      <button class="btn-primary" onclick="openTrialMetrics('')" title="Choose which check-in metrics every new trial measures" style="padding:9px 16px; font-size:13px;">📊 Default metrics</button>
     </div>
   </div>
   <div id="experiments-list"></div>
@@ -3729,6 +3730,20 @@ html body select.status-badge-select.status-blacklist {
     <input id="itemtype-search" type="text" placeholder="Search items…" oninput="renderItemTypesList(this.value)" style="width:100%; padding:8px 10px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text); margin-bottom:10px; box-sizing:border-box;">
     <div id="itemtype-list" style="overflow-y:auto; flex:1; padding-right:4px;"></div>
     <div style="margin-top:14px; text-align:right;"><button onclick="closeItemTypesModal()" style="padding:8px 18px; border-radius:8px; border:none; background:var(--navy); color:#fff; font-weight:700; cursor:pointer;">Done</button></div>
+  </div>
+</div>
+
+<!-- ═══ Trial metrics picker (v69) — defaults or one trial ═══ -->
+<div id="trialmetrics-modal-bg" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:10000; align-items:center; justify-content:center; padding:16px;" onclick="if(event.target===this)closeTrialMetrics()">
+  <div style="background:var(--card); color:var(--text); border-radius:14px; max-width:480px; width:100%; max-height:82vh; display:flex; flex-direction:column; padding:20px; box-shadow:0 20px 60px rgba(0,0,0,0.45);">
+    <h3 id="trialmetrics-title" style="margin:0 0 6px;">📊 Trial metrics</h3>
+    <p id="trialmetrics-sub" style="font-size:12px; color:var(--muted); margin:0 0 12px;"></p>
+    <div id="trialmetrics-list" style="overflow-y:auto; flex:1; padding-right:4px;"></div>
+    <div style="margin-top:14px; display:flex; gap:8px; justify-content:flex-end; align-items:center;">
+      <span id="trialmetrics-count" style="margin-right:auto; font-size:12px; color:var(--muted);"></span>
+      <button onclick="closeTrialMetrics()" style="padding:8px 16px; border-radius:8px; border:1px solid var(--border); background:var(--card); color:var(--text); cursor:pointer;">Cancel</button>
+      <button onclick="saveTrialMetricsModal()" style="padding:8px 18px; border-radius:8px; border:none; background:var(--navy); color:#fff; font-weight:700; cursor:pointer;">Save</button>
+    </div>
   </div>
 </div>
 
@@ -11322,7 +11337,22 @@ function overallCheckinKey() {
 
 // Smart-pick target symptoms: overall daily score + the check-in symptoms this
 // food was flagged for in Verdicts, else the most-affected (lowest-baseline) ones.
+// ── Trial metrics (v69) ────────────────────────────────────────────────────
+// Which check-in metrics a trial measures. The app used to auto-pick 3 —
+// always Overall plus whatever scored LOWEST lately — so every trial watched
+// the same chronically-bad metrics regardless of the food. Now you choose the
+// default set once; auto-pick is only the fallback when you haven't.
+const TRIAL_AUTO_METRICS = 5;   // auto-pick width when you haven't chosen (was 3)
+function loadTrialMetrics() {
+  try { const a = JSON.parse(localStorage.getItem('fst_trial_metrics') || '[]'); return Array.isArray(a) ? a : []; }
+  catch (e) { return []; }
+}
+function saveTrialMetrics(arr) { localStorage.setItem('fst_trial_metrics', JSON.stringify(arr || [])); }
+
 function pickTargetSyms(food) {
+  // your explicit choice wins — no guessing
+  const chosen = loadTrialMetrics().filter(k => allCheckinSymptoms().some(s => s.key === k));
+  if (chosen.length) return chosen;
   const syms = allCheckinSymptoms();
   const picked = [];
   const overall = overallCheckinKey();
@@ -11344,7 +11374,7 @@ function pickTargetSyms(food) {
   }
 
   // fall back to the lowest-recent-average (most bothersome) symptoms
-  if (picked.length < 3) {
+  if (picked.length < TRIAL_AUTO_METRICS) {
     const checkins = loadCheckins();
     const recent = Object.keys(checkins).filter(d => d >= addDays(today(), -14));
     const avgOf = key => {
@@ -11354,10 +11384,75 @@ function pickTargetSyms(food) {
     syms.filter(s => !picked.includes(s.key))
       .map(s => ({ key: s.key, avg: avgOf(s.key) }))
       .sort((a, b) => a.avg - b.avg)
-      .slice(0, 3 - picked.length)
+      .slice(0, TRIAL_AUTO_METRICS - picked.length)
       .forEach(s => picked.push(s.key));
   }
-  return picked.slice(0, 4);
+  return picked.slice(0, TRIAL_AUTO_METRICS);
+}
+
+// ── Trial metrics picker (v69) ──────────────────────────────────────────────
+// One modal, two modes: expId '' edits the DEFAULT set for new trials,
+// otherwise it edits that trial's measured metrics in place.
+let _tmExpId = '';
+let _tmSel = [];
+function openTrialMetrics(expId) {
+  _tmExpId = expId || '';
+  if (_tmExpId) {
+    const e = loadExperiments().find(x => x.id === _tmExpId);
+    if (!e) return;
+    _tmSel = (e.targetSyms || []).slice();
+    document.getElementById('trialmetrics-title').textContent = '📊 Metrics for this trial';
+    document.getElementById('trialmetrics-sub').innerHTML = `Which check-in metrics <b>${esc(e.food)}</b> is judged on. Changing this re-scores the trial immediately.`;
+  } else {
+    _tmSel = loadTrialMetrics();
+    document.getElementById('trialmetrics-title').textContent = '📊 Default trial metrics';
+    document.getElementById('trialmetrics-sub').innerHTML = 'Which check-in metrics every NEW trial measures. Leave all unticked to let the app auto-pick. Existing trials keep their own set — edit those on the trial card.';
+  }
+  renderTrialMetricsList();
+  const bg = document.getElementById('trialmetrics-modal-bg');
+  if (bg) bg.style.display = 'flex';
+}
+function closeTrialMetrics() {
+  const bg = document.getElementById('trialmetrics-modal-bg');
+  if (bg) bg.style.display = 'none';
+  _tmExpId = ''; _tmSel = [];
+}
+function toggleTrialMetric(key, on) {
+  if (on) { if (!_tmSel.includes(key)) _tmSel.push(key); }
+  else _tmSel = _tmSel.filter(k => k !== key);
+  renderTrialMetricsList();
+}
+function renderTrialMetricsList() {
+  const el = document.getElementById('trialmetrics-list');
+  if (!el) return;
+  const overall = overallCheckinKey();
+  el.innerHTML = allCheckinSymptoms().map(s => {
+    const on = _tmSel.includes(s.key);
+    const isOverall = s.key === overall;
+    return `<label style="display:flex; align-items:center; gap:9px; padding:7px 4px; border-bottom:1px solid var(--border); cursor:pointer; font-size:13px;">
+      <input type="checkbox" ${on ? 'checked' : ''} data-k="${escAttr(s.key)}" onchange="toggleTrialMetric(this.dataset.k, this.checked)">
+      <span style="flex:1; min-width:0;">${esc(s.label)}</span>
+      ${isOverall ? '<span title="This metric decides the trial verdict" style="font-size:10.5px; font-weight:700; color:#0F6E56; white-space:nowrap;">drives verdict</span>' : ''}
+    </label>`;
+  }).join('');
+  const c = document.getElementById('trialmetrics-count');
+  if (c) c.textContent = _tmSel.length ? `${_tmSel.length} selected` : 'none selected → auto-pick';
+}
+function saveTrialMetricsModal() {
+  if (_tmExpId) {
+    if (!_tmSel.length) { toast('Pick at least one metric for this trial'); return; }
+    const exps = loadExperiments();
+    const e = exps.find(x => x.id === _tmExpId);
+    if (e) { e.targetSyms = _tmSel.slice(); saveExperiments(exps); }
+    closeTrialMetrics();
+    render();
+    toast('Trial metrics updated ✓');
+  } else {
+    saveTrialMetrics(_tmSel.slice());
+    closeTrialMetrics();
+    render();
+    toast(_tmSel.length ? `New trials will measure ${_tmSel.length} metric${_tmSel.length === 1 ? '' : 's'} ✓` : 'Default metrics cleared — new trials auto-pick');
+  }
 }
 
 function meanCheckin(checkins, fromDate, toDate, key) {
@@ -11398,7 +11493,7 @@ function computeExperiment(exp) {
 
   // per-symptom baseline vs measured elimination
   const syms = allCheckinSymptoms();
-  const rows = exp.targetSyms.map(rawKey => {
+  const mkRow = rawKey => {
     const key = rawKey === 'diarrhea' ? 'ci_focus' : rawKey;   // v68 legacy-key alias — old trials keep scoring
     const sym = syms.find(s => s.key === key);
     const base = meanCheckin(checkins, baseFrom, baseTo, key);
@@ -11409,7 +11504,16 @@ function computeExperiment(exp) {
     }
     const delta = (base.avg != null && elim.avg != null) ? elim.avg - base.avg : null;
     return { key, label: sym ? sym.label : key, base, elim, reintro, delta };
-  });
+  };
+  const rows = exp.targetSyms.map(mkRow);
+  // v69: every OTHER metric that has data, biggest movement first — supporting
+  // detail only (it never feeds the verdict; on a short trial some of these
+  // move by chance).
+  const targetKeys = new Set(rows.map(r => r.key));
+  const otherRows = syms.filter(s => !targetKeys.has(s.key))
+    .map(s => mkRow(s.key))
+    .filter(r => r.delta != null)
+    .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
 
   const overallKey = overallCheckinKey();
   const overallRow = rows.find(r => r.key === overallKey) || rows[0];
@@ -11455,7 +11559,7 @@ function computeExperiment(exp) {
     }
   }
 
-  return { rows, overallRow, verdict, headline, slipDays: [...slipDays], elimDayNum, elimEnd, measuredDays: measuredDays.size, baseFrom, baseTo };
+  return { rows, otherRows, overallRow, verdict, headline, slipDays: [...slipDays], elimDayNum, elimEnd, measuredDays: measuredDays.size, baseFrom, baseTo };
 }
 
 function foodsForDatalist() {
@@ -11651,17 +11755,37 @@ function renderExperiments() {
       </div>`;
     }).join('');
 
+    // v69: every other metric with data, biggest movement first — supporting
+    // detail, folded away so it can't be mistaken for the verdict's basis.
+    const others = c.otherRows || [];
+    const otherHtml = others.length ? `<details style="margin-top:8px;">
+        <summary style="cursor:pointer; font-size:11.5px; color:var(--muted); font-weight:700;">＋ ${others.length} other metric${others.length === 1 ? '' : 's'} moved (supporting detail)</summary>
+        <div style="margin-top:6px;">${others.map(r => {
+          const d = r.delta;
+          const cls2 = d >= 0.4 ? 'up' : d <= -0.4 ? 'down' : 'flat';
+          const arrow2 = d >= 0.4 ? `▲ +${d.toFixed(1)}` : d <= -0.4 ? `▼ ${d.toFixed(1)}` : '→';
+          return `<div class="weekly-row">
+            <span class="weekly-sym">${esc(r.label)}</span>
+            <span class="weekly-vals">base ${f1(r.base.avg)} → avoid <strong>${f1(r.elim.avg)}</strong></span>
+            <span class="weekly-delta ${cls2}">${arrow2}</span>
+          </div>`;
+        }).join('')}
+        <div style="font-size:10.5px; color:var(--muted); margin-top:6px;">These don't affect the verdict. On a short trial a few will move by chance — treat them as leads, not proof.</div></div>
+      </details>` : '';
+
     let actions = '';
     if (exp.status === 'eliminating') {
       const canReintro = c.elimDayNum >= exp.elimDays;
       actions = `<div class="exp-actions">
         ${canReintro ? `<button class="btn-primary" style="padding:7px 12px; font-size:12px;" onclick="beginReintro('${exp.id}')">Reintroduce to confirm</button>` : ''}
         <button class="bundle-secondary-btn" onclick="finishExperiment('${exp.id}')">Finish now</button>
+        <button class="bundle-secondary-btn" onclick="openTrialMetrics('${exp.id}')" title="Choose which check-in metrics this trial is judged on">📊 Metrics</button>
         <button class="delete-btn" style="padding:6px 10px; font-size:12px;" onclick="deleteExperiment('${exp.id}')">Delete</button>
       </div>`;
     } else if (exp.status === 'reintroducing') {
       actions = `<div class="exp-actions">
         <button class="btn-primary" style="padding:7px 12px; font-size:12px;" onclick="finishExperiment('${exp.id}')">Finish trial</button>
+        <button class="bundle-secondary-btn" onclick="openTrialMetrics('${exp.id}')" title="Choose which check-in metrics this trial is judged on">📊 Metrics</button>
         <button class="delete-btn" style="padding:6px 10px; font-size:12px;" onclick="deleteExperiment('${exp.id}')">Delete</button>
       </div>`;
     } else {
@@ -11678,7 +11802,7 @@ function renderExperiments() {
       </div>
       <div class="exp-headline">${c.headline}</div>
       ${slipWarn}
-      <div style="margin-top:6px;">${rowsHtml}</div>
+      <div style="margin-top:6px;">${rowsHtml}${otherHtml}</div>
       <div class="exp-meta">Baseline: ${fmtDayShort(c.baseFrom)}–${fmtDayShort(c.baseTo)} · washout ${exp.washoutDays}d · scores 1 (severe) → 5 (good), higher is better</div>
       ${actions}
     </div>`;
@@ -12840,6 +12964,7 @@ function buildBackupJSON() {
       dictionary: loadFoodDictionary(), // v58: retired-name autocomplete list now travels too
       faceMap: loadFaceMap(),           // v59: face-map reaction marks travel too
       itemTypes: loadItemTypeMap(),     // v68: per-food type overrides travel too (audit batch 3)
+      trialMetrics: loadTrialMetrics(), // v69: your default trial-metric choice travels too
       theme: localStorage.getItem('fst_theme') || 'light',
       uiStyle: localStorage.getItem('fst_ui_style') || 'current'
     }
@@ -12862,7 +12987,7 @@ function markBackupDone(msg) {
 // Answers "if I restored this file right now, what exactly would change?"
 // The file goes through the SAME normalizer a real restore uses, then every
 // section is diffed against live data. Nothing is written anywhere.
-const VB_COVERED_KEYS = ['fst_entries','fst_custom_syms','fst_food_notes','fst_food_status','fst_checkins','fst_checkin_syms','fst_checkin_order','fst_archives','fst_bundles','fst_experiments','fst_food_dictionary','fst_face_map','fst_item_types','fst_theme','fst_ui_style'];
+const VB_COVERED_KEYS = ['fst_entries','fst_custom_syms','fst_food_notes','fst_food_status','fst_checkins','fst_checkin_syms','fst_checkin_order','fst_archives','fst_bundles','fst_experiments','fst_food_dictionary','fst_face_map','fst_item_types','fst_trial_metrics','fst_theme','fst_ui_style'];
 const VB_DEVICE_LOCAL = ['fst_last_meal_type','fst_insight_view','fst_timeline_view','fst_trend_active','fst_reminder_dismissed','fst_backup_nag_snooze','fst_trial_nudge_dismissed','fst_streak_milestone','fst_last_celebration','fst_windows_celebration','fst_log_milestone','fst_last_backup','fst_food_merge_undo'];
 
 function _vbCanonEntry(e) {
@@ -13299,8 +13424,14 @@ function normalizeImportedBackupData(rawData) {
         .map(([f, t]) => [String(f), t]))
     : null;
 
+  // v69: default trial metrics (null when absent — keeps the live choice)
+  const normTrialMetrics = Array.isArray(data.trialMetrics)
+    ? data.trialMetrics.map(v => String(v)).filter(Boolean)
+    : null;
+
   return {
     entries: normEntries,
+    trialMetrics: normTrialMetrics,
     customSyms: normCustomSyms,
     foodNotes: normFoodNotes,
     foodStatus: normFoodStatus,
@@ -13376,6 +13507,7 @@ async function importFullBackup(text, inputEl) {
     if (data.dictionary !== null) saveFoodDictionary(data.dictionary); // pre-v58 backups lack the field — keep the live list
     if (data.faceMap !== null) saveFaceMap(data.faceMap); // pre-v59 backups lack the field — keep the live marks
     if (data.itemTypes !== null) saveItemTypeMap(data.itemTypes); // v68: type overrides travel; saveItemTypeMap refreshes the cache
+    if (data.trialMetrics !== null) saveTrialMetrics(data.trialMetrics); // v69
     localStorage.setItem('fst_theme', data.theme);
     applyVisualTheme(data.uiStyle);
 
@@ -15103,6 +15235,25 @@ function runSelfTest() {
     const off = (_bulkMode = false, getBulkTargets(es, es[0]).length);
     _bulkMode = was;
     return (ids === 'a,b' && off === 1) ? true : `got [${ids}], off=${off}`;
+  });
+
+  // ── trial metrics (v69) ──
+  t('trial metrics: computeExperiment separates target rows from other-metric rows', () => {
+    const exp = { id: 'x', food: 'Test Food', status: 'done', elimStart: D(6), elimDays: 5,
+                  washoutDays: 0, reintroStart: null, reintroDays: 3, endedAt: null, targetSyms: ['ci_day_score'] };
+    const c = computeExperiment(exp);
+    const targets = c.rows.map(r => r.key);
+    const others = (c.otherRows || []).map(r => r.key);
+    const overlap = others.filter(k => targets.includes(k));
+    const sorted = (c.otherRows || []).every((r, i, a) => i === 0 || Math.abs(a[i - 1].delta) >= Math.abs(r.delta));
+    return (targets.length === 1 && overlap.length === 0 && sorted) ? true
+      : `targets=${JSON.stringify(targets)} overlap=${JSON.stringify(overlap)} sorted=${sorted}`;
+  });
+  t('trial metrics: backup carries the default set; absent field keeps the live choice', () => {
+    const n1 = normalizeImportedBackupData({ trialMetrics: ['ci_day_score', 'ci_daily_pain'] });
+    const n2 = normalizeImportedBackupData({ entries: [] });
+    return (JSON.stringify(n1.trialMetrics) === '["ci_day_score","ci_daily_pain"]' && n2.trialMetrics === null)
+      ? true : JSON.stringify([n1.trialMetrics, n2.trialMetrics]);
   });
 
   // ── meal copy (v69) ──
