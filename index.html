@@ -2876,7 +2876,7 @@ try {
   </div>
 
   <div style="margin-left: auto; display: flex; align-items: center; gap: 4px;">
-    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v68</span>
+    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v70</span>
   </div>
 
   <div id="nav-more-tray" style="display:none; flex-basis:100%; flex-wrap:wrap; gap:4px; padding-top:6px; margin-top:4px; border-top:1px dashed rgba(255,255,255,0.18);">
@@ -4328,37 +4328,92 @@ function isUnscoredEntry(e) {
   const w = e.windows || {}, s = e.symptoms || {};
   return ['w1', 'w2', 'w3', 'w4'].every(k => w[k] == null) && !Object.values(s).some(Boolean);
 }
+// v70.3: a previous round normalised the window part of a row's badness by how
+// many windows were MARKED (a row marked 1-of-4 with one ✕ scored a full 4).
+// It was reverted on measurement, not taste: paired against the round before it
+// on identical logs it cost +0.29pp of false accusations aggregate and +0.60pp
+// on a calm log with ragged marking, against the -0.12pp the pooled/ICC change
+// buys back — 2.4× more harm than good. The mechanism is that sparse rows become
+// high-variance: one mark decides the whole row. The underlying complaint (an
+// unmarked window is ABSENT, not calm) is real, but the cure has to cost less
+// than the disease, and this one did not.
 function foodMealLift(entries) {
   entries = entries.filter(e => !isUnscoredEntry(e));
   const byKey = {};
   entries.forEach(e => { const k = mealKeyOf(e); (byKey[k] || (byKey[k] = [])).push(e); });
   const meals = Object.values(byKey).map(es => ({
     foods: new Set(es.map(x => x.food)),
-    bad: Math.max(...es.map(entryBadness)),          // one reaction per meal
+    // One reaction per meal — the MEAN over the plate, not the max. Max scaled
+    // with plate size (a 3-item plate inherits the worst of 3 draws), so a food's
+    // lift rose just for being eaten in company: the exact bleed this card exists
+    // to prevent. Bulk Edit stamps the same windows AND symptoms onto every item
+    // of a meal group, so for meals marked that way mean === max and nothing moves.
+    bad: es.reduce((a, x) => a + entryBadness(x), 0) / es.length,
     // 🔬 means EXPLICIT solo test only (audit batch 2) — a one-item meal isn't
     // automatically a deliberate clean test, and pretending it was inflated badges.
     solo: es.some(x => x.solo),
   }));
   const nMealsTotal = meals.length;
   const totalBad = meals.reduce((a, m) => a + m.bad, 0);
+  const totalSq = meals.reduce((a, m) => a + m.bad * m.bad, 0);
   const grand = nMealsTotal ? totalBad / nMealsTotal : 0;
   // One pass over meals accumulating per-food sums — mathematically identical
   // to the old per-food meals.filter() loops, minus the O(foods × meals) cost
   // that ran twice per Summary render (audit batch 4).
   const acc = {};
-  meals.forEach(m => m.foods.forEach(f => {
-    const a = acc[f] || (acc[f] = { n: 0, sum: 0, soloN: 0 });
-    a.n++; a.sum += m.bad; if (m.solo) a.soloN++;
-  }));
+  meals.forEach(m => {
+    const fs = [...m.foods];
+    fs.forEach(f => {
+      const a = acc[f] || (acc[f] = { n: 0, sum: 0, sq: 0, soloN: 0, sharedN: 0, mates: {} });
+      a.n++; a.sum += m.bad; a.sq += m.bad * m.bad; if (m.solo) a.soloN++;
+      // who it keeps company with — so a demoted food can be told WHY (v70)
+      if (fs.length > 1) { a.sharedN++; fs.forEach(o => { if (o !== f) a.mates[o] = (a.mates[o] || 0) + 1; }); }
+    });
+  });
+  const vr = (sq, sum, n) => (n > 1 ? Math.max(0, (sq - sum * sum / n) / (n - 1)) : 0);
   const rows = Object.entries(acc).map(([food, a]) => {
     const wMean = a.sum / (a.n || 1);
     const woN = nMealsTotal - a.n;
     const woMean = woN ? (totalBad - a.sum) / woN : grand;
-    return { food, nMeals: a.n, wMean, woMean, lift: wMean - woMean, soloN: a.soloN };
+    // How much of that gap is just noise? Standard error of the difference of the
+    // two means. A lift smaller than its own SE is not evidence of anything (v70).
+    const se = Math.sqrt(vr(a.sq, a.sum, a.n) / (a.n || 1) + (woN ? vr(totalSq - a.sq, totalBad - a.sum, woN) / woN : 0));
+    const mate = Object.keys(a.mates).sort((x, y) => a.mates[y] - a.mates[x])[0] || null;
+    // v70.3: a food eaten in EVERY meal has no "without" side at all. woMean then
+    // falls back to the grand mean, which IS its own mean, so the lift came out
+    // exactly +0.00 and the meal test failed it — and a staple reacting on 67% of
+    // its windows against a 9% baseline was filed as Typical and named on NO
+    // surface. An absent comparison is not evidence of innocence: flag it, and
+    // let liftClears() ABSTAIN rather than read a fabricated zero as a pass mark.
+    const noContrast = !woN;
+    return { food, nMeals: a.n, wMean, woMean, lift: wMean - woMean, se, soloN: a.soloN, noContrast,
+      sharedN: a.sharedN, mate, mateN: mate ? a.mates[mate] : 0, mates: a.mates };
   });
   rows.sort((a, b) => b.lift - a.lift);
   return rows;
 }
+// v70: "do its OWN meals run worse?" — the one question that separates a trigger
+// from a bystander sitting on the same plate. A food may only be called a
+// suspect, enter Strong Suspects, or reach the doctor report if the meals
+// containing it beat the meals without it by more than the noise in that
+// comparison. Below 3 meals the SE means nothing, so there is no case to answer.
+// v70.1: this stays a MARGINAL comparison, and both proposed replacements were
+// built, swept and rejected on measured numbers, not taste:
+//   - Dropping it and leaning on the pooled test alone: false accusations 2.9%
+//     → 5.4% (breaks the <5% budget) to buy +0.7pp of real detections.
+//   - Replacing it with a STRATIFIED contrast (judge the food on the meals it
+//     was eaten apart from its likeliest confounder): as sole judge it costs
+//     30pp of detection, and even as a veto-only rule it costs 3.2pp at 8-11
+//     meals and 4.0pp at 12-19, and triples the excess loss on an
+//     always-accompanied real trigger (-1.7pp → -5.0pp vs control). It buys
+//     ~10pp of innocent-plate-mate accuracy, which is real but is not worth
+//     hiding real triggers for. Its honest limit: with no meals apart, no
+//     method can separate two foods — that needs a deliberate solo test.
+// v70.3: ABSTAIN when there is nothing to compare against. With no meals without
+// it the contrast cannot be computed at all, and a test that cannot run must not
+// veto — the food falls back to its window/pooled statistics, exactly as the day
+// level already does for a staple ("almost no days without it to compare").
+function liftClears(r) { return !!r && r.nMeals >= 3 && (r.noContrast || r.lift > r.se); }
 // ── Collapsible Summary sections (v66): the five analysis cards ship folded so
 // the tab stays scannable; tap a header to expand. Open state lives in memory,
 // so it survives the full re-renders that range/filter chips trigger.
@@ -4403,18 +4458,53 @@ function mealSuspectsCard(entries) {
   const rows = foodMealLift(entries).filter(r => r.nMeals >= 5);
   if (rows.length < 3) return '';
   const tmap = trialStateMap();
-  const worst = rows.slice(0, 12);
-  const best  = rows.slice(-6).reverse();
+  // v70.2: the two sections must be DISJOINT, and "calmer" must actually be
+  // calmer. `rows` is ONE array sorted by lift descending, so under 18 qualifying
+  // foods slice(0,12) and slice(-6) overlapped and the same food printed as both
+  // a suspect and a least-suspect; and with every lift positive the log's WORST
+  // food was printed under "your meals run calmer with these".
+  // v70.4: split by SIGN rather than by slice index, and keep the rows that have
+  // no lift out of both. Two things were wrong:
+  //  · `rows.slice(0, 12)` swallowed EVERY row on a log with 12 or fewer
+  //    qualifying foods, so the calm section only ever appeared at 13+ — below
+  //    that, foods whose meals run calmer printed under "Meal-aware suspects"
+  //    with nothing marking them as the calm end (measured: absent at 3-12).
+  //  · a 📌 can't-isolate row has NO lift at all — woMean falls back to the grand
+  //    mean — which is why the lift cell prints an em dash. The ranking was still
+  //    ordering those rows by that fabricated zero, and a fabricated NEGATIVE
+  //    could even file one under "your meals run calmer with these". They get
+  //    their own group now, ordered by the avg-badness column the card does show.
+  // v70.5: a row must not sit under a header asserting a direction when the lift
+  // it PRINTS is ±0.0. fmt() is toFixed(1), so anything under 0.05 displays as
+  // 0.0; those rows get their own neutral group rather than a claim the number on
+  // screen contradicts (measured: 29 of 838 grouped rows over 48 generated logs).
+  // Grouping and labelling only — no lift VALUE changes.
+  const flat = r => +r.lift.toFixed(1) === 0;
+  // v70.5: and NOTHING is truncated away. slice(0,12)/slice(-6) came from the
+  // pre-split code where the two slices OVERLAPPED, so together they still printed
+  // every row up to 18. Once the groups became disjoint the same slices started
+  // dropping qualifying foods off the card completely — measured at 482 of 1320
+  // rows across 48 generated logs, up to 16 lost on a single log. Losing a row the
+  // user previously had is worse than a longer table (the card ships folded).
+  const measured = rows.filter(r => !r.noContrast);
+  const worst = measured.filter(r => !flat(r) && r.lift > 0);
+  const best  = measured.filter(r => !flat(r) && r.lift < 0).reverse();
+  const level = measured.filter(flat);
+  const staples = rows.filter(r => r.noContrast).sort((a, b) => b.wMean - a.wMean);
   const fmt = n => (n >= 0 ? '+' : '') + n.toFixed(1);
   const liftColor = l => l > 0.5 ? '#d03b3b' : (l < -0.5 ? '#0ca30c' : 'var(--muted)');
-  const row = (r, testable) => `<tr><td class="food-col">${esc(r.food)}${r.soloN ? ` <span title="${r.soloN} clean solo test(s)" style="color:#0ca30c;font-weight:700;">🔬${r.soloN}</span>` : ''}${testable ? trialBadgeHTML(r.food, tmap) : ''}</td>`
+  const grpRow = txt => txt ? `<tr><td colspan="4" style="font-size:11px;color:var(--muted);padding:12px 8px 4px;font-weight:600;">${txt}</td></tr>` : '';
+  // v70.3: a food eaten in EVERY meal has no meals to be compared against, so its
+  // lift is not 0.0 — it does not exist. Printing the fabricated zero read as
+  // "measured, and it makes no difference", which is the opposite of the truth.
+  const row = (r, testable) => `<tr><td class="food-col">${esc(r.food)}${r.soloN ? ` <span title="${r.soloN} clean solo test(s)" style="color:#0ca30c;font-weight:700;">🔬${r.soloN}</span>` : ''}${r.noContrast ? ` <span class="tl-flag tl-staple" title="In every meal in range — there are no meals without it to compare, so no lift can be measured. Run a Trial.">📌 can't isolate</span>` : ''}${testable ? trialBadgeHTML(r.food, tmap) : ''}</td>`
     + `<td style="text-align:center;">${r.nMeals}</td>`
     + `<td style="text-align:center;">${r.wMean.toFixed(1)}</td>`
-    + `<td style="text-align:center;font-weight:800;color:${liftColor(r.lift)};">${fmt(r.lift)}</td></tr>`;
+    + `<td style="text-align:center;font-weight:800;color:${r.noContrast ? 'var(--muted)' : liftColor(r.lift)};">${r.noContrast ? '—' : fmt(r.lift)}</td></tr>`;
   return summaryFold('meal', '🍽️ Meal-aware suspects', `
     <div style="font-size:11px;color:var(--muted);margin-bottom:10px;">Ranks each food by how much <b>worse (or better)</b> your meals are when it's present vs absent — so a food isn't blamed just for sharing a plate with the real trigger. <b>Lift</b> in badness points; 🔬 = backed by clean solo tests.</div>
     <div style="overflow-x:auto;"><table class="corr-table"><thead><tr><th class="food-col" style="min-width:180px;">Food</th><th title="meals containing this food">meals</th><th title="avg badness of meals with this food">avg&nbsp;bad</th><th title="badness lift vs meals without it">lift</th></tr></thead>
-    <tbody>${worst.map(r => row(r, true)).join('')}<tr><td colspan="4" style="font-size:11px;color:var(--muted);padding:12px 8px 4px;font-weight:600;">Least-suspect — your meals run <b>calmer</b> with these:</td></tr>${best.map(r => row(r, false)).join('')}</tbody></table></div>`);
+    <tbody>${grpRow(worst.length && (best.length || level.length || staples.length) ? 'Your meals run <b>rougher</b> with these:' : '')}${worst.map(r => row(r, true)).join('')}${grpRow(best.length ? 'Least-suspect — your meals run <b>calmer</b> with these:' : '')}${best.map(r => row(r, false)).join('')}${grpRow(level.length ? 'Too small to call — your meals run about the <b>same</b> with or without these (lift rounds to 0.0):' : '')}${level.map(r => row(r, false)).join('')}${grpRow(staples.length ? '📌 No lift can be measured — in <b>every</b> meal in this range, so there are no meals without them to compare. Ranked by their own avg badness, not by a lift:' : '')}${staples.map(r => row(r, true)).join('')}</tbody></table></div>`);
 }
 
 // ── Prep & portion comparator (v65) ──────────────────────────────────────────
@@ -4882,7 +4972,27 @@ function openDoctorReport() {
   const dates = E.map(e => e.date).sort();
   const nDays = new Set(dates).size;
   const rows = foodMealLift(E).filter(r => r.nMeals >= 8);
-  const worst = rows.slice(0, 8), best = rows.slice(-6).reverse();
+  // v70.1: gate this on the SAME verdict the app shows the user, not on
+  // liftClears alone. liftClears is a ~1-sigma bar — 15.9% false-positive rate
+  // in theory, 13.5% measured on simulated null data — so on its own it handed a
+  // clinician roughly one innocent food in seven, and named foods the Summary
+  // refused to name. A clinician-facing page must be the most conservative
+  // surface in the app, never the loosest.
+  // The range chips are a filter on the Verdicts TAB; this report is always
+  // whole-history, so pin the range while we ask and put it straight back.
+  const _vr = _verdictRange;
+  let _susp;
+  try {
+    _verdictRange = 'all';
+    _susp = new Set(computeVerdicts().list.filter(i => i.verdict === 'suspect').map(i => i.food));
+  } finally { _verdictRange = _vr; }
+  const worst = rows.filter(r => _susp.has(r.food)).slice(0, 8);
+  const _named = new Set(worst.map(r => r.food));
+  // "Best tolerated" was rows.slice(-6) with no sign check and no overlap guard:
+  // on a log with no calm foods at all it reassured about the six LEAST bad
+  // ones, and a food could be printed as both a suspect and well tolerated on
+  // the same page. Require a genuinely negative lift, and never repeat a name.
+  const best = rows.filter(r => r.lift < 0 && !_named.has(r.food)).slice(-6).reverse();
   const trials = loadExperiments().filter(x => x.status === 'done')
     .map(x => ({ x, v: computeExperiment(x).verdict }))
     .filter(t => t.v === 'helped' || t.v === 'nochange' || t.v === 'worse');
@@ -4904,7 +5014,7 @@ function openDoctorReport() {
     <div>${Object.keys(mo).sort().map(m => `${m}: <b>${(mo[m].reduce((a, b) => a + b, 0) / mo[m].length).toFixed(2)}</b> (${mo[m].length}d)`).join(' · ') || '—'}</div>
     <div style="margin-top:4px;">Last 30 days: ${sparklineSVG(score30, '#0a7a4f') || '(insufficient data)'}</div>
     <div class="dr-h">Foods most associated with worse meals (meal-aware lift; + = worse when present)</div>
-    <table>${worst.map(r => `<tr><td style="padding:1px 12px 1px 0;">${esc(r.food)}</td><td style="padding:1px 8px;"><b>${fmt(r.lift)}</b></td><td style="color:#555;">${r.nMeals} meals</td></tr>`).join('') || '<tr><td>—</td></tr>'}</table>
+    <table>${worst.map(r => `<tr><td style="padding:1px 12px 1px 0;">${esc(r.food)}</td><td style="padding:1px 8px;"><b>${r.noContrast ? 'n/a' : fmt(r.lift)}</b></td><td style="color:#555;">${r.nMeals} meals${r.noContrast ? ' — present in EVERY meal; no unexposed meals exist to compare against, so no lift can be computed. Listed on its own reaction-window rate alone.' : ''}</td></tr>`).join('') || '<tr><td>—</td></tr>'}</table>
     <div class="dr-h">Best tolerated (meals run calmer when present)</div>
     <table>${best.map(r => `<tr><td style="padding:1px 12px 1px 0;">${esc(r.food)}</td><td style="padding:1px 8px;"><b>${fmt(r.lift)}</b></td><td style="color:#555;">${r.nMeals} meals</td></tr>`).join('') || '<tr><td>—</td></tr>'}</table>
     <div class="dr-h">Controlled avoidance trials (finished, conclusive)</div>
@@ -11014,6 +11124,134 @@ function inVerdictRange(dateStr) {
   return days === undefined ? true : d >= dateDaysAgo(days);
 }
 
+// ─── Statistical footing for the two suspect gates (v70) ─────────────────────
+// Both gates used to be "is the worst of 4 windows over a fixed bar?" — four
+// chances at one bar, n>=3 as the only sample rule, no variance term at all. So
+// three unlucky servings read as proof, and on pure noise a third of all foods
+// came back "suspect". These give both gates (Verdicts here, and the Summary's
+// Strong Suspects card) a real footing: an EXACT binomial tail against the
+// food's own applicable baseline, a correction for testing several windows at
+// once, and a Wilson lower bound so a tiny sample cannot outrank a large one.
+// Honest caveat: the 4 windows after one serving are not fully independent, so
+// treat these as screening thresholds, not as publishable p-values.
+// The dial between "misses real triggers" and "blames innocent food". Measured
+// on 360k simulated food-trials with zero real effect: 0.05 → 1.8% of innocent
+// foods called suspect but only 62% of real +25pp triggers caught at 8 servings;
+// 0.10 → 4.5% and 75%; 0.20 → 8.5% and 85%. 0.10 is the most sensitive setting
+// that still keeps false accusations under 5%.
+// CORRECTION (v70.1). An earlier note here blamed that 75% on sample size —
+// "at 8 servings even a perfect test holding 5% can only reach 77%". That was
+// simply WRONG, and it was hiding a fixable defect. 8 servings carry 32 window
+// observations, not 8. One window's 8 observations really do cap near 22-26%
+// power; the SAME 32 observations pooled into a single exact binomial reach
+// ~86% power at a ~3.3% true false-positive rate. The ceiling was the
+// per-window framing, not the data — hence the pooled path below.
+const SUSPECT_ALPHA = 0.10;      // family-wise budget for the PER-WINDOW family
+const SUSPECT_MIN_DELTA = 0.15;  // ...and the gap must still be big enough to act on
+// The pooled test is ONE test over one sample, so it pays no multiplicity
+// correction — that is the entire point of pooling — and carries its own,
+// tighter budget. A food qualifies on EITHER path: pooled catches "a bit worse
+// in every window", per-window catches "fine except at 9-13h", and both are
+// genuine. The two overlap heavily (same data), so the union's measured
+// false-positive rate is far below the sum of the two budgets.
+// Both numbers are swept, not guessed. 0.08 lifts detection at 8 servings to
+// ~88% but pushes null false accusations to 5.5-6.0%, over budget. A 0.12
+// effect-size floor saves only 0.2pp of that budget and costs 7pp of detection
+// on foods eaten 40+ times — the staples — because a staple's own plate-mates
+// contaminate the baseline it is measured against. 0.05 / 0.10 is the pair that
+// holds the budget without paying for it in staples.
+// v70.2: 0.10 is the NOMINAL budget, and it is nominal on an EFFECTIVE sample —
+// see pooledSuspect().
+// v70.3 CORRECTION. This note used to state, flatly, that feeding the binomial
+// half the window count at 0.10 "is a tighter test than the full count at 0.05".
+// That is FALSE, and it is exactly enumerable rather than a matter of judgement:
+// across every reachable (scored 6-40) × (neg) × (baseline .05-.70) count-state
+// the two rules disagree 255 times — ÷2@0.10 is tighter on 153 of them and
+// LOOSER on 102 (whole gate, effect-size floor included: 148 vs 96). What is
+// true is the weaker, empirical claim: on measured logs the pair comes out
+// net-tighter — null false accusations fell (aggregate 4.07% → 3.93%, worst
+// stress cell 6.02% → 5.72%) for 0.59pp of detection on real +25pp triggers.
+// Simply tightening to 0.03 instead bought a bit more (worst cell 5.50%) but
+// cost 2.19pp of detection — ~2× worse per point bought, and it papers over the
+// cause rather than modelling it.
+const POOLED_ALPHA = 0.10;
+const POOLED_MIN_DELTA = 0.10;
+// v70.3: it was argued that this floor — a raw-rate threshold with no sample-size
+// term in it — is what really sets the false-positive rate on short histories,
+// and that tuning the binomial's divisor is "tuning a limb that is not binding".
+// Measured, both halves of that are false. On 30-day logs the BINOMIAL is what
+// binds: of innocent foods with 6+ scored windows, 12.86% clear this floor and
+// are refused by the binomial, while 0.06% clear the binomial and are refused by
+// the floor (n=1,649; under 20 scored windows every food that cleared the
+// binomial had already cleared the floor). And adding a sample-size term costs
+// far more than it buys, on paired identical logs: floor + 0.25/√n → null
+// −0.64pp but detection −3.28pp (McNemar p=2e-16); a Wilson-lower-bound floor at
+// 0.05 → null −1.55pp, detection −5.69pp (p=8e-21). Both spend roughly five real
+// triggers for every innocent food spared. Left alone deliberately.
+// P(X >= k) for k reactions out of n scored windows at baseline rate p.
+// If (1-p)^n underflows (absurd n) cum stays 0 and this returns 1 = "not
+// significant", which fails SAFE: it can never invent a suspect.
+function binomTailGE(k, n, p) {
+  if (k <= 0) return 1;
+  if (k > n) return 0;
+  if (!(p > 0)) return 0;
+  if (p >= 1) return 1;
+  let term = Math.pow(1 - p, n), cum = 0;
+  for (let i = 0; i < k; i++) { cum += term; term *= ((n - i) / (i + 1)) * (p / (1 - p)); }
+  return Math.min(1, Math.max(0, 1 - cum));
+}
+// Šidák: the chance the BEST of m tests looks this good by luck alone.
+function multiAdjust(p, m) { return m <= 1 ? p : 1 - Math.pow(1 - p, m); }
+// Wilson lower bound on a rate: 3-of-3 lands at 0.31, 18-of-20 at 0.70 — so the
+// small sample can no longer outrank the large one the way raw % did.
+function wilsonLower(k, n) {
+  if (!n) return 0;
+  const z = 1.96, ph = k / n, z2 = z * z;
+  return Math.max(0, Math.min(1, (ph + z2 / (2 * n) - z * Math.sqrt((ph * (1 - ph) + z2 / (4 * n)) / n)) / (1 + z2 / n)));
+}
+// v70.3: ONE window test, shared by the Verdicts tab and the Summary's Strong
+// Suspects card. They used to test DIFFERENT THINGS: Summary tested every window
+// and took any pass, Verdicts tested only `worst` — the single max-shrunk-delta
+// window — so a food significant in a window that was not its worst read 'Strong
+// Suspect' on one surface and 'Typical' on the other. That disagreement was
+// measured at 4.0% of food-cards whenever per-window totals are uneven, which is
+// the app's NORMAL state, since windows fill in over time.
+// All-windows-with-a-multiplicity-correction is the right side of that fork:
+// max-only pays the Šidák price for m tests and then looks at one of them, so at
+// the same false-positive budget it is strictly less powerful — it hides real
+// triggers and buys nothing. `nTested` is the number of windows with enough data
+// to be tested, counted the same way on both surfaces. Note it deliberately does
+// NOT depend on the Summary's minimum-logs chip: a display filter must never move
+// a significance threshold.
+function winSuspect(n, total, base, nTested) {
+  return total >= 3 && n >= 3
+    && (n + 2 * base) / (total + 2) - base >= SUSPECT_MIN_DELTA
+    && multiAdjust(binomTailGE(n, total, base), nTested) <= SUSPECT_ALPHA;
+}
+// v70.1 POOLED test — the single most important gate in this file. All of a
+// food's scored windows judged as ONE sample against the baseline mix its own
+// windows imply (self-excluded, +1/+2 smoothed, same convention as everywhere
+// else). `expRate` is that mix; `neg`/`scored` are the food's own totals.
+// Shared verbatim by the Verdicts tab and the Summary's Strong Suspects card so
+// the two can never disagree about whether a food cleared it.
+// v70.2: the binomial treated a food's window marks as INDEPENDENT trials. They
+// are not — Bulk Edit stamps a whole meal at once and one serving's four windows
+// largely echo a single outcome. Measured within-serving correlation (one-way
+// ICC on the marks, clustered by serving) runs 0.06 on a calm log and up to 0.37
+// on a heavy-Bulk-Edit / near-full-coverage / sticky-bad-weeks log, so the design
+// effect 1 + (m−1)·ICC at m≈3.9 marks per serving reaches 2.08. The count is
+// therefore deflated by that worst-case design effect before it is tested: half
+// the windows, half the reactions. The divisor is measured, not guessed, and it
+// is deliberately the worst case rather than the average — the gate must hold its
+// budget on the user's bad weeks, not just on their calm ones.
+// The effect-size floor keeps the FULL count: clustering inflates the VARIANCE of
+// the estimate, it does not bias the estimate itself.
+function pooledSuspect(neg, scored, expRate) {
+  const nEff = Math.floor(scored / 2), kEff = Math.min(nEff, Math.round(neg / 2));
+  return scored >= 6 && (neg + 2 * expRate) / (scored + 2) - expRate >= POOLED_MIN_DELTA
+    && binomTailGE(kEff, nEff, expRate) <= POOLED_ALPHA;
+}
+
 function computeVerdicts() {
   // foods only (audit batch 2): supplements/salt/activities were ranking as
   // "suspects" here and polluting every food's baseline, while Summary already
@@ -11060,8 +11298,29 @@ function computeVerdicts() {
     negSyms.forEach(s => { if (e.symptoms && e.symptoms[s.key]) f.symCounts[s.key] = (f.symCounts[s.key] || 0) + 1; });
   });
 
+  // v70: meal-aware lift over the SAME entry set the verdicts are built from, so
+  // the suspect label can require a food's own meals to be worse — not merely its
+  // windows to look bad on plates it happened to share with something else.
+  const liftBy = {};
+  foodMealLift(entries).forEach(r => { liftBy[r.food] = r; });
+  // v70.1: which companion to name when a food is held back. Raw co-occurrence
+  // count always names whatever you eat with everything — bread, oil, coffee —
+  // which is useless advice. Prefer a companion that itself fails the meal test,
+  // i.e. one that actually looks like a trigger, and only fall back to the most
+  // frequent when none of them does.
+  const pickMate = r => {
+    if (!r || !r.mates) return null;
+    const ns = Object.keys(r.mates).filter(m => r.mates[m] >= 2);
+    if (!ns.length) return null;
+    ns.sort((x, y) => ((liftClears(liftBy[y]) ? 1 : 0) - (liftClears(liftBy[x]) ? 1 : 0))
+      || ((liftBy[y] ? liftBy[y].lift : 0) - (liftBy[x] ? liftBy[x].lift : 0))
+      || (r.mates[y] - r.mates[x]));
+    return { food: ns[0], n: r.mates[ns[0]] };
+  };
+
   const list = Object.values(foods).map(f => {
-    let pos = 0, neg = 0, expectedNeg = 0, worst = null, best = null;
+    let pos = 0, neg = 0, expectedNeg = 0, worst = null, best = null, nWinTests = 0;
+    const tested = [];   // v70.3: every window with data — all of them get tested
     WINDOWS.forEach(w => {
       const s = f.win[w.key];
       const tot = s.p + s.n;
@@ -11074,11 +11333,13 @@ function computeVerdicts() {
       const base = (bn + 1) / (bp + bn + 2);
       expectedNeg += tot * base;
       if (tot < 3) return;
+      nWinTests++;                                   // every window with data = one more chance to look bad
       // Shrink toward the BASELINE, not toward 50% — Laplace smoothing made
       // "gentler" unreachable whenever the baseline sits below ~25%.
       const bayes = (s.n + 2 * base) / (tot + 2);
       const delta = bayes - base;
-      const rec = { label: w.label, cls: w.cls, p: s.p, n: s.n, tot, bayes, rate: s.n / tot, base, delta };
+      const rec = { label: w.label, cls: w.cls, p: s.p, n: s.n, tot, bayes, rate: s.n / tot, base, delta, tail: binomTailGE(s.n, tot, base), lb: wilsonLower(s.n, tot) - base };
+      tested.push(rec);
       if (!worst || delta > worst.delta) worst = rec;
       if (!best || delta < best.delta) best = rec;
     });
@@ -11089,6 +11350,22 @@ function computeVerdicts() {
     const overallDelta = scored ? (neg + 2 * expRate) / (scored + 2) - expRate : 0;
     const eatenShare = f.days.size / totalDays;
     const staple = eatenShare >= 0.7 && totalDays >= 14;
+
+    // Could this many ✕ have come from my own baseline by chance? Each window
+    // with data is one test and the overall rate is one more, so correct for the
+    // whole family — "the worst of several" is not evidence on its own.
+    // v70.3: winSuspect() is the SHARED test — every window with data, corrected
+    // for how many were tested (the pooled test is its own family of one, so it
+    // pays no correction). Qualifying windows are ordered by Wilson lower bound
+    // over baseline, exactly as the Summary card orders them, so when both
+    // surfaces name a food they now quote the SAME window.
+    const winQual = tested.filter(r => winSuspect(r.n, r.tot, r.base, nWinTests))
+      .sort((a, b) => b.lb - a.lb || b.n - a.n);
+    const winSig = winQual.length > 0;
+    const sigWin = winQual[0] || worst;
+    const allSig = pooledSuspect(neg, scored, expRate);
+    const ml = liftBy[f.food] || null;
+    const liftOK = liftClears(ml);
 
     const lifts = [];
     negSyms.forEach(s => {
@@ -11115,10 +11392,10 @@ function computeVerdicts() {
     if (scored < 4) {
       verdict = 'unclear';
       why.push({ kind: 'note', text: scored === 0 ? 'No reaction windows scored yet' : `Only ${scored} window${scored === 1 ? '' : 's'} scored — not enough to judge` });
-    } else if (worst && worst.n >= 3 && worst.delta >= 0.15) {
+    } else if (winSig && liftOK) {
       verdict = 'suspect';
-      why.push({ kind: 'win', cls: worst.cls, win: worst.label, count: `${worst.n} of ${worst.tot} ✕`, foodPct: worst.rate, basePct: worst.base, dir: 'bad' });
-    } else if (scored >= 6 && overallDelta >= 0.15) {
+      why.push({ kind: 'win', cls: sigWin.cls, win: sigWin.label, count: `${sigWin.n} of ${sigWin.tot} ✕`, foodPct: sigWin.rate, basePct: sigWin.base, dir: 'bad' });
+    } else if (allSig && liftOK) {
       // Diffuse reactor: ✕ spread across windows with no single window
       // reaching 3 — the old logic filed these under "typical" and even
       // claimed they were "close to baseline".
@@ -11138,9 +11415,63 @@ function computeVerdicts() {
       why.push({ kind: 'overall', count: `${neg} of ${scored} ✕`, foodPct: rawRate, basePct: expRate, dir: 'flat',
         note: Math.abs(rawRate - expRate) <= 0.10
           ? 'Close to what your baseline predicts'
-          : 'Too few windows for this gap to be conclusive' });
-      if (worst && worst.delta >= 0.08 && worst.n >= 2) why.push({ kind: 'win', cls: worst.cls, win: worst.label, count: `${worst.n} of ${worst.tot} ✕`, foodPct: worst.rate, basePct: worst.base, dir: 'mild',
+          // v70.2: this was chosen on the SIZE of the gap alone — there was no
+          // sample-size term in the expression at all, so "Too few windows"
+          // printed next to a 'strong evidence' badge on hundreds of scored
+          // windows. "Few" now means what evidenceConf() itself calls weak
+          // evidence (< 12 scored windows); above that the note says what
+          // actually happened instead of blaming the sample size.
+          : scored < 12 ? `Only ${scored} windows scored — too few for this gap to be conclusive`
+          : (winSig || allSig) ? 'Above your baseline on its own windows — held back by the meal check below'
+          : rawRate > expRate ? 'Runs above your baseline, but not by enough to name it a suspect'
+          : 'Runs below your baseline, but not by enough to call it gentler' });
+      // v70.1: a food demoted by the meal test also lands in this branch. Calling
+      // evidence that just passed a corrected significance test "slightly
+      // elevated" contradicts the held-back note printed right below it, so this
+      // mild note is for foods that genuinely never reached significance.
+      if (!(winSig || allSig) && worst && worst.delta >= 0.08 && worst.n >= 2) why.push({ kind: 'win', cls: worst.cls, win: worst.label, count: `${worst.n} of ${worst.tot} ✕`, foodPct: worst.rate, basePct: worst.base, dir: 'mild',
         note: 'Slightly elevated in this window' });
+    }
+    // v70.3: the meal test ABSTAINED — it is in every meal, so there is no
+    // "without" side to compare. Say that plainly instead of letting the reader
+    // assume a comparison was made and passed. Same honest line the day-level
+    // analyses already print for a staple, and the same answer: run a Trial.
+    // v70.4: printed WHICHEVER WAY THE VERDICT POINTS. The gate used to be
+    // `noContrast && (winSig || allSig)`, so the caveat appeared when a staple
+    // looked bad and was withheld when it looked calm — the more dangerous
+    // direction, because a food in 100% of meals reading Typical or Easier-on-you
+    // then got a clean bill of health on evidence that structurally cannot support
+    // it. The comparison is missing either way; say so either way.
+    if (ml && ml.noContrast) why.push({ kind: 'note',
+      text: '📌 It is in every meal in this range, so there are no meals without it to compare — this verdict rests on its own reaction windows alone, whether it reads calm or not. A 🧪 Trial is the only way to be sure.' });
+    // Held back by the meal test: say so, in the same structured evidence shape
+    // the renderer already lays out. Silence here would read as "we found
+    // nothing", when what we actually found was company (v70).
+    if ((winSig || allSig) && !liftOK) {
+      // v70.1: say what the number MEANS. The old text read "its own meals are
+      // no worse than meals without it (lift -1.82, give or take 0.13)" — a lift
+      // 14 standard errors BELOW baseline, i.e. dramatically calmer, printed as
+      // if it were a near miss. Sign, units and scale are now spelled out.
+      // v70.2: the demotion has TWO causes — liftClears() is
+      // `nMeals >= 3 && lift > se` — and only the noise one was ever described.
+      // A food eaten twice was therefore narrated as "smaller than its own
+      // margin of error" beside a gap 170× that margin. Each cause now gets its
+      // own sentence. The noise wording is also stated as "within", which is
+      // exactly what `!(lift > se)` means, so it can no longer be printed by a
+      // food whose gap is larger than its error.
+      // Rounding: a true 0.0634-vs-0.0646 printed as "0.06 vs 0.06" and read as
+      // self-contradictory even when correct, so the two figures are shown to as
+      // many decimals as it takes to tell them apart.
+      const _gdp = ml ? (() => { let d = 2; while (d < 4 && Math.abs(ml.lift).toFixed(d) === ml.se.toFixed(d)) d++; return d; })() : 2;
+      const g = ml ? `${ml.lift < 0 ? '−' : '+'}${Math.abs(ml.lift).toFixed(_gdp)} badness per meal, margin of error ${ml.se.toFixed(_gdp)}` : '';
+      const gap = !ml ? 'there is no meal comparison for it yet'
+        : ml.nMeals < 3 ? `it has only been eaten in ${ml.nMeals} meal${ml.nMeals === 1 ? '' : 's'} — too few to compare meals with it against meals without it (the gap so far is ${ml.lift < 0 ? '−' : '+'}${Math.abs(ml.lift).toFixed(2)} badness per meal, but 3 meals is the minimum to judge)`
+        : ml.lift < 0 ? `meals containing it actually run CALMER than meals without it (${g}) — the opposite of a trigger`
+        : `the gap between meals with it and meals without it (${g}) is within its own margin of error`;
+      const mate = pickMate(ml);
+      why.push({ kind: 'note', text: mate
+        ? `Its windows look bad, but ${gap}. It shares a plate with ${esc(mate.food)} in ${mate.n} of ${ml.nMeals} meals — eat it apart from that to tell the two of them apart.`
+        : `Its windows look bad, but ${gap} — not enough on its own to name it a trigger yet.` });
     }
     if (verdict !== 'unclear' && lifts.length) {
       lifts.slice(0, 2).forEach(l => why.push({ kind: 'lift', sym: l.label, lift: l.lift, c: l.c }));
@@ -11236,7 +11567,7 @@ function renderVerdicts() {
   const baseEl = `<div class="verdict-baseline">
     <div><b>Your baseline</b> — how often you mark a reaction (✕) per window, across all foods:</div>
     <div class="vb-row">${baseChips}</div>
-    <div class="vb-sub">Every verdict below is measured against this, not against zero.</div>
+    <div class="vb-sub">Each card is judged against this same picture with <i>its own</i> ✓/✕ taken out of it first — so the "% baseline" a card quotes is that food's own comparison and can sit well away from the figures here, most of all for a food you eat constantly. These are the all-foods numbers; the card's are the ones its verdict rests on.</div>
   </div>`;
 
   // One evidence line: window/overall chip · count · food-vs-baseline with a
@@ -12489,11 +12820,11 @@ function renderSummaryInsights(stats) {
     <div class="summary-stat-item">
       <div style="min-width:0;">
         <div class="summary-stat-name" title="${escAttr(item.food)}">${esc(item.food)}</div>
-        <div class="summary-stat-meta">${item.logs} logs • repeated negatives in ${item.windows.length} window${item.windows.length===1?'':'s'}</div>
+        <div class="summary-stat-meta">${item.logs} logs • ${item.windows.length ? `repeated negatives in ${item.windows.length} window${item.windows.length===1?'':'s'}` : `${item.pooled.neg} of ${item.pooled.total} scored windows reacted`}</div>
       </div>
       <div class="summary-suspect-stack">
-        <span class="summary-suspect-window">${item.windows[0].label}</span>
-        <span class="summary-suspect-pct">${item.windows[0].pct}% −</span>
+        <span class="summary-suspect-window">${item.windows.length ? item.windows[0].label : 'All windows'}</span>
+        <span class="summary-suspect-pct">${item.windows.length ? item.windows[0].pct : item.pooled.pct}% −</span>
       </div>
     </div>`).join('')}</div>` : `<div style="font-size:12px;color:var(--muted);">No strong repeated negative patterns in this filter.</div>`;
   wrap.innerHTML = `<div class="summary-stats-grid">
@@ -12530,11 +12861,16 @@ function renderSymptomSpecificAnalysis(foodStats, syms) {
   if (!syms.length || !foodStats.length) { wrap.innerHTML = ''; return; }
   if (!_symptomAnalysisKey || !syms.some(s => s.key === _symptomAnalysisKey)) _symptomAnalysisKey = syms[0].key;
   const selectedSym = syms.find(s => s.key === _symptomAnalysisKey) || syms[0];
+  // v70.5: FOODS only — the same ws.isFood gate every other surface that NAMES an
+  // item already carries. This one was missed: it is handed summaryFoods, which the
+  // 'Foods only' chip DOES filter, so with the chip off a condiment or supplement
+  // took a slot in the top 6 and pushed a real food off both lists. That is the chip
+  // moving which food is named, which is the one thing it must never do.
   const rows = foodStats.map(item => {
     const hits = item.ws.symptoms[selectedSym.key] || 0;
     const rate = item.logs ? Math.round((hits / item.logs) * 100) : 0;
     return { ...item, hits, rate };
-  }).filter(x => x.logs > 0 && (x.hits > 0 || x.logs >= Math.max(2, _summaryMinLogs || 1)));
+  }).filter(x => x.ws.isFood && x.logs > 0 && (x.hits > 0 || x.logs >= Math.max(2, _summaryMinLogs || 1)));
   const triggers = [...rows].filter(x => x.hits >= 1).sort((a,b) => b.rate - a.rate || b.hits - a.hits || b.logs - a.logs).slice(0,6);
   const calmer = [...rows].filter(x => x.logs >= Math.max(2, _summaryMinLogs || 1)).sort((a,b) => a.rate - b.rate || b.logs - a.logs).slice(0,6);
   const listHTML = (items, kind) => items.length ? `<div class="summary-mini-list">${items.map(item => `
@@ -12699,9 +13035,23 @@ function renderSummary() {
   }
 
   const foods = {};
-  filteredEntries.forEach(e => {
+  // v70.4: the per-food accumulator is FOODS-ONLY too. It walked filteredEntries,
+  // which the 'Foods only' chip DOES filter, so a NAME holding entries of mixed
+  // type (the edit modal retypes one serving) had its OWN counts move with a
+  // display chip — and with them its pooled baseline, its significance and whether
+  // it was named a suspect. A name with any food-typed entry is now judged on those
+  // entries alone, exactly as computeVerdicts already judges it. Names with none
+  // are still accumulated and LISTED when the chip is off — that is a row being
+  // shown, not a number changing.
+  const _foodOnlyEntries = filteredEntries.filter(e => effectiveItemType(e) === 'food');
+  const _foodNames = new Set(_foodOnlyEntries.map(e => e.food));
+  const _accEntries = _summaryFoodsOnly ? _foodOnlyEntries
+    : _foodOnlyEntries.concat(filteredEntries.filter(e => effectiveItemType(e) !== 'food' && !_foodNames.has(e.food)));
+  _accEntries.forEach(e => {
     if (!foods[e.food]) {
-      foods[e.food] = { logs:0, scoredWindows:0, totalPos:0, totalNeg:0, w1:{p:0,n:0}, w2:{p:0,n:0}, w3:{p:0,n:0}, w4:{p:0,n:0}, symptoms:{}, seq:[] };
+      // v70.3: remembered because the baseline below is foods-only — an item that
+      // never entered that baseline must not be subtracted back out of it.
+      foods[e.food] = { logs:0, scoredWindows:0, totalPos:0, totalNeg:0, w1:{p:0,n:0}, w2:{p:0,n:0}, w3:{p:0,n:0}, w4:{p:0,n:0}, symptoms:{}, seq:[], isFood: effectiveItemType(e) === 'food' };
       syms.forEach(s => foods[e.food].symptoms[s.key] = 0);
     }
     foods[e.food].logs++;
@@ -12716,6 +13066,71 @@ function renderSummary() {
     foods[e.food].seq.push({ date: e.date, logTime: e.logTime || '', out });
     if (e.symptoms) syms.forEach(s => { if (e.symptoms[s.key]) foods[e.food].symptoms[s.key]++; });
   });
+
+  // v70: the Strong Suspects gate needs a BASELINE. It used to be a flat 65% ✕
+  // with no comparison at all, so on a log where two thirds of windows are
+  // marked ✕ anyway, every food cleared it. Same convention as the Verdicts tab
+  // (self-excluded, +1/+2 smoothed) so the two tabs can't disagree about a food.
+  // v70.3: accumulated FOODS-ONLY whatever the 'Foods only' chip says, exactly
+  // like computeVerdicts' baseWin. With the chip off this summed condiments,
+  // supplements and activities into the baseline every food is judged against —
+  // so flipping a display filter silently moved the threshold and changed who was
+  // called a suspect. (_foodOnlyEntries is built above, with the accumulator.)
+  // v70.4/v70.5: PROVEN, not asserted — versions/_livefix/_round5/chipinvar.mjs
+  // checks it over generated logs holding condiments, supplements, activities and
+  // mixed-type NAMES. Its exact reach, which is all this comment is entitled to
+  // claim: the chip moves none of a food's Verdict or its evidence lines, its
+  // Strong-Suspects / Riskiest / Safest membership, rank and quoted numbers, its
+  // per-window and pooled statistics, its row in the meal card, or its place in the
+  // SYMPTOM ANALYSIS top-6. On those surfaces all it moves is which ROWS are listed.
+  // OUTSIDE that proof — counted at v70.5, not recalled: FOUR cards below are handed
+  // `filteredEntries`, which IS the on-screen set, and every one of them prints item
+  // names as findings: prep & portion, drivers (its best-food line), natural gaps,
+  // symptom fingerprints. With the chip off their numbers shift and the items they
+  // name can change. Two further consumers show that same set without ranking it —
+  // the daily overview and the A/B compare picker.
+  // (Before v70.5 this comment said "two day-level cards … Neither one classifies a
+  // food". Both halves were false. Re-run the enumeration before editing this list:
+  // three rounds running it was widened from memory and claimed more than the code.)
+  const sumBaseWin = {};
+  WINDOWS.forEach(w => { sumBaseWin[w.key] = { p: 0, n: 0 }; });
+  _foodOnlyEntries.forEach(e => WINDOWS.forEach(w => {
+    const v = e.windows[w.key];
+    if (v === true) sumBaseWin[w.key].p++;
+    else if (v === false) sumBaseWin[w.key].n++;
+  }));
+  // v70: the card must also clear the meal test (liftClears) — built from the
+  // same entry set the ranking itself uses, so the two can never disagree.
+  const _liftBy = {};
+  // v70.1: foods-only, exactly like computeVerdicts' liftBy. With the 'Foods
+  // only' chip OFF this used to fold condiments/supplements/activities into the
+  // meal comparison while the Verdicts tab never did, so the two tabs could
+  // reach opposite conclusions about the same food on the same data.
+  foodMealLift(_foodOnlyEntries).forEach(r => { _liftBy[r.food] = r; });
+  // v70.1: ONE definition of "the app is willing to name this food", shared by
+  // Strong Suspects AND Riskiest Foods below — (per-window significance OR
+  // pooled significance) AND the meal test. Riskiest Foods used to skip all of
+  // it, so a food could sit at #1 there while reading 'Typical' in Verdicts on
+  // the same screen.
+  // v70.3 CORRECTION. This comment used to claim it matched computeVerdicts()
+  // "clause for clause". It did not: computeVerdicts tested only its single
+  // max-delta window while this line tested every window, so the two surfaces
+  // reached opposite conclusions on ~4% of food-cards. The three tests are now
+  // literally the same functions — winSuspect(), pooledSuspect(), liftClears().
+  // What legitimately still differs is the DATA: this card obeys the Summary's
+  // date range and the Verdicts tab obeys its own. Set them to different ranges
+  // and the two are answering different questions, as they should.
+  const _susQual = x => !!(x.suspectWindows.length || x.pooled.sig) && liftClears(_liftBy[x.food]);
+  // ...and ONE ranking statistic — Wilson lower bound over baseline, taken from
+  // whichever path qualified — plus the window that statistic came from, so
+  // both cards headline what they actually ranked on instead of a different
+  // window each.
+  const _susLb = x => (x.suspectWindows.length ? x.suspectWindows[0].lb : x.pooled.lb);
+  const _susWin = x => (x.suspectWindows.length
+    ? (x.windowStats.find(w => w.key === x.suspectWindows[0].key) || x.worstWindow)
+    : { label: 'All windows', total: x.pooled.total,
+        negRate: x.pooled.total ? x.pooled.neg / x.pooled.total : 0,
+        posRate: x.pooled.total ? 1 - x.pooled.neg / x.pooled.total : 0 });
 
   const minLogs = _summaryMinLogs || 1;
   const foodNotes = loadFoodNotes();
@@ -12754,13 +13169,46 @@ function renderSummary() {
       const bestWindow = meaningfulWindows.length
         ? [...meaningfulWindows].sort((a,b) => a.bayesNegRate - b.bayesNegRate || b.total - a.total || a.label.localeCompare(b.label))[0]
         : null;
+      // A window qualifies only if its ✕ count is unlikely under YOUR baseline for
+      // that window (exact binomial, corrected for however many windows had enough
+      // data to be tested), and the shrunk gap is still worth acting on. Ranked by
+      // the Wilson lower bound, so 3-of-3 no longer outranks 18-of-20.
+      // v70.3: the test itself is winSuspect() — the SAME function the Verdicts
+      // tab calls, so the two surfaces can no longer disagree about whether a
+      // window is significant. The minimum-logs chip is gone from the threshold
+      // too: it decides which foods are LISTED, never what counts as evidence.
+      const nWinTested = windowStats.filter(w => w.total >= 3).length;
+      // Only foods are IN the foods-only baseline, so only foods are taken back
+      // out of it. Clamped at 0 because a single NAME can hold entries of mixed
+      // type (the edit modal can retype one serving), and subtracting more than
+      // the baseline holds would flip the denominator negative and invent a
+      // suspect out of arithmetic.
+      const _self = ws.isFood ? 1 : 0;
+      const _sub = (tot, own) => Math.max(0, tot - _self * own);
       const suspectWindows = windowStats.map(w => {
         const negPct = w.total ? Math.round((w.n/w.total)*100) : 0;
-        return { key:w.key, label:w.label, pct:negPct, total:w.total, negCount:w.n };
-      }).filter(x => x.total >= Math.max(3, minLogs) && x.negCount >= 3 && x.pct >= 65)
-        .sort((a,b)=> b.pct - a.pct || b.negCount - a.negCount);
+        const bp = _sub(sumBaseWin[w.key].p, w.p), bn = _sub(sumBaseWin[w.key].n, w.n);
+        const base = (bn + 1) / (bp + bn + 2);
+        return { key:w.key, label:w.label, pct:negPct, total:w.total, negCount:w.n, base,
+                 delta: (w.n + 2 * base) / (w.total + 2) - base,
+                 lb: wilsonLower(w.n, w.total) - base,
+                 pAdj: multiAdjust(binomTailGE(w.n, w.total, base), nWinTested) };
+      }).filter(x => winSuspect(x.negCount, x.total, x.base, nWinTested))
+        .sort((a,b)=> b.lb - a.lb || b.negCount - a.negCount);
+      // v70.1: the POOLED path — this food's scored windows as ONE sample rather
+      // than four small ones, against the same self-excluded baseline mixed over
+      // whichever windows it actually has data in. Catches "a bit worse in every
+      // window", which four separate tests each paying for the other three miss.
+      const poolBase = scored ? windowStats.reduce((a, w) => {
+        const bp = _sub(sumBaseWin[w.key].p, w.p), bn = _sub(sumBaseWin[w.key].n, w.n);
+        return a + w.total * ((bn + 1) / (bp + bn + 2));
+      }, 0) / scored : 0;
+      const pooled = { neg: ws.totalNeg, total: scored, base: poolBase,
+        pct: scored ? Math.round((ws.totalNeg / scored) * 100) : 0,
+        lb: wilsonLower(ws.totalNeg, scored) - poolBase,
+        sig: pooledSuspect(ws.totalNeg, scored, poolBase) };
       return {
-        food, ws, scored, negRate, posRate, bayesNegRate, conf, suspectWindows,
+        food, ws, scored, negRate, posRate, bayesNegRate, conf, suspectWindows, pooled,
         logs:ws.logs, scoredWindows:ws.scoredWindows,
         windowStats, meaningfulWindows, worstWindow, bestWindow
       };
@@ -12786,15 +13234,27 @@ function renderSummary() {
   const summaryFoods = _summarySearch ? sortedFoods.filter(x => x.food.toLowerCase().includes(_summarySearch)) : sortedFoods;
 
   const qualifiedFoods = summaryFoods.filter(x => x.meaningfulWindows.length);
-  const safeCandidates = qualifiedFoods.filter(x => (x.worstWindow?.bayesNegRate ?? 1) < 0.5);
+  // v70.2: Safest is the MIRROR IMAGE of _susQual, not an independent
+  // computation. Strong Suspects, Riskiest and the Verdicts tab all gate on
+  // _susQual; Safest was the one card that never got that gate, so a food the
+  // app was willing to NAME could still be printed as one of the safest. The
+  // exclusion is explicit rather than trusting the flat 0.5 line not to overlap
+  // the significance tests — it does overlap, and reachably: a food at 28% ✕
+  // against a 6% personal baseline is significant against its own baseline while
+  // still under 50% in every single window, so both cards claimed it and quoted
+  // the SAME window at 63% + and 38% −.
+  // v70.4: FOODS only, like every other verdict surface. With the chip off a
+  // condiment could be printed among your safest FOODS — judged against a
+  // foods-only baseline it is not part of, and past a meal test that never ran on
+  // it (liftClears keeps non-foods out of the suspect side, so it kept them out of
+  // one side only). It also cost real foods their slots in the top 10.
+  const safeCandidates = qualifiedFoods.filter(x => x.ws.isFood && (x.worstWindow?.bayesNegRate ?? 1) < 0.5 && !_susQual(x));
   const safeBase = safeCandidates.slice(0,10);
   const safeFoodNames = new Set(safeBase.map(x => x.food));
   const riskyCandidates = [...qualifiedFoods]
-    .filter(x => !safeFoodNames.has(x.food) && (x.worstWindow?.bayesNegRate ?? 0) > 0.5)
+    .filter(x => !safeFoodNames.has(x.food) && (x.worstWindow?.bayesNegRate ?? 0) > 0.5 && _susQual(x))
     .sort((a,b) => {
-      if ((b.worstWindow?.bayesNegRate ?? 0) !== (a.worstWindow?.bayesNegRate ?? 0)) {
-        return (b.worstWindow?.bayesNegRate ?? 0) - (a.worstWindow?.bayesNegRate ?? 0);
-      }
+      if (_susLb(b) !== _susLb(a)) return _susLb(b) - _susLb(a);
       if ((b.worstWindow?.total ?? 0) !== (a.worstWindow?.total ?? 0)) {
         return (b.worstWindow?.total ?? 0) - (a.worstWindow?.total ?? 0);
       }
@@ -12806,11 +13266,15 @@ function renderSummary() {
     ...x,
     label: `${x.worstWindow ? `${x.worstWindow.label} ${Math.round((x.worstWindow.posRate||0)*100)}% +` : `${Math.round((x.posRate||0)*100)}% +`}`
   }));
-  const riskyFoods = riskyBase.map(x => ({
-    ...x,
-    label: `${x.worstWindow ? `${x.worstWindow.label} ${Math.round((x.worstWindow.negRate||0)*100)}% −` : `${Math.round((x.negRate||0)*100)}% −`}`
-  }));
-  const strongSuspects = [...summaryFoods].filter(x => x.suspectWindows.length).sort((a,b) => b.suspectWindows[0].pct - a.suspectWindows[0].pct || b.logs - a.logs).slice(0,8).map(x => ({...x, windows:x.suspectWindows}));
+  const riskyFoods = riskyBase.map(x => {
+    const w = _susWin(x);
+    return { ...x, worstWindow: w,
+      label: `${w ? `${w.label} ${Math.round((w.negRate||0)*100)}% −` : `${Math.round((x.negRate||0)*100)}% −`}` };
+  });
+  // Ranked by evidence strength (Wilson lower bound over baseline), not raw % —
+  // and the card is allowed to come back EMPTY. On a log with no signal in it,
+  // no names is the correct answer; 8 confident wrong ones is not.
+  const strongSuspects = [...summaryFoods].filter(_susQual).sort((a,b) => _susLb(b) - _susLb(a) || b.logs - a.logs).slice(0,8).map(x => ({...x, windows:x.suspectWindows}));
   renderSummaryInsights({ safeFoods, riskyFoods, strongSuspects });
   // v64: meal-aware suspects — ranks foods by how much worse/better meals run
   // WITH vs WITHOUT them, so a food isn't blamed for riding along in a bad meal.
@@ -14565,12 +15029,37 @@ function fpBasics(entries, food) {
 
 // Per reaction window: this food's ✓/✕ counts vs a baseline that EXCLUDES the
 // food itself (same self-inclusion guard computeVerdicts uses).
+// v70.4: it is now the SAME baseline number the Verdict hero on this very card
+// quotes — foods-only and +1/+2 smoothed. It used to be a raw share over every
+// logged item, so one card printed two baselines for the SAME window: the hero
+// read "14-17h, 26 of 40 ✕, 65% vs 12% baseline" and the list below it read
+// "65% vs 10% baseline". One card, one comparison.
+// v70.5: the legend under this list no longer says it is literally the SAME NUMBER
+// as the Verdict's, because one gap is still open and is not this function's to
+// close: this whole card groups servings by normFood(), so "Banana" and "🍌 Banana"
+// are one item here and two foods in computeVerdicts. Measured over 30 generated
+// logs carrying both spellings, the printed baseline percent differed in at least
+// one window on 19 of them. Closing it means changing how the ENTIRE profile card
+// keys an item (basics, impacts, co-eaten, history all use normFood) — a different
+// job. Convention (foods-only per serving, self-excluded, +1/+2) is now identical.
 function fpWindowStats(entries, food) {
   const k = normFood(food);
+  // v70.5: decided per SERVING, like computeVerdicts — not by foodBaseType(food),
+  // which is a NAME-level guess. The edit modal retypes individual servings, so a
+  // name whose base type is non-food can still hold food-typed ones: the Verdict
+  // above judged it on those servings alone while this list counted every serving
+  // of the name, and one card printed two irreconcilable pictures of one item.
+  // An item with NO food-typed serving has no Verdict to contradict, so it keeps
+  // showing all of its own marks — that is the case this guard was written for.
+  const anyFoodServing = entries.some(e => e && normFood(e.food) === k && effectiveItemType(e) === 'food');
   const per = WINDOWS.map(w => ({ key: w.key, label: w.label, cls: w.cls, p: 0, n: 0, bp: 0, bn: 0 }));
   entries.forEach(e => {
     if (!e) return;
     const mine = normFood(e.food) === k;
+    // Non-food servings are not food evidence and are not in the food baseline —
+    // the rule computeVerdicts already applies. A wholly non-food ITEM still gets
+    // its own marks shown; it just isn't part of what it is compared against.
+    if (effectiveItemType(e) !== 'food' && !(mine && !anyFoodServing)) return;
     per.forEach(s => {
       const v = e.windows ? e.windows[s.key] : undefined;
       if (v === true) { if (mine) s.p++; else s.bp++; }
@@ -14581,7 +15070,9 @@ function fpWindowStats(entries, food) {
     s.tot = s.p + s.n;
     const btot = s.bp + s.bn;
     s.rate = s.tot ? s.n / s.tot : null;
-    s.base = btot ? s.bn / btot : null;
+    // Smoothed like every other baseline in the app; still null when there is no
+    // baseline data at all, because +1/+2 on nothing prints a fabricated 50%.
+    s.base = btot ? (s.bn + 1) / (btot + 2) : null;
   });
   return per;
 }
@@ -14811,7 +15302,7 @@ function renderFoodProfile() {
   };
   const windowsCard = `<div class="card fp-card">
     <div class="fp-h">⏱️ Reaction windows (hours after eating)</div>
-    ${anyWin ? ws.map(winRow).join('') + '<div class="fp-legend">Baseline = your ✕ rate across all other foods in that window</div>'
+    ${anyWin ? ws.map(winRow).join('') + '<div class="fp-legend">Baseline = your ✕ rate across all other foods in that window — self-excluded and smoothed the same way the ⚖️ Verdict above is judged</div>'
              : '<div class="fp-empty">No ✓/✕ marks on this food\'s reaction windows yet.</div>'}
   </div>`;
 
@@ -15511,8 +16002,10 @@ function runSelfTest() {
   });
   t('food profile: window stats split food vs excluded baseline', () => {
     const w2 = fpWindowStats(FX.entries, 'TestChili').find(s => s.key === 'w2');
-    // chili: 4 ✕ of 4 in w2; baseline w2 = Banana's 10 clean → 0%
-    return eq([w2.p, w2.n, w2.rate, w2.base].join('|'), '0|4|1|0');
+    // chili: 4 ✕ of 4 in w2; baseline w2 = Banana's 10 clean, smoothed exactly as
+    // the Verdict hero on the same card does it → (0+1)/(10+0+2) = 1/12
+    const ok = close(w2.base, 1 / 12, 1e-9);
+    return ok === true ? eq([w2.p, w2.n, w2.rate].join('|'), '0|4|1') : ok;
   });
   t('food profile: same-day impact compares eaten vs control days', () => {
     const r = fpImpacts(FX.entries, FX.checkins, 'Banana', [{ key: 'c_overall', label: 'o' }], 0)[0];
