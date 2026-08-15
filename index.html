@@ -5792,8 +5792,8 @@ function doseResponse(entries) {
   return cards.sort((a, b) => Math.abs(b.r) - Math.abs(a.r));
 }
 // ── Portion pooling (v72) ────────────────────────────────────────────────────
-// "Fries 70g" and "Fries 90g" are two names for one food. baseFoodName() has
-// always known that — prepVariants() and doseResponse() group on it — but
+// "Fries 70g" and "Fries 90g" are two names for one food. stripCosmetic() has
+// always known that — doseResponse() groups on it — but
 // computeVerdicts() and the Summary ranking keyed on the FULL logged name, so
 // each gram level was its own under-powered sample. The v70 evidence gates made
 // that worse, not better: they require real evidence before naming a food, so
@@ -5815,7 +5815,33 @@ function doseResponse(entries) {
 // UNPOOLED and told on (see poolDoseConflicts below), rather than averaged.
 let _poolPortions = false;
 try { _poolPortions = localStorage.getItem('fst_pool_portions') === '1'; } catch (e) {}
-const _POOL_OFF = { on: false, key: f => f, group: {}, conflicts: {}, prepConflicts: {} };
+const _POOL_OFF = { on: false, key: f => f, group: {}, conflicts: {} };
+// ── THE POOLING KEY (v72.1) ──────────────────────────────────────────────────
+// ONE function, used by every site on the pooling path: the group accumulator in
+// poolPlan(), the dose guard, and the why-note lookups in computeVerdicts(). A
+// key built one way and looked up another makes the guards silently stop firing
+// while still LOOKING present, which is worse than the bug they guard — so if a
+// new pooling site ever needs the key, it calls this and nothing else.
+//
+// It is stripCosmetic(), NOT baseFoodName(). baseFoodName() strips PREP words
+// (raw, cooked, baked, peeled, heated, steamed, defrosted, fried…) as well as
+// quantities. That is right for prepVariants() — stripping prep is exactly how it
+// lines variants up to compare them — and wrong here, under a chip that only ever
+// claimed to ignore portion SIZE. Measured on the live log's own name patterns:
+//   '🥒 Cucumber raw no skin 50-70g' + '🥒 Cucumber baked no skin 35-49g' → 'cucumber'
+//   'Almonds sprtd peeled baked small x1-2' + '… peeled raw small x6' → 'almonds sprtd small'
+//   '🥬 Arugula raw defrosted 10-15g' + '🥬 Arugula heated defrosted 16-25g' → 'arugula'
+// — all merged, destroying the exact raw-vs-cooked distinction the v65 comparator
+// exists to find ("cucumber: peeled beats skin-on" is a real result of his).
+// stripCosmetic() drops quantities, units, xN, [brands] and emoji and KEEPS prep,
+// so '🍗 Chicken leg 90-110g' / '61-89g' / '111-140g' still pool into one sample
+// while those cucumbers stay three separate foods. On the 12 names above: 5 pooled
+// groups → 2, and both survivors are pure gram splits.
+//
+// Round-trip safe: poolLabel() emits icon + Title Case of the key, and
+// poolKeyOf() strips the icon and lowercases, so poolKeyOf(label) === key. That
+// is what lets computeVerdicts() look a conflict up by a row's displayed name.
+function poolKeyOf(food) { return stripCosmetic(food); }
 // "The gram levels genuinely disagree." The threshold is NOT a new invention: it
 // is the shipped dose card's own verdict, made symmetric in sign. doseResponse()
 // already flags `doseLinked` — and prepPortionSection prints "📈 Dose-linked …
@@ -5832,32 +5858,36 @@ function poolDoseConflicts(entries) {
   const out = {};
   doseResponse(entries).forEach(c => {
     if (!(Math.abs(c.r) >= 0.12 && Math.abs(c.spread) >= 0.8 && Math.abs(c.t) >= 2)) return;
-    const b = baseFoodName(c.label); if (!b) return;
+    // v72.1: keyed by poolKeyOf, which is doseResponse()'s OWN grouping key
+    // (it buckets byVar on stripCosmetic), so each dose card now guards exactly
+    // the one pooled group it was measured on. Under the old baseFoodName key
+    // several cards collapsed onto one entry and a conflict found in one
+    // preparation vetoed pooling in an unrelated one.
+    const b = poolKeyOf(c.label); if (!b) return;
     (out[b] || (out[b] = [])).push(c);
   });
   return out;
 }
-// ...and the SAME refusal on the other axis. baseFoodName() drops prep words as
-// well as quantities, so one base name can hold two genuinely different dishes:
-// '🍚Fried Rice 200g' and '🍚Rice 200g' both reduce to 'rice', and neither varies
-// in grams, so poolDoseConflicts() above cannot see them. Measured on the live
-// slice before this existed, those two pooled into one '🍚 Rice' row with one
-// eaten at 4/4 ✕ and the other at 0/4 — behaviourally opposite, silently merged,
-// under a chip that only claims to ignore portion size.
-// Same principle as the dose guard, same source for the bar: prepVariants() is
-// the app's own test of whether two preparations of one base behave differently,
-// and 🍳 Prep & portion already prints "✅ Best prep runs N lift-pts calmer than
-// the worst" for exactly the cards it returns — ≥2 variants, each with ≥5 meals
-// of evidence, separated by ≥1.0 lift-points. If it is willing to tell the user
-// those two preps differ, pooling must not fold them together. Nothing about
-// prepVariants() itself is changed, and this can only ever REFUSE to pool.
-// A pure gram-level split is untouched: 'Fries 70g' and 'Fries 90g' share one
-// stripCosmetic() variant, so prepVariants() emits no card for them at all.
-function poolPrepConflicts(entries) {
-  const out = {};
-  prepVariants(entries).forEach(c => { if (c.base) out[c.base] = c; });
-  return out;
-}
+// REMOVED in v72.1: poolPrepConflicts(), the second refusal net. It existed only
+// to patch the OLD key's over-collapsing — '🍚Fried Rice 200g' and '🍚Rice 200g'
+// both reduced to 'rice', so a guard was needed to pull them back apart. The key
+// fix above deletes that premise at the source: they are 'fried rice' and 'rice',
+// two keys, never one group.
+//
+// It is not merely unlikely to fire now — it CANNOT. prepVariants()' variant
+// identity IS stripCosmetic(), i.e. the pooling key itself, and it only emits a
+// card when ONE base holds ≥2 distinct variants. Every member of a pooled group
+// shares one key, so a group is exactly one variant and can never hold the two
+// sides of a prep card. Kept, the guard would have INVERTED: it would refuse to
+// pool the gram levels of 'cucumber raw no skin' merely because 'cucumber baked
+// no skin' exists and differs — withholding the fix from the very case the chip
+// is for. It also cost a full prepVariants() → foodMealLift() pass on every
+// verdict computation to return an answer that could not be used.
+// The collision classes it never covered anyway are unchanged by its removal:
+// two brands of one food, or 'Omega 3' vs 'Omega 6', are each a SINGLE variant,
+// so prepVariants() was structurally blind to them before and after.
+// Its selftest was not deleted — it now asserts the stronger structural property
+// directly: two preparations of one food never share a pooled group.
 // The base name is lowercase and emoji-free (that is what makes two gram levels
 // compare equal), so give the pooled row back an icon and title case.
 function poolLabel(base, names) {
@@ -5871,10 +5901,9 @@ function poolLabel(base, names) {
 function poolPlan(entries) {
   if (!_poolPortions) return _POOL_OFF;
   const conflicts = poolDoseConflicts(entries);
-  const prepConflicts = poolPrepConflicts(entries);
   const counts = {};
   entries.forEach(e => {
-    const b = baseFoodName(e.food); if (!b) return;
+    const b = poolKeyOf(e.food); if (!b) return;
     const c = counts[b] || (counts[b] = {});
     c[e.food] = (c[e.food] || 0) + 1;
   });
@@ -5883,12 +5912,12 @@ function poolPlan(entries) {
     // Only one spelling: pooling it with itself gains nothing and would cost the
     // user the name they actually typed. Conflicted: must not pool at all.
     const names = Object.keys(counts[b]).sort((x, y) => counts[b][y] - counts[b][x] || x.localeCompare(y));
-    if (names.length < 2 || conflicts[b] || prepConflicts[b]) return;
+    if (names.length < 2 || conflicts[b]) return;
     const label = poolLabel(b, names);
     group[label] = { base: b, names, label };
     names.forEach(f => { key[f] = label; });
   });
-  return { on: true, key: f => key[f] || f, group, conflicts, prepConflicts };
+  return { on: true, key: f => key[f] || f, group, conflicts };
 }
 // One sentence a reader can act on, attached to the food itself — used verbatim
 // by both the Verdicts tab and the Summary so the two cannot word it differently.
@@ -5900,33 +5929,65 @@ function poolConflictNote(cards) {
     + `(r ${c.r >= 0 ? '+' : '−'}${Math.abs(c.r).toFixed(2)} across ${c.n} scored servings). `
     + `The per-gram breakdown is in 🍳 Prep &amp; portion below.`;
 }
-// The same sentence for the other axis, in the same shape and the same place.
-function poolPrepNote(card) {
-  const lo = card.variants[0], hi = card.variants[card.variants.length - 1];
-  return `⚖️ Kept SEPARATE — these are not the same preparation, only the same base food. `
-    + `"${esc(lo.label)}" runs ${lo.lift.toFixed(1)} lift over ${lo.n} meals and "${esc(hi.label)}" runs ${hi.lift.toFixed(1)} over ${hi.n} `
-    + `(a ${card.spread.toFixed(1)}-point gap). Folding them into one row would average a real prep difference away. `
-    + `The per-prep breakdown is in 🍳 Prep &amp; portion below.`;
-}
 // The "what got folded in" answer, in one place, so pooling is never invisible.
+// v72.1: was a wall — ~50 bold names, each trailing every member spelled out and
+// joined by middots that wrapped mid-name, with the safety-relevant "Kept
+// separate" line buried under all of it, above the analysis he opened the tab
+// for. Now it ships FOLDED behind a one-line count, using the app's own
+// summaryFold so it matches the five Summary sections instead of inventing a
+// pattern; expanded, one bordered row per pooled food with the member names on
+// their own lines; and "Kept separate" is a peer block, not a footnote — the
+// refusals are the half that protects a real dose effect from being averaged
+// away, so each names its food and its reason on one line.
+// Colours are tokens only (--border/--muted/--bg) plus the INHERITED card ink for
+// every emphasised string, so all 10 palettes and both defaults stay legible;
+// every name box uses overflow-wrap so 375px never scrolls sideways.
+// MEASURED, not assumed: --ink-warn is UNDEFINED in the legacy default palette,
+// so `var(--ink-warn, #fab219)` falls back to raw amber — 1.83:1 on the white
+// card, unreadable. It is therefore used ONLY as the 3px left stripe on a refusal
+// row, where it is decoration carrying no text, and never as an ink. Measured
+// across all 12 grounds (legacy light + legacy dark + the 10 palettes), worst
+// element per ground: 3.27:1 in legacy light rising to 9.02:1 in Clarity, and the
+// 3.27 is --muted at 11px — the app's own secondary-text token, the same ratio
+// every other card's small print already runs at. Nothing here is below it.
+// The REFUSAL reason deliberately does not use --muted: it is the safety-relevant
+// half, so it takes the card's own ink (14:1 in legacy light) while the pooled
+// member names stay muted reference detail.
 function poolNoticeHTML(plan) {
   if (!plan.on) return '';
-  const pooled = Object.values(plan.group).sort((a, b) => a.label.localeCompare(b.label));
-  // Both refusal reasons, each named with its own reason — "kept separate" with
-  // no reason reads like a bug, and the two reasons are not the same advice.
-  const keptDose = Object.keys(plan.conflicts).sort();
-  const keptPrep = Object.keys(plan.prepConflicts).filter(b => !plan.conflicts[b]).sort();
-  const kept = keptDose.concat(keptPrep);
+  const pooled = Object.values(plan.group).sort((a, b) => b.names.length - a.names.length || a.label.localeCompare(b.label));
+  const kept = Object.keys(plan.conflicts).sort();
   if (!pooled.length && !kept.length) return '';
-  const row = g => `<div style="font-size:12px;margin:3px 0;"><b>${esc(g.label)}</b> <span style="color:var(--muted);">← ${g.names.map(n => esc(n)).join(' · ')}</span></div>`;
-  return `<div class="card" style="margin-bottom:24px;padding:14px;">
-    <div style="font-weight:700;font-size:13px;margin-bottom:6px;">🔗 Ignoring portion size</div>
-    <div style="font-size:11px;color:var(--muted);margin-bottom:8px;">Gram levels of the same food are judged as ONE sample on this tab and in Verdicts. No mark is copied between servings — each one still counts only what you marked on it. The per-gram breakdown stays untouched in 🍳 Prep &amp; portion and 🧪 dose-response.</div>
-    ${pooled.length ? pooled.map(row).join('') : `<div style="font-size:12px;color:var(--muted);">Nothing to pool in this range — no food is logged under two different portion names.</div>`}
-    ${kept.length ? `<div style="font-size:12px;margin-top:8px;padding-top:8px;border-top:1px solid var(--border);">⚖️ <b>Kept separate:</b>
-      ${keptDose.length ? `<div style="margin-top:3px;">${keptDose.map(b => esc(b)).join(', ')} — your <b>gram levels</b> for these genuinely disagree, so pooling them would average a real dose effect away.</div>` : ''}
-      ${keptPrep.length ? `<div style="margin-top:3px;">${keptPrep.map(b => esc(b)).join(', ')} — these share a base name but not a <b>preparation</b> (e.g. fried vs plain), and the two versions behave differently, so they are not one food to pool.</div>` : ''}</div>` : ''}
-  </div>`;
+  const STRIPE = 'var(--ink-warn, #fab219)';   // border only — see the note above
+  const nP = pooled.length, nK = kept.length;
+  // One pooled food per row: the pooled name, how many portion names folded in,
+  // then those names one per line — readable, never a middot run-on.
+  const row = g => `<div style="border:1px solid var(--border);border-radius:10px;background:var(--bg);padding:8px 10px;margin-bottom:6px;">
+      <div style="display:flex;align-items:baseline;gap:8px;">
+        <b style="font-size:12.5px;flex:1;min-width:0;overflow-wrap:anywhere;">${esc(g.label)}</b>
+        <span style="font-size:11px;color:var(--muted);font-weight:600;white-space:nowrap;">${g.names.length} portion names</span>
+      </div>
+      <div style="margin-top:5px;border-left:2px solid var(--border);padding-left:8px;">
+        ${g.names.map(n => `<div style="font-size:11px;color:var(--muted);line-height:1.55;overflow-wrap:anywhere;">${esc(n)}</div>`).join('')}
+      </div>
+    </div>`;
+  // The refusals. One line each: WHICH food, and WHY in its own numbers.
+  const keptRow = b => {
+    const c = plan.conflicts[b].slice().sort((x, y) => Math.abs(y.r) - Math.abs(x.r))[0];
+    const lo = c.lvls[0], hi = c.lvls[c.lvls.length - 1];
+    return `<div style="border:1px solid var(--border);border-left:3px solid ${STRIPE};border-radius:10px;background:var(--bg);padding:8px 10px;margin-bottom:6px;">
+        <div style="font-size:12.5px;font-weight:700;overflow-wrap:anywhere;">${esc(poolLabel(b, [c.label]))}</div>
+        <div style="font-size:11.5px;line-height:1.55;margin-top:2px;overflow-wrap:anywhere;">~${Math.round(lo.g)}g runs ${lo.bad.toFixed(1)} badness over ${lo.n} servings, ~${Math.round(hi.g)}g runs ${hi.bad.toFixed(1)} over ${hi.n} — your gram levels genuinely disagree, so pooling would average a real dose effect away.</div>
+      </div>`;
+  };
+  const title = `🔗 ${nP ? `${nP} food${nP === 1 ? '' : 's'} pooled by portion` : 'Ignoring portion size — nothing pooled'}`
+    + `${nK ? ` · ⚖️ ${nK} kept separate` : ''}`
+    + ` <span style="font-size:11px;color:var(--muted);font-weight:500;">— tap to see</span>`;
+  return summaryFold('pool', title, `
+    <div style="font-size:11px;color:var(--muted);margin-bottom:10px;">Gram levels of the same food are judged as ONE sample on this tab and in Verdicts. Different <b>preparations</b> are never pooled — raw, baked and peeled stay separate foods. No mark is copied between servings; each one still counts only what you marked on it, and the per-gram breakdown stays untouched in 🍳 Prep &amp; portion and 🧪 dose-response.</div>
+    ${nP ? `<div style="font-size:12px;font-weight:700;margin-bottom:6px;">🔗 Pooled</div>${pooled.map(row).join('')}`
+      : `<div style="font-size:12px;color:var(--muted);">Nothing to pool in this range — no food is logged under two different portion names.</div>`}
+    ${nK ? `<div style="font-size:12px;font-weight:700;margin:12px 0 6px;">⚖️ Kept separate — pooling refused</div>${kept.map(keptRow).join('')}` : ''}`);
 }
 
 // Batch age (v66): histamine grows as cooked food ages — compare fresh vs
@@ -12969,10 +13030,11 @@ function computeVerdicts() {
     const _pg = _pool.group[f.food];
     if (_pg) why.push({ kind: 'note',
       text: `🔗 Portion sizes pooled — this row is ${_pg.names.length} names judged as one sample: ${_pg.names.map(esc).join(', ')}. Each serving still counts only the windows you marked on it.` });
-    const _pc = _pool.conflicts[baseFoodName(f.food)];
+    // v72.1: looked up with poolKeyOf — the SAME function poolDoseConflicts built
+    // the map with. Keyed one way and read another, this guard would go silent
+    // while still appearing to be here, so both sides call one function by name.
+    const _pc = _pool.conflicts[poolKeyOf(f.food)];
     if (_pc) why.push({ kind: 'note', text: poolConflictNote(_pc) });
-    const _ppc = _pool.prepConflicts[baseFoodName(f.food)];
-    if (_ppc) why.push({ kind: 'note', text: poolPrepNote(_ppc) });
     if (ml && ml.noContrast) why.push({ kind: 'note',
       text: '📌 It is in every meal in this range, so there are no meals without it to compare — this verdict rests on its own reaction windows alone, whether it reads calm or not. A 🧪 Trial is the only way to be sure.' });
     // Held back by the meal test: say so, in the same structured evidence shape
@@ -17414,32 +17476,72 @@ function runSelfTest() {
       && !a.names.some(n => /Sweet/i.test(n)) && !b.names.some(n => /^🍟/.test(n)))
       ? true : JSON.stringify(Object.entries(p.group).map(([k, v]) => k + ' ← ' + v.names.join('|')));
   });
-  t('pooling collision: quantity-only, emoji-only and empty-base names never pool', () => {
-    // Every one of these reduces to an empty base name. Pooling on "" would sweep
-    // unrelated items into one nameless row, so an empty base is refused outright.
-    const NAMES = ['200g', '300g', '🍕', '🍔', 'x2', '[Brand]', '(fresh)'];
-    const extra = NAMES.map((nm, k) => _poolRows(nm, 5, { w1: false }, 'dg' + k))
+  t('pooling collision: quantity-only, emoji-only and empty-key names never pool', () => {
+    // Every one of these reduces to an EMPTY pooling key. Pooling on "" would sweep
+    // unrelated items into one nameless row, so an empty key is refused outright.
+    // v72.1: '(fresh)' left this list — poolKeyOf is stripCosmetic now, which KEEPS
+    // prep words, so it reduces to 'fresh', not ''. It is still asserted to stay
+    // put below: it is the only name under that key, so there is nothing to pool.
+    const NAMES = ['200g', '300g', '🍕', '🍔', 'x2', '[Brand]'];
+    const ALL = NAMES.concat(['(fresh)']);
+    const extra = ALL.map((nm, k) => _poolRows(nm, 5, { w1: false }, 'dg' + k))
       .reduce((a, b) => a.concat(b), []);
     const es = _poolFx('🍟Fries', ['70g', '90g'].map(g => ({ g, marks: _POOL_THIN })), extra);
     const p = withPool(true, es, () => poolPlan(es));
-    const moved = NAMES.filter(n => p.key(n) !== n);
-    const bases = NAMES.filter(n => baseFoodName(n) !== '');
+    const moved = ALL.filter(n => p.key(n) !== n);
+    const bases = NAMES.filter(n => poolKeyOf(n) !== '');
     return (!moved.length && !bases.length && Object.keys(p.group).length === 1)
-      ? true : `remapped=${JSON.stringify(moved)} nonEmptyBase=${JSON.stringify(bases)} groups=${JSON.stringify(Object.keys(p.group))}`;
+      ? true : `remapped=${JSON.stringify(moved)} nonEmptyKey=${JSON.stringify(bases)} groups=${JSON.stringify(Object.keys(p.group))}`;
   });
-  t('pooling collision: one base, two preparations that DISAGREE — refused and warned', () => {
-    // baseFoodName drops prep words as well as quantities, so '🍚Fried Rice 200g'
-    // and '🍚Rice 200g' both reduce to 'rice'. Both are 200g, so the DOSE guard is
-    // blind to it — only the prep guard can refuse this merge.
+  // v72.1 REGRESSION GUARD — this is the case that shipped broken. The old key
+  // (baseFoodName) stripped prep words as well as quantities, so raw and baked
+  // cucumber landed in ONE pooled row under a chip that only claims to ignore
+  // portion SIZE, averaging away exactly the distinction 🍳 Prep & portion exists
+  // to find. Real name patterns from the live log, verbatim.
+  t('pooling: two PREPARATIONS of one food never share a pooled group', () => {
+    const P = (nm, n, w, tag) => _poolRows(nm, n, w, tag);
+    const bad = { w1: false, w2: false, w3: false, w4: false }, ok = { w1: true, w2: true, w3: true, w4: true };
     const es = _poolFx('🍟Fries', ['70g', '90g'].map(g => ({ g, marks: _POOL_THIN })),
-      _poolRows('🍚Fried Rice 200g', 10, { w1: false, w2: false, w3: false, w4: false }, 'fr')
-        .concat(_poolRows('🍚Rice 200g', 10, { w1: true, w2: true, w3: true, w4: true }, 'pr')));
+      P('🥒 Cucumber raw no skin 50-70g', 8, bad, 'cr1')
+        .concat(P('🥒 Cucumber raw no skin 80-100g', 8, bad, 'cr2'))
+        .concat(P('🥒 Cucumber baked no skin 35-49g', 8, ok, 'cb'))
+        .concat(P('🥬 Arugula raw defrosted 10-15g', 8, bad, 'ar'))
+        .concat(P('🥬 Arugula heated defrosted 16-25g', 8, ok, 'ah'))
+        .concat(P('🍚Fried Rice 200g', 10, bad, 'fr'))
+        .concat(P('🍚Rice 200g', 10, ok, 'pr')));
     const p = withPool(true, es, () => poolPlan(es));
-    const rows = withPool(true, es, () => computeVerdicts().list.filter(x => /rice/i.test(x.food)));
-    return (!p.conflicts['rice'] && p.prepConflicts['rice'] && !p.group['🍚 Rice']
-      && rows.length === 2 && rows.every(r => r.why.some(w => /not the same preparation/.test(w.text || '')))
-      && p.group['🍟 Fries'] && p.group['🍟 Fries'].names.length === 2)
-      ? true : `dose=${!!p.conflicts['rice']} prep=${!!p.prepConflicts['rice']} pooled=${!!p.group['🍚 Rice']} rows=${rows.length} fries=${!!p.group['🍟 Fries']}`;
+    const groups = Object.values(p.group);
+    // No group may hold two names that disagree on any prep word. This is the
+    // property, not a spot-check: it holds for every group in every fixture.
+    const PREPS = ['raw', 'baked', 'heated', 'fried', 'peeled', 'defrosted', 'cooked', 'steamed'];
+    const mixed = groups.filter(g => PREPS.some(w => {
+      const has = n => new RegExp('\\b' + w + '\\b', 'i').test(n);
+      return g.names.some(has) && g.names.some(n => !has(n));
+    })).map(g => g.label + ' ← ' + g.names.join(' | '));
+    // ...and the portion split INSIDE one preparation must still pool, or the fix
+    // has simply turned the chip off.
+    const cuke = p.group['🥒 Cucumber Raw No Skin'];
+    return (!mixed.length && cuke && cuke.names.length === 2
+      && !cuke.names.some(n => /baked/i.test(n))
+      && p.key('🥒 Cucumber baked no skin 35-49g') === '🥒 Cucumber baked no skin 35-49g'
+      && p.key('🥬 Arugula raw defrosted 10-15g') === '🥬 Arugula raw defrosted 10-15g'
+      && p.key('🍚Fried Rice 200g') === '🍚Fried Rice 200g' && p.key('🍚Rice 200g') === '🍚Rice 200g')
+      ? true : `mixed=${JSON.stringify(mixed)} cuke=${cuke ? cuke.names.join('|') : 'MISSING'} rice=${p.key('🍚Rice 200g')}`;
+  });
+  t('pooling: the key function is the ONE key — conflicts are keyed and read alike', () => {
+    // The bug this guards: build the conflict map with one key and look it up with
+    // another and the refusal goes silent while still LOOKING present. A row that
+    // poolPlan refused must carry the warning in computeVerdicts, keyed off its
+    // own displayed name — which means poolLabel/poolKeyOf must round-trip.
+    const mk = bad => { const w = {}; ['w1','w2','w3','w4'].forEach((k, j) => { w[k] = j < bad ? false : true; }); return w; };
+    const es = _poolFx('🥔Potato', [['70g',0],['100g',1],['130g',3],['160g',4]].map(([g, b]) =>
+      ({ g, marks: [mk(b), mk(b), mk(b), mk(b), mk(b), mk(b)] })));
+    const p = withPool(true, es, () => poolPlan(es));
+    const rows = withPool(true, es, () => computeVerdicts().list.filter(x => /potato/i.test(x.food)));
+    const roundTrips = Object.keys(p.conflicts).every(k => poolKeyOf(poolLabel(k, [k])) === k);
+    return (p.conflicts['potato'] && roundTrips && rows.length === 4
+      && rows.every(r => r.doseConflict && r.why.some(w => /gram levels disagree/.test(w.text || ''))))
+      ? true : `conflict=${!!p.conflicts['potato']} roundTrip=${roundTrips} rows=${rows.length} warned=${rows.filter(r => r.doseConflict).length}`;
   });
   t('pooling: prepVariants is byte-identical with the chip on — the per-prep view survives', () => {
     const es = _poolFx('🍟Fries', ['70g', '90g'].map(g => ({ g, marks: _POOL_THIN })),
