@@ -512,6 +512,63 @@
   }
   #notes-modal .btn-cancel-note:hover { border-color: var(--navy); color: var(--navy-ink); }
 
+  /* ── Note scope + consolidation (v73) ──
+     Tokens only: this modal's ground is #fff in light, #1e2630 in dark and
+     var(--card) under the ten palettes, so any hardcoded ink here would be
+     illegible on at least one of them. */
+  .note-scope-row {
+    display: flex; flex-wrap: wrap; align-items: center;
+    gap: 8px; justify-content: space-between; margin-bottom: 6px;
+  }
+  .note-scope-seg {
+    display: inline-flex; border: 1.5px solid var(--border);
+    border-radius: 7px; overflow: hidden;
+  }
+  .note-scope-btn {
+    background: none; border: none; color: var(--muted);
+    font-family: inherit; font-size: 12px; font-weight: 700;
+    padding: 6px 11px; cursor: pointer; transition: all .12s;
+  }
+  .note-scope-btn + .note-scope-btn { border-left: 1.5px solid var(--border); }
+  .note-scope-btn:hover { color: var(--navy-ink); }
+  .note-scope-btn.on {
+    background: var(--bg); color: var(--navy-ink);
+    box-shadow: inset 0 -2px 0 var(--navy);
+  }
+  .note-scope-hint { font-size: 11px; color: var(--muted); line-height: 1.45; margin-bottom: 10px; }
+  .note-scope-tag {
+    font-size: 11px; font-weight: 700; border-radius: 5px;
+    padding: 3px 8px; border: 1.5px solid var(--border); color: var(--muted);
+    white-space: nowrap;
+  }
+  .note-scope-tag.item  { border-color: var(--w2); color: var(--w2); }
+  .note-scope-tag.exact { border-color: var(--navy); color: var(--navy-ink); }
+  .note-consolidate-btn {
+    background: none; border: 1.5px dashed var(--w2); color: var(--w2);
+    font-family: inherit; font-size: 12px; font-weight: 700;
+    border-radius: 7px; padding: 7px 12px; cursor: pointer;
+    transition: all .12s; margin-bottom: 4px;
+  }
+  .note-consolidate-btn:hover { border-style: solid; }
+  .note-merge-panel {
+    border: 1.5px solid var(--border); border-radius: 9px;
+    padding: 12px; margin: 4px 0 12px;
+  }
+  .note-merge-h { font-size: 13px; font-weight: 800; color: var(--navy-ink); margin-bottom: 4px; }
+  .note-merge-legend { font-size: 11px; color: var(--muted); line-height: 1.45; margin-bottom: 10px; }
+  .note-merge-src { border-left: 3px solid var(--border); padding: 0 0 0 9px; margin-bottom: 9px; }
+  .note-merge-name { font-size: 11px; font-weight: 700; color: var(--muted); margin-bottom: 2px; }
+  .note-merge-text { font-size: 12px; color: var(--text); line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
+  #notes-modal textarea.note-merge-result {
+    min-height: 120px; font-size: 13px; margin-top: 3px;
+  }
+  .note-merge-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 10px; flex-wrap: wrap; }
+  .fp-note-tag {
+    display: inline-block; font-size: 10px; font-weight: 700;
+    border: 1.5px solid var(--border); color: var(--muted);
+    border-radius: 5px; padding: 2px 7px; margin-bottom: 6px;
+  }
+
   .empty { text-align: center; color: var(--muted); padding: 36px 20px; font-size: 14px; line-height: 1.6; }
   .empty span { font-size: 32px; display: block; margin-bottom: 8px; }
   #toast {
@@ -4952,6 +5009,13 @@ html body select.status-badge-select.status-blacklist {
   <div id="notes-modal">
     <h3>📝 Notes</h3>
     <div class="food-sub" id="notes-modal-food"></div>
+    <div class="note-scope-row">
+      <div class="note-scope-seg" id="note-scope-seg" role="group" aria-label="Where this note is saved"></div>
+      <div id="note-scope-showing"></div>
+    </div>
+    <div class="note-scope-hint" id="note-scope-hint"></div>
+    <div id="note-consolidate-row"></div>
+    <div id="note-consolidate-preview"></div>
     <textarea id="notes-textarea" placeholder="Write observations, patterns, or anything useful about this food…"></textarea>
     <div class="modal-actions">
       <button class="btn-cancel-note" onclick="closeNotesModal()">Cancel</button>
@@ -6496,6 +6560,7 @@ let _trendActive = null; // guarded: a corrupted value here used to kill the who
 try { _trendActive = JSON.parse(localStorage.getItem('fst_trend_active')) || null; } catch (e) {}
 if (Array.isArray(_trendActive)) _trendActive = _trendActive.map(k => k === 'diarrhea' ? 'ci_focus' : k);   // v68 legacy-key alias
 let _notesFood   = null;
+let _notesScope  = 'item';   // v73: where the open note editor will SAVE to
 let _archiveNoteTarget = null; // { sectionId, entryId } | null
 let _ciSymState  = null; // null | { mode:'add'|'edit', key:string|null, emoji:string, name:string }
 let _checkinDate = null; // null = defaults to today() on first render
@@ -7054,6 +7119,17 @@ function executeUndo() {
     renderTimeline(); // Added this so your new timeline updates on undo!
     updateCheckinDot();
     toast('Check-in restored ✓');
+  } else if (state.type === 'notes') {
+    // v73: surgical pre-images — null means "this key did not exist".
+    const n = loadFoodNotes();
+    Object.keys(state.notes || {}).forEach(k => { if (state.notes[k] === null) delete n[k]; else n[k] = state.notes[k]; });
+    saveFoodNotes(n);
+    const it = loadFoodNotesItem();
+    Object.keys(state.item || {}).forEach(k => { if (state.item[k] === null) delete it[k]; else it[k] = state.item[k]; });
+    saveFoodNotesItem(it);
+    renderSummary();
+    if (_fpFood) renderFoodProfile();
+    toast('Notes restored ✓');
   } else if (state.type === 'bulkwin') {
     const entries = loadMigrated();
     const byId = {};
@@ -7675,16 +7751,76 @@ function saveEdit(renameAll) {
   // Migrate EVERYTHING keyed by the old food name once it's fully retired —
   // notes were moved but status labels, bundle items and trials
   // silently kept pointing at the dead name.
+  let _noteClash = null;
   if (newFood !== _editOriginalFood) {
     const remainingOld = entries.filter(e => e.food === _editOriginalFood).length;
     if (renameAll || remainingOld === 0) {
-      migrateFoodReferences(_editOriginalFood, newFood, null);
+      _noteClash = migrateFoodReferences(_editOriginalFood, newFood, null).itemNoteCollision;
     }
   }
 
   closeEditModal();
   toast(renameAll && changed > 1 ? `Renamed ${changed} entries ✓` : 'Entry updated ✓');
   render();
+  warnItemNoteCollision(_noteClash);   // v73: both notes kept — say so, out loud
+}
+
+// ─── Rename: what happens to the ITEM-level note (v73) ───────────────────────
+// PURE. Decides it; writes nothing. The cascade below executes exactly what
+// this returns and the self-test suite tests this directly, so the rule and the
+// code that runs are the same code.
+//
+// Item notes are keyed by poolKeyOf, NOT by the exact name, so a rename only
+// strands one when it CHANGES that key — 'Cucumber raw no skin 50-70g' →
+// '…60-80g' keeps it and the note must not be touched at all. That is the
+// cheap check, and it is done first.
+//
+//   null   — nothing to do: the key is unchanged, or there is no item note.
+//   move   — the key changed and the destination has no item note: carry it.
+//   hold   — the destination ALREADY has an item note, but the OLD item still
+//            has servings in the log, so the incoming note is already sitting
+//            where its own food can reach it. Move nothing.
+//   park   — collision, and the old item is now empty, so leaving the note
+//            there would strand it. It becomes a this-serving note on a serving
+//            of the destination that has none — readable, and picked up by the
+//            existing 🧩 Combine preview so the two can be joined on purpose.
+// A collision NEVER overwrites the destination note and never joins the two.
+// `liveNames` is every food name in the log AS IT WILL BE after the rename.
+function planItemNoteRename(oldName, newName, itemNotes, notes, liveNames) {
+  const oldPk = poolKeyOf(oldName), newPk = poolKeyOf(newName);
+  if (!oldPk || !newPk || oldPk === newPk) return null;   // the cheap check, first
+  const src = itemNotes[oldPk];
+  if (src === undefined || String(src) === '') return null;
+  if (itemNotes[newPk] === undefined)
+    return { act: 'move', from: oldPk, to: newPk, text: String(src) };
+  const kept = String(itemNotes[newPk]), names = liveNames || [];
+  const base = { from: oldPk, to: newPk, text: String(src), kept };
+  // The old item keeps other serving sizes → its note stays reachable there.
+  if (names.some(f => poolKeyOf(f) === oldPk))
+    return { ...base, act: 'hold', parked: null, stillLive: true };
+  // Nothing logs the old item any more. Find a serving of the destination that
+  // has no note of its own; a name with one is left alone rather than joined.
+  const free = [newName, ...names.filter(f => poolKeyOf(f) === newPk)]
+    .find(f => ciLookup(notes, f) === undefined);
+  return free ? { ...base, act: 'park', parked: free }
+              : { ...base, act: 'hold', parked: null, stillLive: false };
+}
+
+// A collision is the user's own writing, so it is reported with a blocking
+// dialog and not a toast: a toast expires while they are still reading it.
+function warnItemNoteCollision(c) {
+  if (!c) return;
+  const clip = s => { s = String(s == null ? '' : s); return s.length > 300 ? s.slice(0, 300) + '…' : s; };
+  const where = c.parked
+    ? `It is now the “this serving only” note on “${c.parked}”, where you can read it — open 📝 Notes there and use 🧩 Combine to join the two deliberately.`
+    : (c.stillLive
+        ? `It is untouched under “${c.from}”, which you still log — open 📝 Notes on any of those servings to read it.`
+        : `It is still saved, byte for byte, under the old item name “${c.from}”, and in every backup and snapshot — but nothing is logged under that name any more, so no screen shows it. Log that item again, or restore a 🛟 Snapshot, to bring it back.`);
+  setTimeout(() => alert(
+    '📝 Two notes now want the same item — nothing was overwritten.\n\n' +
+    `“${c.to}” already had an all-servings note, so that one was kept exactly as it was:\n\n${clip(c.kept)}\n\n` +
+    `Your other note was NOT deleted and NOT merged into it. ${where}\n\n${clip(c.text)}`
+  ), 0);
 }
 
 // ─── Food identity: shared rename cascade ────────────────────────────────────
@@ -7694,7 +7830,7 @@ function saveEdit(renameAll) {
 // merge can be reverted one step without touching anything logged afterwards.
 function migrateFoodReferences(oldName, newName, undo) {
   const oldNorm = normFood(oldName);
-  const report = { notes: 0, status: 0, bundles: 0, experiments: 0, dictionary: 0, faceMap: 0, itemTypes: 0 };
+  const report = { notes: 0, status: 0, bundles: 0, experiments: 0, dictionary: 0, faceMap: 0, itemTypes: 0, itemNotes: 0, itemNoteCollision: null };
 
   // notes/status maps can hold stray keys under old casings — move them all
   const notes = loadFoodNotes();
@@ -7711,6 +7847,50 @@ function migrateFoodReferences(oldName, newName, undo) {
     if (combined) notes[newName] = combined;
     saveFoodNotes(notes);
     report.notes = noteKeys.length;
+  }
+
+  // v73: item-level notes ride along too — they did not exist when this cascade
+  // was written, so a rename used to leave one under the old pool key: not
+  // deleted, but unreachable from the UI, which reads as lost. The store is
+  // re-read here on purpose: the block above may have just written newName.
+  // loadMigrated() here is ALREADY post-rename — both callers save the renamed
+  // entries before calling in — so "does the old item still exist?" is asked of
+  // the log as it will be, not as it was.
+  const iPlan = planItemNoteRename(oldName, newName, loadFoodNotesItem(), loadFoodNotes(), loadMigrated().map(e => e.food));
+  if (iPlan) {
+    const iNotes = loadFoodNotesItem();
+    if (iPlan.act === 'move') {
+      if (undo && undo.itemNotes) {
+        undo.itemNotes[iPlan.from] = iNotes[iPlan.from];
+        if (!(iPlan.to in undo.itemNotes)) undo.itemNotes[iPlan.to] = null;
+      }
+      iNotes[iPlan.to] = iPlan.text;
+      delete iNotes[iPlan.from];
+      saveFoodNotesItem(iNotes);
+      report.itemNotes = 1;
+    } else if (iPlan.act === 'park') {
+      // The destination's note is NOT touched; this one lands where it can be
+      // read. It MUST go to iPlan.parked and not to newName — the plan already
+      // passed over any serving that carries its own note, and writing to
+      // newName here would overwrite exactly the writing it stepped around.
+      const nMap = loadFoodNotes();
+      if (nMap[iPlan.parked] === undefined) {          // belt-and-braces: never clobber
+        if (undo) {
+          if (undo.itemNotes) undo.itemNotes[iPlan.from] = iNotes[iPlan.from];
+          if (!(iPlan.parked in undo.notes)) undo.notes[iPlan.parked] = null;
+        }
+        delete iNotes[iPlan.from];
+        saveFoodNotesItem(iNotes);
+        nMap[iPlan.parked] = iPlan.text;
+        saveFoodNotes(nMap);
+        report.itemNoteCollision = iPlan;
+      } else {
+        report.itemNoteCollision = { ...iPlan, act: 'hold', parked: null, stillLive: false };
+      }
+    } else {
+      // 'hold' — nowhere safe to park, so nothing moves and nothing is lost
+      report.itemNoteCollision = iPlan;
+    }
   }
 
   const status = loadFoodStatus();
@@ -7798,6 +7978,8 @@ function collectFoodImpact(from, to) {
     nTo: entries.filter(e => e.food === to).length,
     noteKeys: Object.keys(notes).filter(k => normFood(k) === fromNorm && k !== to),
     targetHasNote: notes[to] != null && notes[to] !== '',
+    // v73: read-only plan, asked of the log as it WOULD be after the merge
+    itemNote: planItemNoteRename(from, to, loadFoodNotesItem(), notes, entries.map(e => e.food === from ? to : e.food)),
     statKeys: Object.keys(status).filter(k => normFood(k) === fromNorm && k !== to),
     fromStatus: (Object.keys(status).find(k => normFood(k) === fromNorm && k !== to) || null) && status[Object.keys(status).find(k => normFood(k) === fromNorm && k !== to)],
     targetStatus: status[to] !== undefined ? status[to] : null,
@@ -7865,6 +8047,13 @@ function undoFoodMerge() {
   const notes = loadFoodNotes();
   Object.keys(u.notes || {}).forEach(k => { if (u.notes[k] === null) delete notes[k]; else notes[k] = u.notes[k]; });
   saveFoodNotes(notes);
+  // v73: item-level notes. Guarded so an undo of a merge that never touched one
+  // leaves fst_food_notes_item byte-identical instead of rewriting it.
+  if (Object.keys(u.itemNotes || {}).length) {
+    const iNotes = loadFoodNotesItem();
+    Object.keys(u.itemNotes).forEach(k => { if (u.itemNotes[k] === null) delete iNotes[k]; else iNotes[k] = u.itemNotes[k]; });
+    saveFoodNotesItem(iNotes);
+  }
   const status = loadFoodStatus();
   Object.keys(u.status || {}).forEach(k => { if (u.status[k] === null) delete status[k]; else status[k] = u.status[k]; });
   saveFoodStatus(status);
@@ -8025,6 +8214,9 @@ function renderFoodIdentityPreview() {
   const lines = [];
   lines.push(`🍽️ <b>${I.nFrom}</b> logged entr${I.nFrom === 1 ? 'y' : 'ies'} renamed${isMerge ? ` — joins <b>${esc(to)}</b>'s ${I.nTo}, keeping every log (nothing is deleted)` : ''}`);
   if (I.noteKeys.length) lines.push(`📝 note carried over${I.targetHasNote ? ' and combined with the existing one' : ''}`);
+  if (I.itemNote) lines.push(I.itemNote.act === 'move'
+    ? `🍽️ the all-servings note follows the item to <b>${esc(I.itemNote.to)}</b>`
+    : `🍽️ <b style="color:var(--neg);">both items have an all-servings note</b> — <b>${esc(I.itemNote.to)}</b>'s is kept untouched, and yours is ${I.itemNote.act === 'park' ? 'kept as a “this serving only” note you can read and combine on purpose' : `left exactly where it is under <b>${esc(I.itemNote.from)}</b>`}. Nothing is overwritten and nothing is combined without a confirm.`);
   if (I.statKeys.length) lines.push(`🏷️ status: ${I.targetStatus != null ? `<b>${esc(to)}</b> keeps its own (<b>${esc(String(I.targetStatus))}</b>)` : `<b>${esc(String(I.fromStatus))}</b> carries over`}`);
   if (I.bundleNames.length) lines.push(`🍱 bundle${I.bundleNames.length === 1 ? '' : 's'} updated: ${I.bundleNames.map(esc).join(', ')}`);
   if (I.exps) lines.push(`🧪 ${I.exps} trial${I.exps === 1 ? '' : 's'} re-pointed${I.activeTrial ? ' — <b style="color:var(--neg);">one is ACTIVE: adherence matching follows the new name from now on</b>' : ''}`);
@@ -8051,16 +8243,17 @@ async function confirmFoodMerge() {
     if (!confirm('Could not save a safety snapshot first (' + (e && e.message) + ').\n\nProceed with the merge anyway?')) return;
   }
   // 2. surgical undo record + apply
-  const undo = { ts: Date.now(), from, to, entries: [], notes: {}, status: {}, bundles: [], experiments: [], dictionary: [], faceMap: [], itemTypes: {} };
+  const undo = { ts: Date.now(), from, to, entries: [], notes: {}, status: {}, bundles: [], experiments: [], dictionary: [], faceMap: [], itemTypes: {}, itemNotes: {} };
   const entries = loadMigrated();
   entries.forEach(e => { if (e.food === from) { undo.entries.push({ id: e.id, food: e.food }); e.food = to; } });
   save(entries);
-  migrateFoodReferences(from, to, undo);
+  const rep = migrateFoodReferences(from, to, undo);
   localStorage.setItem('fst_food_merge_undo', JSON.stringify(undo));
   toast(`${undo.entries.length} entr${undo.entries.length === 1 ? 'y' : 'ies'} now under "${to}" ✓ (Undo available)`);
   _fiState.from = null; _fiState.to = '';
   render();
   renderFoodIdentity();
+  warnItemNoteCollision(rep.itemNoteCollision);   // v73: both notes kept — say so, out loud
 }
 
 document.getElementById('edit-modal-bg').addEventListener('click', function(e) { if (e.target === this) closeEditModal(); });
@@ -8072,6 +8265,77 @@ function loadFoodNotes() {
   catch { return {}; }
 }
 function saveFoodNotes(obj) { localStorage.setItem('fst_food_notes', JSON.stringify(obj)); }
+
+// ─── Item-level notes (v73) ──────────────────────────────────────────────────
+// One note that shows on EVERY serving size of a food, so an observation is
+// written once instead of ten times. Keyed by poolKeyOf (= stripCosmetic): it
+// drops quantities and units but KEEPS preparation, so
+// 'Cucumber raw no skin 50-70g' and '…71-100g' share one note while
+// 'Cucumber baked no skin' keeps its own — a different food to this user.
+//
+// This is a SEPARATE store on purpose. fst_food_notes is never re-keyed, so
+// every note written before v73 stays byte-for-byte where it was, keeps
+// winning for the exact serving it was written on, and still reads correctly
+// on any older build of the app.
+function loadFoodNotesItem() {
+  try { const o = JSON.parse(localStorage.getItem('fst_food_notes_item') || '{}'); return (o && typeof o === 'object' && !Array.isArray(o)) ? o : {}; }
+  catch { return {}; }
+}
+function saveFoodNotesItem(obj) { localStorage.setItem('fst_food_notes_item', JSON.stringify(obj)); }
+
+// THE read order. Every surface that shows a note calls this and nothing else,
+// so two screens can never disagree about what a food's note is:
+//   1. an exact-name note wins for that one serving (pre-v73 behaviour, intact —
+//      presence is `!== undefined`, exactly the test the old code used),
+//   2. otherwise the item note covers every serving of the food,
+//   3. otherwise there is no note.
+// PURE apart from the default loads — pass both maps in a render loop.
+function resolveFoodNote(food, notes, itemNotes) {
+  const ex = ciLookup(notes || loadFoodNotes(), food);
+  if (ex !== undefined) return { text: ex == null ? '' : String(ex), scope: 'exact', key: food };
+  const k = poolKeyOf(food);
+  const it = k ? (itemNotes || loadFoodNotesItem())[k] : undefined;
+  if (it !== undefined) return { text: it == null ? '' : String(it), scope: 'item', key: k };
+  return null;
+}
+
+// How many spellings of this item exist in the log — "all 6 servings" beats
+// "all servings" when you are deciding where a note lands.
+function itemServingNames(food) {
+  const pk = poolKeyOf(food);
+  if (!pk) return [];
+  const seen = new Set();
+  loadMigrated().forEach(e => { if (poolKeyOf(e.food) === pk) seen.add(e.food); });
+  if (!seen.has(food)) seen.add(food);
+  return [...seen].sort((a, b) => a.localeCompare(b));
+}
+
+// Consolidation PLAN — PURE and read-only. Lists every exact-name note filed
+// against a serving of this same item and what combining them would read like.
+// Building a plan writes nothing: only applyNotesConsolidation(), behind an
+// explicit confirm, ever touches a store. Nothing calls this on load or render.
+function notesConsolidationPlan(food, notes, itemNotes) {
+  const n = notes || loadFoodNotes(), it = itemNotes || loadFoodNotesItem();
+  const pk = poolKeyOf(food);
+  if (!pk) return null;
+  const sources = Object.keys(n)
+    .filter(k => poolKeyOf(k) === pk && String(n[k] == null ? '' : n[k]) !== '')
+    .sort((a, b) => a.localeCompare(b))
+    .map(k => ({ name: k, text: String(n[k]) }));
+  if (!sources.length) return null;
+  const existing = it[pk] !== undefined ? String(it[pk] == null ? '' : it[pk]) : null;
+  // Same de-duplicating joiner the rename cascade already uses for notes, so
+  // two screens combine notes the same way.
+  const texts = [];
+  if (existing) texts.push(existing);
+  sources.forEach(s => { if (!texts.includes(s.text)) texts.push(s.text); });
+  return {
+    key: pk, sources, existing,
+    combined: texts.join('\n———\n'),
+    distinct: texts.length,
+    offer: sources.length >= 2 || (sources.length === 1 && existing !== null)
+  };
+}
 
 // ─── Food Status ──────────────────────────────────────────────────────────────
 function loadFoodStatus() {
@@ -8151,7 +8415,7 @@ function calcStorageMeterLive() {
     logs: storedBytes('fst_entries'),
     checkins: storedBytes('fst_checkins') + storedBytes('fst_checkin_syms') + storedBytes('fst_checkin_order'),
     diary: storedBytes('fst_archives'),
-    notes: storedBytes('fst_food_notes'),
+    notes: storedBytes('fst_food_notes') + storedBytes('fst_food_notes_item'),
   };
   let total = 0;
   const keys = (typeof window.__fstKeys === 'function') ? window.__fstKeys() : [];
@@ -8335,25 +8599,173 @@ function deleteCheckinSym(key) {
 
 function openNotesModal(food) {
   _notesFood = food;
-  const notes = loadFoodNotes();
+  const cur = resolveFoodNote(food);
+  // A NEW note defaults to item scope — write once, see it on every serving.
+  // An existing note opens in the scope it actually lives in, so editing never
+  // silently relocates it.
+  _notesScope = cur ? cur.scope : 'item';
   document.getElementById('notes-modal-food').textContent = food;
-  document.getElementById('notes-textarea').value = ciLookup(notes, food) || '';
+  document.getElementById('notes-textarea').value = cur ? cur.text : '';
+  renderNotesScope();
   document.getElementById('notes-modal-bg').classList.add('open');
   setTimeout(() => document.getElementById('notes-textarea').focus(), 50);
 }
+// Scope control + the consolidation offer. Redrawn on open and on every scope
+// tap so the modal always states where a Save will land.
+function renderNotesScope() {
+  if (!_notesFood) return;
+  const nServings = itemServingNames(_notesFood).length;
+  const cur = resolveFoodNote(_notesFood);
+  const btn = (sc, label) => `<button type="button" class="note-scope-btn${_notesScope === sc ? ' on' : ''}" aria-pressed="${_notesScope === sc}" onclick="setNotesScope('${sc}')">${label}</button>`;
+  document.getElementById('note-scope-seg').innerHTML =
+    btn('item', `🍽️ All servings${nServings > 1 ? ' (' + nServings + ')' : ''}`) + btn('exact', '📏 This serving only');
+  document.getElementById('note-scope-hint').textContent = _notesScope === 'item'
+    ? `Saves once for every serving size of “${poolKeyOf(_notesFood) || _notesFood}”. Preparation still separates foods.`
+    : `Saves against “${_notesFood}” alone — it overrides the all-servings note on this serving only.`;
+  // What you are looking at right now, which can differ from where a Save goes.
+  const showing = document.getElementById('note-scope-showing');
+  showing.innerHTML = cur
+    ? (cur.scope === 'item'
+        ? `<span class="note-scope-tag item">🍽️ Showing the all-servings note</span>`
+        : `<span class="note-scope-tag exact">📏 Showing this serving's own note</span>`)
+    : `<span class="note-scope-tag none">No note yet</span>`;
+
+  const plan = notesConsolidationPlan(_notesFood);
+  const row = document.getElementById('note-consolidate-row');
+  row.innerHTML = (plan && plan.offer)
+    ? `<button type="button" class="note-consolidate-btn" onclick="previewNotesConsolidation()">🧩 Combine ${plan.sources.length} serving note${plan.sources.length === 1 ? '' : 's'} into one</button>
+       <span class="note-scope-hint">Shows you exactly what would be combined first — nothing is merged until you confirm.</span>`
+    : '';
+  document.getElementById('note-consolidate-preview').innerHTML = '';
+}
+function setNotesScope(sc) {
+  _notesScope = (sc === 'exact') ? 'exact' : 'item';
+  renderNotesScope();
+}
 function closeNotesModal() {
   document.getElementById('notes-modal-bg').classList.remove('open');
+  document.getElementById('note-consolidate-preview').innerHTML = '';
   _notesFood = null;
 }
-function saveNotesModal() {
+// v73: notes are the one thing in this app the user cannot retype. Any write
+// that ABSORBS existing note text — a consolidation, or an all-servings save
+// that swallows serving notes — takes a real snapshot first, the same
+// protection importFullBackup and the 🧬 merge already have. The 5-second toast
+// covers a misclick; this covers regretting it an hour later. A snapshot that
+// cannot be taken ASKS: running with no net after promising one is worse than
+// refusing. Returns false when the user declines — the caller must then write
+// nothing at all.
+async function noteSafetySnapshot(what) {
+  try {
+    if (!window.__fstTakeSnapshot) throw new Error('snapshot system unavailable');
+    await window.__fstTakeSnapshot(false);
+    return true;
+  } catch (e) {
+    if (confirm('Could not save a safety snapshot first (' + (e && e.message) + ').\n\n' + what + ' anyway?\n\nThe 5-second Undo would still work, but there would be no 🛟 Snapshot to come back to later.')) return true;
+    toast('Nothing changed — every note left exactly as it was');
+    return false;
+  }
+}
+async function saveNotesModal() {
   if (!_notesFood) return;
-  const notes = loadFoodNotes();
+  const food = _notesFood;
   const val = document.getElementById('notes-textarea').value.trim();
-  ciWrite(notes, _notesFood, val || undefined); // also heals case-duplicate keys
-  saveFoodNotes(notes);
-  closeNotesModal();
-  toast('Notes saved ✓');
+  if (_notesScope === 'exact') {
+    const notes = loadFoodNotes();
+    ciWrite(notes, food, val || undefined); // also heals case-duplicate keys
+    saveFoodNotes(notes);
+    closeNotesModal();
+    toast('Note saved for this serving ✓');
+  } else {
+    const pk = poolKeyOf(food);
+    if (!pk) { toast('This name has no letters to key an item note on — saved for this serving instead'); _notesScope = 'exact'; await saveNotesModal(); return; }
+    // This save ABSORBS any serving note on this name (below), so it earns a
+    // snapshot before it writes — measured first so the common case, where
+    // nothing is absorbed, stays instant and does not spam the snapshot ring.
+    const willAbsorb = Object.keys(loadFoodNotes()).filter(k => normFood(k) === normFood(food)).length;
+    if (willAbsorb && !(await noteSafetySnapshot(`Fold ${willAbsorb} serving note${willAbsorb === 1 ? '' : 's'} into one all-servings note`))) return;
+    const notes = loadFoodNotes(), item = loadFoodNotesItem();
+    // Pre-images for undo. An exact-name note on THIS name would shadow the
+    // item note being saved and make the save look like it did nothing, so it
+    // MOVES up to item scope — its text is what is being saved, and Undo puts
+    // it back exactly where it was.
+    const undo = { notes: {}, item: {} };
+    undo.item[pk] = (pk in item) ? item[pk] : null;
+    let moved = 0;
+    Object.keys(notes).filter(k => normFood(k) === normFood(food)).forEach(k => {
+      undo.notes[k] = notes[k]; delete notes[k]; moved++;
+    });
+    if (val) item[pk] = val; else delete item[pk];
+    saveFoodNotes(notes);
+    saveFoodNotesItem(item);
+    const n = itemServingNames(food).length;
+    closeNotesModal();
+    if (moved) startUndo({ type: 'notes', ...undo }, `Note now covers all ${n} serving${n === 1 ? '' : 's'} of “${pk}”`);
+    else toast(val ? `Note saved for all ${n} serving${n === 1 ? '' : 's'} ✓` : 'Note cleared ✓');
+  }
   renderSummary();
+  if (_fpFood) renderFoodProfile();   // keep the Food Profile's note card in step
+}
+
+// ─── Consolidation: preview → confirm → undo ─────────────────────────────────
+// Never automatic. Never on load, never on open, never a side effect of a
+// render — the plan is built read-only, shown in full, and only applied by the
+// confirm button below.
+function previewNotesConsolidation() {
+  const plan = notesConsolidationPlan(_notesFood);
+  if (!plan) { toast('Nothing to combine'); return; }
+  const host = document.getElementById('note-consolidate-preview');
+  const src = plan.sources.map(s => `<div class="note-merge-src"><div class="note-merge-name">📏 ${esc(s.name)}</div><div class="note-merge-text">${esc(s.text)}</div></div>`).join('');
+  const ex = plan.existing !== null
+    ? `<div class="note-merge-src"><div class="note-merge-name">🍽️ Current all-servings note</div><div class="note-merge-text">${esc(plan.existing)}</div></div>` : '';
+  host.innerHTML = `<div class="note-merge-panel">
+    <div class="note-merge-h">🧩 Combine into one note for “${esc(plan.key)}”</div>
+    <div class="note-merge-legend">These ${plan.sources.length} serving note${plan.sources.length === 1 ? '' : 's'} would be replaced by a single all-servings note. Edit the result before saving — nothing has changed yet.<br>🛟 A safety snapshot is saved first, so the originals stay recoverable long after the Undo toast is gone.</div>
+    ${ex}${src}
+    <div class="note-merge-name">Result</div>
+    <textarea id="note-merge-result" class="note-merge-result">${esc(plan.combined)}</textarea>
+    <div class="note-merge-actions">
+      <button type="button" class="btn-cancel-note" onclick="cancelNotesConsolidation()">Cancel</button>
+      <button type="button" class="btn-save-note" onclick="applyNotesConsolidation()">Combine ${plan.sources.length} note${plan.sources.length === 1 ? '' : 's'} ✓</button>
+    </div>
+  </div>`;
+  host.querySelector('#note-merge-result').focus();
+}
+function cancelNotesConsolidation() {
+  document.getElementById('note-consolidate-preview').innerHTML = '';
+  toast('Nothing combined — every note left as it was');
+}
+let _notesMergeBusy = false;   // one snapshot + one apply per click, never two
+async function applyNotesConsolidation() {
+  if (_notesMergeBusy) return;
+  const food = _notesFood;
+  const plan = notesConsolidationPlan(food);
+  const box = document.getElementById('note-merge-result');
+  if (!plan || !box) return;
+  const combined = box.value.trim();
+  if (!combined) { toast('Combined note is empty — nothing changed'); return; }
+  // The user can edit the combined text before saving, so trimming it and
+  // letting the 5-second toast expire would lose the originals for good. This
+  // is the one undo in the app that reverses writing, so it gets a real net
+  // BEFORE the write — not after.
+  _notesMergeBusy = true;
+  const ok = await noteSafetySnapshot(`Combine ${plan.sources.length} serving note${plan.sources.length === 1 ? '' : 's'} into one`);
+  _notesMergeBusy = false;
+  if (!ok) return;
+  if (!_notesFood || _notesFood !== food) return;   // the modal moved on while we waited
+  const notes = loadFoodNotes(), item = loadFoodNotesItem();
+  const undo = { notes: {}, item: {} };
+  undo.item[plan.key] = (plan.key in item) ? item[plan.key] : null;
+  plan.sources.forEach(s => { if (s.name in notes) { undo.notes[s.name] = notes[s.name]; delete notes[s.name]; } });
+  item[plan.key] = combined;
+  saveFoodNotes(notes);
+  saveFoodNotesItem(item);
+  document.getElementById('note-consolidate-preview').innerHTML = '';
+  _notesScope = 'item';
+  document.getElementById('notes-textarea').value = combined;
+  renderNotesScope();
+  renderSummary();
+  startUndo({ type: 'notes', ...undo }, `${plan.sources.length} serving note${plan.sources.length === 1 ? '' : 's'} combined into one · 🛟 snapshot saved first`);
 }
 document.getElementById('notes-modal-bg').addEventListener('click', function(e) { if (e.target === this) closeNotesModal(); });
 document.addEventListener('keydown', e => {
@@ -14749,6 +15161,7 @@ function renderSummary() {
 
   const minLogs = _summaryMinLogs || 1;
   const foodNotes = loadFoodNotes();
+  const foodNotesItem = loadFoodNotesItem();
   const foodStatuses = loadFoodStatus();
   const foodStats = Object.entries(foods)
     .filter(([,ws]) => ws.logs >= minLogs)
@@ -14998,7 +15411,11 @@ function renderSummary() {
     // the original three expressions.
     const _pg = _pool.group[food];
     const noteKey = _pg ? _pg.names[0] : food;
-    const hasNote = ciLookup(foodNotes, noteKey) !== undefined; // old keys may carry a different casing
+    // v73: ONE read order, shared with the modal and the Food Profile —
+    // exact-name note first (old keys may carry a different casing), then the
+    // item note that covers every serving size.
+    const noteHit = resolveFoodNote(noteKey, foodNotes, foodNotesItem);
+    const hasNote = noteHit !== null;
 
     // Status Logic
     const statusVal = ciLookup(foodStatuses, noteKey) || 'N/A';
@@ -15009,7 +15426,13 @@ function renderSummary() {
 
     const notesCell = `<td style="vertical-align:middle; width:110px;">
       <div style="display:flex; flex-direction:column; gap:6px; align-items:center;">
-        <button class="notes-btn${hasNote?' has-note':''}" ${_pg ? `title="${escAttr('Opens the note on ' + noteKey + ' — the pooled row is a label, not a logged name')}"` : ''} onclick="openNotesModal(${escAttr(JSON.stringify(noteKey))})" style="width:100%;">📝 ${hasNote ? 'View Notes' : 'Add Notes'}</button>
+        <button class="notes-btn${hasNote?' has-note':''}" title="${escAttr(
+          (hasNote
+            ? (noteHit.scope === 'item'
+                ? 'One note covering every serving size of "' + noteHit.key + '"'
+                : 'A note written on "' + noteHit.key + '" alone')
+            : 'No note yet')
+          + (_pg ? ' — the pooled row is a label, not a logged name; notes open on ' + noteKey : ''))}" onclick="openNotesModal(${escAttr(JSON.stringify(noteKey))})" style="width:100%;">${hasNote ? (noteHit.scope === 'item' ? '🍽️ All sizes' : '📝 View Notes') : '📝 Add Notes'}</button>
         ${statusSelect}
       </div>
     </td>`;
@@ -15052,6 +15475,7 @@ function buildBackupJSON() {
       entries: loadMigrated(),
       customSyms: loadCustomSyms(),
       foodNotes: loadFoodNotes(),
+      foodNotesItem: loadFoodNotesItem(), // v73: item-level notes travel — they are your own writing, not a device preference
       foodStatus: loadFoodStatus(),
       checkins: loadCheckins(),
       checkinSyms: loadCheckinSyms(),
@@ -15085,7 +15509,7 @@ function markBackupDone(msg) {
 // Answers "if I restored this file right now, what exactly would change?"
 // The file goes through the SAME normalizer a real restore uses, then every
 // section is diffed against live data. Nothing is written anywhere.
-const VB_COVERED_KEYS = ['fst_entries','fst_custom_syms','fst_food_notes','fst_food_status','fst_checkins','fst_checkin_syms','fst_checkin_order','fst_archives','fst_bundles','fst_experiments','fst_food_dictionary','fst_face_map','fst_item_types','fst_trial_metrics','fst_theme','fst_ui_style'];
+const VB_COVERED_KEYS = ['fst_entries','fst_custom_syms','fst_food_notes','fst_food_notes_item','fst_food_status','fst_checkins','fst_checkin_syms','fst_checkin_order','fst_archives','fst_bundles','fst_experiments','fst_food_dictionary','fst_face_map','fst_item_types','fst_trial_metrics','fst_theme','fst_ui_style'];
 // v71: fst_palette / fst_typography are DEVICE-LOCAL, not backed up. They are a
 // per-screen preference (an OLED phone wants Eclipse; the desktop may not), and
 // listing them as covered would claim the backup carries something it does not.
@@ -15151,6 +15575,15 @@ function verifyBackupText(text, fileName) {
   sections.push({ label: '📝 Food notes', unit: 'notes',
     fileN: Object.keys(fn).length, liveN: Object.keys(ln).length,
     d: _vbDiffMaps(toMap(Object.keys(fn), k => k, k => String(fn[k])), toMap(Object.keys(ln), k => k, k => String(ln[k]))) });
+
+  // v73: item-level notes. null = the file predates them, so a restore keeps
+  // the live ones — compare against themselves rather than reporting a false
+  // "would be deleted".
+  const fni = norm.foodNotesItem, lni = loadFoodNotesItem();
+  sections.push({ label: '🍽️ All-serving notes', unit: 'notes',
+    fileN: fni === null ? Object.keys(lni).length : Object.keys(fni).length, liveN: Object.keys(lni).length,
+    d: _vbDiffMaps(toMap(Object.keys(fni === null ? lni : fni), k => k, k => String((fni === null ? lni : fni)[k])),
+                   toMap(Object.keys(lni), k => k, k => String(lni[k]))) });
 
   const fs = norm.foodStatus, ls = loadFoodStatus();
   sections.push({ label: '🏷️ Food statuses', unit: 'statuses',
@@ -15220,6 +15653,10 @@ function verifyBackupText(text, fileName) {
       fileN: norm.faceMap.length, liveN: loadFaceMap().length,
       d: _vbDiffMaps(toMap(norm.faceMap, m => m.id, m => JSON.stringify(m)),
                      toMap(normalizeImportedBackupData({ faceMap: loadFaceMap() }).faceMap, m => m.id, m => JSON.stringify(m))) });
+  }
+
+  if (norm.foodNotesItem === null && Object.keys(loadFoodNotesItem()).length) {
+    vbNotes.push(`🍽️ This backup predates all-serving notes (${Object.keys(loadFoodNotesItem()).length} live) — restoring keeps yours, but re-save a backup to cover them.`);
   }
 
   // Item-type overrides (v68): pre-v68 files don't carry them (restore keeps live)
@@ -15408,6 +15845,13 @@ function normalizeImportedBackupData(rawData) {
     : [];
 
   const normFoodNotes = data.foodNotes && typeof data.foodNotes === 'object' ? data.foodNotes : {};
+  // v73: null when the field is absent — a pre-v73 backup must NOT wipe the
+  // live item-level notes (same absent-vs-empty rule as dictionary/faceMap).
+  const normFoodNotesItem = data.foodNotesItem && typeof data.foodNotesItem === 'object' && !Array.isArray(data.foodNotesItem)
+    ? Object.fromEntries(Object.entries(data.foodNotesItem)
+        .filter(([k, v]) => k && v != null && String(v) !== '')
+        .map(([k, v]) => [String(k), String(v)]))
+    : null;
   const normFoodStatus = data.foodStatus && typeof data.foodStatus === 'object' ? data.foodStatus : {};
   // v68 (audit batch 3): null when the field is absent — a pre-era backup must
   // not wipe the live custom check-in symptom list (same rule as dictionary).
@@ -15544,6 +15988,7 @@ function normalizeImportedBackupData(rawData) {
     trialMetrics: normTrialMetrics,
     customSyms: normCustomSyms,
     foodNotes: normFoodNotes,
+    foodNotesItem: normFoodNotesItem,
     foodStatus: normFoodStatus,
     checkins: normCheckins,
     checkinSyms: normCheckinSyms,
@@ -15607,6 +16052,7 @@ async function importFullBackup(text, inputEl) {
     saveCustomSyms(data.customSyms);
     save(data.entries);
     saveFoodNotes(data.foodNotes);
+    if (data.foodNotesItem !== null) saveFoodNotesItem(data.foodNotesItem); // v73: pre-era backups lack the field — keep the live item notes
     saveFoodStatus(data.foodStatus);
     if (data.checkinSyms !== null) saveCheckinSyms(data.checkinSyms); // pre-era backups lack the field — keep the live list
     saveCheckins(data.checkins);
@@ -17018,10 +17464,16 @@ function renderFoodProfile() {
   </div>` : '';
 
   // ── note ──
-  const note = ciLookup(loadFoodNotes(), food);
+  // v73: same resolveFoodNote() read order the Summary and the modal use, so
+  // no two screens can disagree about what this food's note is.
+  const noteHit = resolveFoodNote(food);
   const noteCard = `<div class="card fp-card">
     <div class="fp-h">📝 Your note</div>
-    ${note ? `<div class="fp-note">${esc(String(note))}</div>` : '<div class="fp-empty">No note yet — add one from 📋 Summary.</div>'}
+    ${noteHit && noteHit.text
+      ? `<div class="fp-note-tag">${noteHit.scope === 'item'
+          ? `🍽️ Covers every serving size of “${esc(noteHit.key)}”`
+          : `📏 Written on “${esc(noteHit.key)}” alone`}</div><div class="fp-note">${esc(noteHit.text)}</div>`
+      : '<div class="fp-empty">No note yet — add one from 📋 Summary.</div>'}
   </div>`;
 
   host.innerHTML = searchBar + headCard + verdictCard + impactCard + windowsCard + faceCard + trialCard + coCard + histCard + noteCard;
@@ -17073,6 +17525,10 @@ function selfTestFixtures() {
     checkinSyms: [{ key: 'c_overall', emoji: '📋', name: 'Overall Day', label: '📋 Overall Day' }],
     checkinOrder: [],
     foodNotes: { Banana: 'fixture note' },
+    // v73 note-scope fixtures. Two servings of one item, one of which carries
+    // its own exact-name note, plus a different PREPARATION of the same base
+    // that must never see either.
+    foodNotesItem: { 'cucumber raw no skin': 'item note — every size', 'oats': 'oats item note' },
     foodStatus: { Banana: 'safe', TestChili: 'suspect' },
     bundles: [{ id: 'b1', name: 'Fixture bundle', items: ['Banana', 'Oats'] }],
     experiments: [{
@@ -17112,6 +17568,7 @@ function runSelfTest() {
   loadCheckinSyms = () => FX.checkinSyms;
   loadCheckinOrder = () => FX.checkinOrder;
   loadFoodNotes = () => FX.foodNotes;
+  loadFoodNotesItem = () => FX.foodNotesItem;
   loadFoodStatus = () => FX.foodStatus;
   loadBundles = () => FX.bundles;
   loadExperiments = () => FX.experiments;
@@ -17863,6 +18320,195 @@ function runSelfTest() {
     return eq([h[3].logs, h[3].neg, h[2].logs].join('|'), '4|4|0');
   });
 
+  // ── note scope: item-level vs exact-name notes (v73) ──
+  // The whole point of the feature is that ONE read order governs every screen
+  // and that four months of exact-name notes keep winning where they were
+  // written. Both halves are asserted here, plus the leak the pool key exists
+  // to prevent (preparation is kept, so baked never sees raw's note).
+  t('note scope: an exact-name note still wins, unchanged', () => {
+    const r = resolveFoodNote('Banana');
+    return (r && r.scope === 'exact' && r.text === 'fixture note') ? true : 'exact note no longer wins: ' + JSON.stringify(r);
+  });
+  t('note scope: the item note covers a serving with no note of its own', () => {
+    const r = resolveFoodNote('🥒 Cucumber raw no skin 71-100g');
+    return (r && r.scope === 'item' && r.text === 'item note — every size') ? true : JSON.stringify(r);
+  });
+  t('note scope: EVERY serving size of one item reads the same note', () => {
+    const sizes = ['Cucumber raw no skin 50-70g', 'Cucumber raw no skin 71-100g', '🥒Cucumber raw no skin 150g'];
+    const seen = sizes.map(s => { const r = resolveFoodNote(s); return r && r.text; });
+    return seen.every(x => x === 'item note — every size') ? true : JSON.stringify(seen);
+  });
+  t('note scope: an item note never leaks onto a different PREPARATION', () =>
+    resolveFoodNote('Cucumber baked no skin 100g') === null ? true : 'baked cucumber picked up the raw note');
+  t('note scope: no note at all resolves to null', () =>
+    resolveFoodNote('NeverSeenFood 10g') === null ? true : 'invented a note');
+  t('note scope: the item key IS poolKeyOf, not a second key', () =>
+    eq(poolKeyOf('🥒 Cucumber raw no skin 71-100g'), 'cucumber raw no skin'));
+  t('note scope: a NEW note defaults to item scope, an existing one keeps its own', () => {
+    // openNotesModal's rule, evaluated the same way it computes it.
+    const scopeFor = f => { const c = resolveFoodNote(f); return c ? c.scope : 'item'; };
+    return eq([scopeFor('NeverSeenFood 10g'), scopeFor('Banana'), scopeFor('Cucumber raw no skin 50-70g')].join('|'), 'item|exact|item');
+  });
+
+  // ── consolidation: previewed, confirmed, undoable — never automatic ──
+  t('consolidation: the plan lists every serving note and previews the result', () => {
+    const notes = { 'Fries 70g': 'salty', 'Fries 120g': 'worse when big', 'Rice 100g': 'unrelated' };
+    const p = notesConsolidationPlan('Fries 90g', notes, {});
+    // sources are listed in name order ("Fries 120g" sorts before "Fries 70g"),
+    // and the preview shows that order before anything is written.
+    return (p && p.key === 'fries' && p.sources.length === 2 && p.offer === true
+      && p.combined === 'worse when big\n———\nsalty') ? true : JSON.stringify(p);
+  });
+  t('consolidation: building a plan writes NOTHING', () => {
+    const notes = { 'Fries 70g': 'salty', 'Fries 120g': 'worse when big' }, item = {};
+    const before = JSON.stringify([notes, item]);
+    notesConsolidationPlan('Fries 90g', notes, item);
+    return before === JSON.stringify([notes, item]) ? true : 'the plan mutated the notes it was handed';
+  });
+  t('consolidation: never automatic — no render or resolve path calls it', () => {
+    // The only callers are the preview button and the confirm button. If a
+    // render ever starts calling it, this list is the tripwire.
+    const src = String(renderNotesScope) + String(resolveFoodNote) + String(saveNotesModal);
+    return !/applyNotesConsolidation\(/.test(src) ? true : 'a non-confirm path calls applyNotesConsolidation';
+  });
+  t('consolidation: identical text on two servings collapses to one line', () => {
+    const p = notesConsolidationPlan('Fries 90g', { 'Fries 70g': 'same', 'Fries 120g': 'same' }, {});
+    return (p.distinct === 1 && p.combined === 'same') ? true : JSON.stringify(p);
+  });
+  t('consolidation: an existing item note leads the combined result', () => {
+    const p = notesConsolidationPlan('Fries 90g', { 'Fries 70g': 'salty' }, { fries: 'already here' });
+    return (p.offer === true && p.combined === 'already here\n———\nsalty') ? true : JSON.stringify(p);
+  });
+  t('consolidation: a lone serving note with no item note is not offered', () => {
+    const p = notesConsolidationPlan('Fries 90g', { 'Fries 70g': 'salty' }, {});
+    return p.offer === false ? true : 'offered a pointless one-note merge';
+  });
+  t('consolidation: nothing to combine returns no plan', () =>
+    notesConsolidationPlan('Fries 90g', { 'Rice 100g': 'x' }, {}) === null ? true : 'invented a plan');
+  // ── rename cascade: an item note must never be stranded (v73 S1) ──
+  // planItemNoteRename() is what migrateFoodReferences executes, so these
+  // assert the shipped rule and not a paraphrase of it.
+  const IN_FIX = { 'cucumber raw no skin': 'the raw-cucumber note' };
+  t('rename: a portion-only rename does NOT touch the item note', () =>
+    planItemNoteRename('🥒 Cucumber raw no skin 50-70g', '🥒 Cucumber raw no skin 60-80g', IN_FIX, {}, []) === null
+      ? true : 'a rename that keeps the pool key still planned a write');
+  t('rename: emoji/brand/xN churn alone does NOT touch the item note', () =>
+    planItemNoteRename('Cucumber raw no skin x2 [Aldi]', '🥒 Cucumber raw no skin 100g', IN_FIX, {}, []) === null
+      ? true : 'cosmetic-only rename planned a write');
+  t('rename: a rename that CHANGES the pool key carries the note across', () => {
+    const p = planItemNoteRename('Cucumber raw no skin 50-70g', 'Cucumber raw peeled 50-70g', IN_FIX, {}, []);
+    return (p && p.act === 'move' && p.from === 'cucumber raw no skin' && p.to === 'cucumber raw peeled'
+      && p.text === 'the raw-cucumber note') ? true : JSON.stringify(p);
+  });
+  t('rename: nothing is left behind at the old key after a move', () => {
+    const store = { ...IN_FIX };
+    const p = planItemNoteRename('Cucumber raw no skin 50g', 'Cucumber raw peeled 50g', store, {}, []);
+    store[p.to] = p.text; delete store[p.from];          // exactly what the cascade does
+    return (!('cucumber raw no skin' in store) && store['cucumber raw peeled'] === 'the raw-cucumber note')
+      ? true : JSON.stringify(store);
+  });
+  const IN_BOTH = { ...IN_FIX, 'cucumber raw peeled': 'the peeled note' };
+  t('rename COLLISION: the destination note is NEVER overwritten', () => {
+    const p = planItemNoteRename('Cucumber raw no skin 50g', 'Cucumber raw peeled 50g', IN_BOTH, {}, []);
+    return (p && p.act === 'park' && p.kept === 'the peeled note' && p.text === 'the raw-cucumber note')
+      ? true : JSON.stringify(p);
+  });
+  t('rename COLLISION: the old item still being logged means MOVE NOTHING', () => {
+    // its own servings can still reach it, so the safest act is no act at all
+    const p = planItemNoteRename('Cucumber raw no skin 50g', 'Cucumber raw peeled 50g', IN_BOTH, {},
+      ['Cucumber raw no skin 120g', 'Cucumber raw peeled 50g']);
+    return (p && p.act === 'hold' && p.stillLive === true && p.parked === null) ? true : JSON.stringify(p);
+  });
+  t('rename COLLISION: BOTH texts still exist after the cascade applies it', () => {
+    const item = { ...IN_BOTH }, notes = {};
+    const p = planItemNoteRename('Cucumber raw no skin 50g', 'Cucumber raw peeled 50g', item, notes, []);
+    delete item[p.from]; notes[p.parked] = p.text;       // exactly what the cascade does
+    return (item['cucumber raw peeled'] === 'the peeled note' && notes['Cucumber raw peeled 50g'] === 'the raw-cucumber note'
+      && resolveFoodNote('Cucumber raw peeled 50g', notes, item).text === 'the raw-cucumber note')
+      ? true : JSON.stringify([item, notes]);
+  });
+  t('rename COLLISION: the parked note is reachable by 🧩 Combine, not merged', () => {
+    // after a park, the existing consolidation preview offers the two — and
+    // only offers, because nothing is written until the confirm button.
+    const item = { 'cucumber raw peeled': 'the peeled note' };
+    const notes = { 'Cucumber raw peeled 50g': 'the raw-cucumber note' };
+    const plan = notesConsolidationPlan('Cucumber raw peeled 50g', notes, item);
+    return (plan && plan.offer === true && plan.existing === 'the peeled note'
+      && plan.combined === 'the peeled note\n———\nthe raw-cucumber note') ? true : JSON.stringify(plan);
+  });
+  t('rename COLLISION: a serving that already has a note is passed over, not joined', () => {
+    // 'Cucumber raw peeled 50g' carries its own note, so the incoming one parks
+    // on a sibling serving instead of being appended to anyone's writing.
+    const p = planItemNoteRename('Cucumber raw no skin 50g', 'Cucumber raw peeled 50g', IN_BOTH,
+      { 'Cucumber raw peeled 50g': 'already mine' }, ['Cucumber raw peeled 120g']);
+    return (p && p.act === 'park' && p.parked === 'Cucumber raw peeled 120g') ? true : JSON.stringify(p);
+  });
+  t('rename COLLISION: with nowhere safe to park, the note is left where it is', () => {
+    const p = planItemNoteRename('Cucumber raw no skin 50g', 'Cucumber raw peeled 50g', IN_BOTH,
+      { 'Cucumber raw peeled 50g': 'already mine' }, []);
+    return (p && p.act === 'hold' && p.parked === null && p.stillLive === false) ? true : JSON.stringify(p);
+  });
+  t('rename: a name with no letters cannot key an item note — plan nothing', () =>
+    planItemNoteRename('123 50g', '456 60g', { '': 'x' }, {}, []) === null ? true : 'planned a write on an empty pool key');
+  t('rename: no item note means no plan at all', () =>
+    planItemNoteRename('Oats 50g', 'Porridge 50g', {}, {}, []) === null ? true : 'invented a plan');
+  t('rename: the cascade EXECUTES planItemNoteRename and nothing else', () => {
+    const src = String(migrateFoodReferences);
+    return (/planItemNoteRename\(/.test(src) && !/loadFoodNotesItem\(\)\[/.test(src))
+      ? true : 'the cascade re-derives the item-note rule instead of calling the tested one';
+  });
+  t('rename: the park lands on the serving the PLAN chose, never on newName', () => {
+    // the plan deliberately steps around any serving that already carries
+    // writing; parking on newName instead would destroy exactly that writing.
+    const src = String(migrateFoodReferences);
+    const park = src.slice(src.indexOf("act === 'park'"), src.indexOf("'hold' — nowhere"));
+    return (/nMap\[iPlan\.parked\] = iPlan\.text/.test(park) && !/nMap\[newName\] = /.test(park))
+      ? true : 'the park branch writes to newName instead of iPlan.parked';
+  });
+  t('rename: the park refuses outright if the target somehow holds a note', () =>
+    /nMap\[iPlan\.parked\] === undefined/.test(String(migrateFoodReferences))
+      ? true : 'the park can overwrite an existing note');
+  t('rename: the merge undo record carries an itemNotes slot', () =>
+    /itemNotes:\s*\{\}/.test(String(confirmFoodMerge)) ? true : 'a merge cannot undo an item-note move');
+  t('rename: undoFoodMerge replays item notes, and skips the store when empty', () => {
+    const src = String(undoFoodMerge);
+    return (/u\.itemNotes/.test(src) && /saveFoodNotesItem\(/.test(src)) ? true : 'undo does not restore item notes';
+  });
+  t('rename: a collision is reported with a blocking dialog, not a toast', () => {
+    const src = String(warnItemNoteCollision);
+    return (/alert\(/.test(src) && !/\btoast\(/.test(src)) ? true : 'the collision notice can expire before it is read';
+  });
+
+  // ── merge safety net: snapshot BEFORE the write (v73 S2) ──
+  t('merge safety: the snapshot is taken BEFORE any note is written', () => {
+    const src = String(applyNotesConsolidation);
+    const iSnap = src.indexOf('noteSafetySnapshot'), iSave = src.indexOf('saveFoodNotes(');
+    return (iSnap > -1 && iSave > -1 && iSnap < iSave) ? true : 'no snapshot, or it runs after the write';
+  });
+  t('merge safety: a failed snapshot asks, and a "no" writes nothing', () => {
+    const snap = String(noteSafetySnapshot), apply = String(applyNotesConsolidation);
+    return (/confirm\(/.test(snap) && /return false/.test(snap) && /if\s*\(!ok\)\s*return/.test(apply))
+      ? true : 'a failed snapshot does not block the merge';
+  });
+  t('merge safety: an all-servings save that absorbs serving notes snapshots too', () => {
+    const src = String(saveNotesModal);
+    return (/willAbsorb/.test(src) && /noteSafetySnapshot/.test(src)) ? true : 'the fold-up path has no snapshot';
+  });
+  t('merge safety: a save that absorbs NOTHING does not snapshot', () =>
+    /if\s*\(willAbsorb\s*&&/.test(String(saveNotesModal)) ? true : 'every note save would spam the snapshot ring');
+  t('merge safety: one click cannot apply the merge twice', () =>
+    /_notesMergeBusy/.test(String(applyNotesConsolidation)) ? true : 'a double-click could apply twice');
+
+  t('consolidation: the undo branch restores exact notes and the prior item note', () => {
+    // executeUndo's 'notes' branch, replayed against plain maps.
+    const notes = {}, item = { fries: 'combined' };
+    const state = { type: 'notes', notes: { 'Fries 70g': 'salty', 'Fries 120g': 'worse when big' }, item: { fries: null } };
+    Object.keys(state.notes).forEach(k => { if (state.notes[k] === null) delete notes[k]; else notes[k] = state.notes[k]; });
+    Object.keys(state.item).forEach(k => { if (state.item[k] === null) delete item[k]; else item[k] = state.item[k]; });
+    return (notes['Fries 70g'] === 'salty' && notes['Fries 120g'] === 'worse when big' && !('fries' in item))
+      ? true : JSON.stringify([notes, item]);
+  });
+
   // ── backup round-trip ──
   const parsedBackup = JSON.parse(buildBackupJSON().json);
   const norm = normalizeImportedBackupData(parsedBackup.data);
@@ -17875,6 +18521,12 @@ function runSelfTest() {
   t('backup: every check-in day survives', () => eq(Object.keys(norm.checkins).length, Object.keys(FX.checkins).length));
   t('backup: check-in values survive', () => eq(norm.checkins[D(1)] && norm.checkins[D(1)].c_overall, 5));
   t('backup: food notes survive', () => eq(norm.foodNotes && norm.foodNotes.Banana, 'fixture note'));
+  t('backup: item-level notes are exported', () => (parsedBackup.data.foodNotesItem && parsedBackup.data.foodNotesItem['oats'] === 'oats item note') ? true : 'foodNotesItem missing from backup payload');
+  t('backup: item-level notes survive the normalizer', () => eq(norm.foodNotesItem && norm.foodNotesItem['oats'], 'oats item note'));
+  t('backup: a pre-v73 file leaves item notes ALONE (null, not wiped)', () =>
+    normalizeImportedBackupData({ entries: [] }).foodNotesItem === null ? true : 'absent field did not normalize to null — a restore would wipe live item notes');
+  t('backup: fst_food_notes_item is registered as covered, not device-local', () =>
+    (VB_COVERED_KEYS.includes('fst_food_notes_item') && !VB_DEVICE_LOCAL.includes('fst_food_notes_item')) ? true : 'key is not registered exactly once as covered');
   t('backup: food statuses survive', () => eq(norm.foodStatus && norm.foodStatus.Banana, 'safe'));
   t('backup: bundles survive', () => eq(norm.bundles && norm.bundles.length, 1));
   t('backup: trials survive', () => eq(norm.experiments && norm.experiments.length && norm.experiments[0].food, 'TestChili'));
