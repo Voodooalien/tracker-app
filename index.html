@@ -4110,7 +4110,7 @@ try {
   </div>
 
   <div style="margin-left: auto; display: flex; align-items: center; gap: 4px;">
-    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v73</span>
+    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v74</span>
   </div>
 
   <div id="nav-more-tray" style="display:none; flex-basis:100%; flex-wrap:wrap; gap:4px; padding-top:6px; margin-top:4px; border-top:1px dashed rgba(255,255,255,0.18);">
@@ -5587,6 +5587,36 @@ function isUnscoredEntry(e) {
 // high-variance: one mark decides the whole row. The underlying complaint (an
 // unmarked window is ABSENT, not calm) is real, but the cure has to cost less
 // than the disease, and this one did not.
+// ── v75 conditional-contrast tuning. One literal per line so the sweep harness
+// (versions/_livefix/_round4/mkeng.mjs) can measure the SHIPPED code at each
+// setting by substituting one literal, instead of re-implementing it. Every
+// value below was chosen off that grid — 200-260 generated logs per cell, two
+// independent generators — and none of them was inherited from a guess.
+//   STRAT_MIN_ARM — how many meals apart from the partner before the log is
+//     allowed to answer. An earlier sketch proposed 3. Measured, 3-6 is far too
+//     thin: at 6 the arm is noisy enough to cost 6.7pp of detection on a staple
+//     trigger and to push inversions from 2 to 7 per 120 logs. From 10 up, the
+//     forced-company detection cells are identical to the marginal engine to the
+//     decimal and the whole remaining cost is collateral on triggers that were
+//     never forced into company. That cost does not vanish at any setting — this
+//     is the trade curve, world5, 260 logs/cell for bleed, 550 for detection:
+//        arm    bleed (2-mate)   detection aggregate   McNemar
+//        —      48.9%            86.31%                (marginal)
+//        10     36.0%            85.57%  (-0.74pp)     p=3e-6
+//        12     38.3%            85.77%  (-0.54pp)     p=1e-4
+//        16     41.4%            86.01%  (-0.30pp)     p=4e-3
+//     10 is shipped: the exchange rate is ~7 innocent foods un-accused per real
+//     trigger missed, and every miss is a WEAK (+15pp) or staple trigger that
+//     happens to share 60-80% of its meals with one partner — i.e. a food whose
+//     unconfounded evidence really is thin. Raising this one number walks the
+//     curve back if that trade ever looks wrong.
+//   STRAT_MATE_FRAC: 0.70 keeps only 8pp of the 13pp bleed win; 0 buys 1.8pp
+//     more but costs 1.1pp on a solo trigger. 0.55 is the value at which every
+//     forced-company detection cell is byte-identical to the marginal engine.
+//   STRAT_MAX_MATES: see the note above condFor().
+const STRAT_MATE_FRAC = 0.55;
+const STRAT_MIN_ARM = 10;
+const STRAT_MAX_MATES = 1;
 function foodMealLift(entries) {
   entries = entries.filter(e => !isUnscoredEntry(e));
   const byKey = {};
@@ -5614,13 +5644,81 @@ function foodMealLift(entries) {
   meals.forEach(m => {
     const fs = [...m.foods];
     fs.forEach(f => {
-      const a = acc[f] || (acc[f] = { n: 0, sum: 0, sq: 0, soloN: 0, sharedN: 0, mates: {} });
+      const a = acc[f] || (acc[f] = { n: 0, sum: 0, sq: 0, soloN: 0, sharedN: 0, mates: {}, mSum: {}, mSq: {} });
       a.n++; a.sum += m.bad; a.sq += m.bad * m.bad; if (m.solo) a.soloN++;
-      // who it keeps company with — so a demoted food can be told WHY (v70)
-      if (fs.length > 1) { a.sharedN++; fs.forEach(o => { if (o !== f) a.mates[o] = (a.mates[o] || 0) + 1; }); }
+      // who it keeps company with — so a demoted food can be told WHY (v70) — and
+      // v75, the BADNESS of those shared meals, which is the whole extra
+      // sufficient statistic the conditional contrast below needs. Same O(k²)
+      // pair loop that was already here; two adds per pair, no new pass.
+      if (fs.length > 1) {
+        a.sharedN++;
+        fs.forEach(o => { if (o !== f) { a.mates[o] = (a.mates[o] || 0) + 1; a.mSum[o] = (a.mSum[o] || 0) + m.bad; a.mSq[o] = (a.mSq[o] || 0) + m.bad * m.bad; } });
+      }
     });
   });
   const vr = (sq, sum, n) => (n > 1 ? Math.max(0, (sq - sum * sum / n) / (n - 1)) : 0);
+  // v75: shrink a cell's variance toward the log's overall meal-to-meal variance
+  // with the SAME 2-pseudo-observation weight pooledSuspect() uses on a rate.
+  // Without it a 5-meal arm that happened to draw five near-identical badnesses
+  // reports a near-zero SE and clears on nothing at all.
+  const gVar = vr(totalSq, totalBad, nMealsTotal);
+  const sVar = (sq, sum, n) => (n > 1 ? (vr(sq, sum, n) * (n - 1) + 2 * gVar) / (n + 1) : gVar);
+  // ── v75 THE CONDITIONAL CONTRAST ──────────────────────────────────────────
+  // `lift` below is MARGINAL: meals with F against every other meal. When F
+  // almost always rides with M, BOTH arms carry M and the comparison is
+  // confounded — that is "company bleed": an innocent food forced onto a real
+  // trigger's plates was named 45-49% of the time against 5.5% for an
+  // unaccompanied innocent (measured, world5, 260 logs/cell).
+  //
+  // But those accused plate-mates were NOT inseparable. They had a median of 13
+  // meals apart from their top partner and 18 apart from the planted trigger.
+  // The log can tell them apart; the marginal contrast simply never looks. This
+  // does: restrict to the meals WITHOUT the dominant partner M, and inside that
+  // M-free world compare meals with F against meals without F. Both arms are
+  // M-free, so M's effect cancels instead of leaking into F.
+  //
+  // WHY ONLY THAT STRATUM. The symmetric half — M's own meals without F, i.e.
+  // "does F add anything on top of M" — was built and measured too, pooled with
+  // this one by inverse variance. It is the only thing that helps a food that
+  // rides its partner EXCLUSIVELY (world8's riderSub: 71% named → 34%). It was
+  // rejected on its cost: it is intrinsically a ~1.6× wider test (its control
+  // arm is M's handful of solo meals instead of the whole log), so it took
+  // 3-12pp off real-trigger detection on every forced-company structure AND
+  // pushed INVERSIONS — the trigger silenced while the innocent companion is
+  // named anyway, the failure that is worse than the bug — from 5 to 21 per 437
+  // triggers. This half costs neither: detection is unchanged to the decimal on
+  // five of six structures, inversions are ≤ the marginal engine in every cell.
+  const condFor = a => {
+    // Only a genuinely dominant partner is worth adjusting for. Below the frac a
+    // food is not meaningfully confounded and stratifying only throws away power.
+    // STRAT_MAX_MATES: a food riding TWO staples is real, and adjusting for the
+    // top 2 (taking whichever partner explains it away best) does buy another
+    // 4.6pp of bleed. It was not taken: on 200 logs/cell it also cost 1.5pp of
+    // detection on the hardest structure — a staple trigger with forced
+    // companions, already only 69.5% — and raised inversions there from 4/200 to
+    // 6/200. Top-3 costs more again and buys less. So: the dominant partner, and
+    // the knob stays here so the next round can re-measure instead of re-derive.
+    const cands = Object.keys(a.mates)
+      .filter(o => acc[o] && a.mates[o] >= STRAT_MATE_FRAC * a.n)
+      .sort((x, y) => a.mates[y] - a.mates[x])
+      .slice(0, STRAT_MAX_MATES);
+    let best = null;
+    for (const o of cands) {
+      const b = acc[o];
+      // meals with M and F → subtract to get the two M-FREE arms. n01 is only
+      // needed to size the "neither" arm; it is not itself compared against.
+      const n11 = a.mates[o], n01 = b.n - n11;
+      const nA = a.n - n11, sA = a.sum - a.mSum[o], qA = a.sq - a.mSq[o];             // F, no M
+      const nB = nMealsTotal - a.n - n01, sB = totalBad - a.sum - (b.sum - a.mSum[o]),
+            qB = totalSq - a.sq - (b.sq - a.mSq[o]);                                   // neither
+      if (nA < STRAT_MIN_ARM || nB < STRAT_MIN_ARM) continue;
+      const v = sVar(qA, sA, nA) / nA + sVar(qB, sB, nB) / nB;
+      if (!(v > 0)) continue;
+      const lift = sA / nA - sB / nB, se = Math.sqrt(v);
+      if (!best || lift / se < best.lift / best.se) best = { mate: o, mateN: n11, apartN: nA, lift, se };
+    }
+    return best;
+  };
   const rows = Object.entries(acc).map(([food, a]) => {
     const wMean = a.sum / (a.n || 1);
     const woN = nMealsTotal - a.n;
@@ -5636,8 +5734,16 @@ function foodMealLift(entries) {
     // surface. An absent comparison is not evidence of innocence: flag it, and
     // let liftClears() ABSTAIN rather than read a fabricated zero as a pass mark.
     const noContrast = !woN;
+    // v75: `lift`/`se` stay MARGINAL — the meal card prints them and "avg badness
+    // with vs without" is what that column means to a reader. The conditional
+    // estimate rides alongside as cLift/cSE and is what liftClears() judges on
+    // when it exists; cMate names the partner it was adjusted for and cApartN
+    // how many meals apart from that partner the judgement rests on.
+    const cond = noContrast ? null : condFor(a);
     return { food, nMeals: a.n, wMean, woMean, lift: wMean - woMean, se, soloN: a.soloN, noContrast,
-      sharedN: a.sharedN, mate, mateN: mate ? a.mates[mate] : 0, mates: a.mates };
+      sharedN: a.sharedN, mate, mateN: mate ? a.mates[mate] : 0, mates: a.mates,
+      cLift: cond ? cond.lift : null, cSE: cond ? cond.se : null,
+      cMate: cond ? cond.mate : null, cMateN: cond ? cond.mateN : 0, cApartN: cond ? cond.apartN : 0 };
   });
   rows.sort((a, b) => b.lift - a.lift);
   return rows;
@@ -5663,7 +5769,20 @@ function foodMealLift(entries) {
 // it the contrast cannot be computed at all, and a test that cannot run must not
 // veto — the food falls back to its window/pooled statistics, exactly as the day
 // level already does for a staple ("almost no days without it to compare").
-function liftClears(r) { return !!r && r.nMeals >= 3 && (r.noContrast || r.lift > r.se); }
+// v75: when the log CAN tell F apart from its dominant partner — 10+ meals of
+// its own without it — judge it on THAT (cLift/cSE, built in foodMealLift above)
+// instead of the confounded marginal.
+// The FALLBACK when it cannot is the marginal, deliberately, not silence. Under
+// 10 apart-meals there is no conditional estimate to be had, and the two ways to
+// handle that were both measured: falling back to the marginal keeps the bleed
+// for exactly those foods (a byte-identical companion stays at ~93% named, and
+// world8's exclusive rider at ~70%), while WITHHOLDING instead is the v74
+// honesty gate that was reverted for costing 12pp of real-trigger detection.
+// Bleed on foods the data genuinely cannot separate is the cheaper of the two
+// errors — it is visible to the user and a solo test resolves it, where a
+// silenced real trigger is invisible and resolves nothing. So: separate every
+// food the log CAN separate, and say nothing new about the ones it cannot.
+function liftClears(r) { return !!r && r.nMeals >= 3 && (r.noContrast || (r.cSE != null ? r.cLift > r.cSE : r.lift > r.se)); }
 // ── Collapsible Summary sections (v66): the five analysis cards ship folded so
 // the tab stays scannable; tap a header to expand. Open state lives in memory,
 // so it survives the full re-renders that range/filter chips trigger.
@@ -17810,6 +17929,41 @@ function runSelfTest() {
     const rows = foodMealLift(E);
     const a = rows.find(r => r.food === 'A'), b = rows.find(r => r.food === 'B');
     return (a && b && a.lift > b.lift && a.lift > 0) ? true : 'A should outrank bystander B';
+  });
+  // v75 — the CONDITIONAL contrast, and its fallback. The case above is 3 meals
+  // per food, far under STRAT_MIN_ARM, so it exercises the marginal path only.
+  // This one builds the structure the conditional path exists for.
+  const _condFx = () => {
+    const bad = { symptoms: { c_strong_pain: true, c_buildup: true }, windows: { w1: false, w2: false, w3: false } };
+    const calm = { symptoms: {}, windows: { w1: true } };
+    const E = [];
+    // T is the real trigger. R rides on all 30 of its plates — but R also has 20
+    // calm meals of its own, which is the evidence the marginal contrast ignores.
+    for (let i = 0; i < 30; i++) { E.push({ mealId: 'm' + i, date: '2026-01-01', food: 'T', ...bad }); E.push({ mealId: 'm' + i, date: '2026-01-01', food: 'R', ...bad }); }
+    for (let i = 0; i < 20; i++) E.push({ mealId: 'n' + i, date: '2026-01-02', food: 'R', ...calm });
+    for (let i = 0; i < 40; i++) E.push({ mealId: 'z' + i, date: '2026-01-03', food: 'Z', ...calm });
+    const rows = foodMealLift(E);
+    return { R: rows.find(r => r.food === 'R'), T: rows.find(r => r.food === 'T') };
+  };
+  t('foodMealLift: an innocent rider is judged on its meals APART from its partner', () => {
+    const { R } = _condFx();
+    if (!R) return 'no row for R';
+    // its marginal lift is inflated by the 30 meals it shared with T…
+    if (!(R.lift > R.se)) return `marginal should have accused R (lift ${R.lift.toFixed(2)} se ${R.se.toFixed(2)})`;
+    // …and the conditional contrast, on its own 20 meals, clears it
+    if (R.cMate !== 'T') return 'should have stratified on T, got ' + R.cMate;
+    if (R.cApartN !== 20) return 'apart-arm should be 20 meals, got ' + R.cApartN;
+    if (!(Math.abs(R.cLift) < R.cSE)) return `conditional lift ${R.cLift.toFixed(2)} not inside its own SE ${R.cSE.toFixed(2)}`;
+    return liftClears(R) === false ? true : 'R should no longer clear the meal test';
+  });
+  t('foodMealLift: no meals apart → no conditional estimate, FALL BACK to marginal', () => {
+    const { T } = _condFx();
+    if (!T) return 'no row for T';
+    // T never appears without R, so there is no arm to build a conditional on.
+    // The contract is that it falls back to the marginal rather than going silent —
+    // withholding here is what cost 12pp of real-trigger detection in v74.
+    if (T.cSE !== null || T.cLift !== null) return 'T has no apart-meals; it must have no conditional estimate';
+    return liftClears(T) === true ? true : 'a real trigger with no separable evidence must still be judged, not silenced';
   });
 
   // ── prep & portion (v65) ──
