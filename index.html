@@ -606,6 +606,41 @@
     display: block; font-size: 11.5px; color: var(--muted); line-height: 1.45; margin-top: 2px;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
+  /* v76 notes-grouping scope. Which level is live has to be readable at a
+     glance, so it reuses the notes modal's own segmented control — and that
+     control tints with --navy-ink ON --bg rather than filling with --navy,
+     which is what keeps it legible in the palettes where --navy is nearly
+     white (obsidian dark sets --navy:#fafafa). No new colour is introduced. */
+  .nm-scope-row {
+    display: flex; align-items: center; gap: 10px;
+    flex-wrap: wrap; margin-bottom: 10px;
+  }
+  .nm-scope-hint { flex: 1; min-width: 180px; font-size: 11px; color: var(--muted); line-height: 1.45; }
+  /* Inside .nm-row, which is a <label>: the global `label` rule uppercases and
+     letter-spaces everything it contains, and these are food words the user
+     has to read literally. .nm-row already resets both; this stays explicit so
+     a future move of the markup cannot silently re-inherit them. */
+  .nm-row-preps {
+    display: block; font-size: 11px; color: var(--w2); line-height: 1.4; margin-top: 2px;
+    text-transform: none; letter-spacing: normal;
+  }
+  .nm-preps {
+    font-size: 11.5px; color: var(--text); line-height: 1.5;
+    border-left: 3px solid var(--w2); background: var(--bg);
+    border-radius: 0 6px 6px 0; padding: 7px 9px; margin-bottom: 8px;
+    text-transform: none; letter-spacing: normal;
+  }
+  .nm-preps span { font-size: 11px; color: var(--muted); }
+  .nm-offer { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+  .nm-offer span { font-size: 11.5px; color: var(--muted); line-height: 1.45; }
+  /* MEASURED, not assumed. This button first used --navy-ink on --bg, and that
+     fell to 1.56:1 in 10 of 26 palette/mode combinations: several palettes
+     override --bg but NOT --navy-ink, so the ink falls back to the root value
+     (#2E4057 light / #ACC0D7 dark) and lands dark-on-dark or light-on-light.
+     --text on --card is the one pair every palette defines together, so it is
+     the pair that cannot drift — worst case measured 12.8:1. The --w2 border
+     carries the emphasis instead of a fill. */
+  .nm-offer-btn { border: 1.5px solid var(--w2); color: var(--text); background: var(--card); }
   .nm-kept { font-size: 11px; color: var(--muted); padding: 6px 4px; }
   .nm-empty { font-size: 13px; color: var(--text); padding: 14px 4px; line-height: 1.6; }
   .nm-empty span { font-size: 12px; color: var(--muted); }
@@ -4164,7 +4199,7 @@ try {
   </div>
 
   <div style="margin-left: auto; display: flex; align-items: center; gap: 4px;">
-    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v75</span>
+    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v76</span>
   </div>
 
   <div id="nav-more-tray" style="display:none; flex-basis:100%; flex-wrap:wrap; gap:4px; padding-top:6px; margin-top:4px; border-top:1px dashed rgba(255,255,255,0.18);">
@@ -8493,30 +8528,82 @@ function itemServingNames(food) {
   return [...seen].sort((a, b) => a.localeCompare(b));
 }
 
+// ─── The NOTES grouping key (v76) ────────────────────────────────────────────
+// Deliberately NOT the analysis key. poolKeyOf() must keep preparations apart —
+// baked potato and mashed potato behave differently and v72.1 fixed verdicts,
+// pooling and lift to respect that. But a note is the user's own writing, and
+// "one note covering all potato" is a fair thing to want. v75 reused poolKeyOf
+// for notes without asking whether it fit, and it did not: three preparations
+// with one note each are three groups of one, so nothing was ever offerable.
+//
+// So the picker gets two grouping levels and NOTHING else changes:
+//   'item' (default) — poolKeyOf, v75 behaviour exactly, preparations separate.
+//   'food'           — baseFoodName, preparations fold together.
+// baseFoodName() already exists and already strips prep words; this invents no
+// third key and feeds no analysis path.
+function notesGroupKeyOf(food, scope) {
+  // v76: three levels of looseness, NOTES ONLY. None of these is an analysis key
+  // — poolKeyOf still decides verdicts/pooling/lift and baseFoodName still keys
+  // prepVariants; neither is touched here.
+  //   item — poolKeyOf: preparations separate ("potato baked" != "potato mashed")
+  //   food — baseFoodName: known prep words dropped, so baked+mashed fold. But
+  //          words it does not know stay: "Potato air-fries in refined canola oil"
+  //          keeps "air fries refined canola oil", so it will NOT join them.
+  //   head — the first word only, so every potato spelling folds. Looser, and it
+  //          can join things that merely share a first word ("Olive oil" with
+  //          "Olive tapenade"), which is why it is opt-in and why the preview
+  //          names every member before anything is written.
+  if (scope === 'head') return (baseFoodName(food) || '').split(' ')[0] || '';
+  return scope === 'food' ? baseFoodName(food) : poolKeyOf(food);
+}
+
 // Consolidation PLAN — PURE and read-only. Lists every exact-name note filed
 // against a serving of this same item and what combining them would read like.
 // Building a plan writes nothing: only applyNotesConsolidation(), behind an
 // explicit confirm, ever touches a store. Nothing calls this on load or render.
-function notesConsolidationPlan(food, notes, itemNotes) {
+// `scope` is optional and defaults to 'item', so every v75 caller is unchanged.
+function notesConsolidationPlan(food, notes, itemNotes, scope) {
   const n = notes || loadFoodNotes(), it = itemNotes || loadFoodNotesItem();
-  const pk = poolKeyOf(food);
-  if (!pk) return null;
+  // v76: 'head' is a THIRD, looser scope. Every place that used to ask
+  // "is this the by-food scope?" really means "is this looser than by-item?",
+  // so test that instead — otherwise 'head' silently behaves like 'item'.
+  const byFood = scope === 'food' || scope === 'head';
+  const key = notesGroupKeyOf(food, scope);
+  if (!key) return null;
   const sources = Object.keys(n)
-    .filter(k => poolKeyOf(k) === pk && String(n[k] == null ? '' : n[k]) !== '')
+    .filter(k => notesGroupKeyOf(k, scope) === key && String(n[k] == null ? '' : n[k]) !== '')
     .sort((a, b) => a.localeCompare(b))
     .map(k => ({ name: k, text: String(n[k]) }));
-  if (!sources.length) return null;
-  const existing = it[pk] !== undefined ? String(it[pk] == null ? '' : it[pk]) : null;
+  // Which item-note keys the result lands on. BY ITEM that is the one pool key,
+  // byte-for-byte what v75 wrote. BY FOOD it is EVERY preparation involved,
+  // because resolveFoodNote() still reads item notes by poolKeyOf — writing the
+  // combined text to each preparation's own key is what makes one note show on
+  // all of them without touching the read path, the stores' shape, or the
+  // analysis key. No third store, no new tier in the read order.
+  const itemKeys = byFood
+    ? [...new Set(sources.map(s => poolKeyOf(s.name))
+        .concat(Object.keys(it).filter(k => notesGroupKeyOf(k, scope) === key)))]
+        .filter(Boolean).sort((a, b) => a.localeCompare(b))
+    : [key];
+  const existings = itemKeys.filter(k => it[k] !== undefined)
+    .map(k => ({ key: k, text: String(it[k] == null ? '' : it[k]) }));
+  // BY ITEM existings is 0 or 1, so this is v75's `if (!sources.length) return null`.
+  // BY FOOD, two item notes on two preparations are a real merge with no exact
+  // note in sight — that is precisely the case this scope exists for.
+  if (!sources.length && existings.length < 2) return null;
+  const existing = existings.length ? existings[0].text : null;
   // Same de-duplicating joiner the rename cascade already uses for notes, so
   // two screens combine notes the same way.
   const texts = [];
-  if (existing) texts.push(existing);
+  existings.forEach(e => { if (e.text && !texts.includes(e.text)) texts.push(e.text); });
   sources.forEach(s => { if (!texts.includes(s.text)) texts.push(s.text); });
   return {
-    key: pk, sources, existing,
+    key, scope: byFood ? 'food' : 'item', itemKeys, sources, existing, existings,
     combined: texts.join('\n———\n'),
     distinct: texts.length,
-    offer: sources.length >= 2 || (sources.length === 1 && existing !== null)
+    offer: byFood
+      ? (sources.length + existings.length) >= 2
+      : (sources.length >= 2 || (sources.length === 1 && existing !== null))
   };
 }
 
@@ -8971,23 +9058,111 @@ document.addEventListener('keydown', e => {
 // PURE. Every food that actually has something to combine, as full plans — built
 // by the same notesConsolidationPlan the single-food editor uses, so the two
 // screens can never disagree about what a merge would do. Writes nothing.
-function notesBatchCandidates(notes, itemNotes) {
+function notesBatchCandidates(notes, itemNotes, scope) {
   const n = notes || loadFoodNotes(), it = itemNotes || loadFoodNotesItem();
-  // One representative serving name per pool key. The plan is keyed by the pool
-  // key, so WHICH of a food's names we hand it cannot change the result.
+  // One representative serving name per group key. The plan is keyed by the
+  // group key, so WHICH of a food's names we hand it cannot change the result.
   const rep = new Map();
-  Object.keys(n).forEach(k => {
-    if (String(n[k] == null ? '' : n[k]) === '') return;
-    const pk = poolKeyOf(k);
-    if (!pk) return;                                  // no letters — cannot key an item note
-    if (!rep.has(pk) || k.localeCompare(rep.get(pk)) < 0) rep.set(pk, k);
-  });
+  const put = k => {
+    const gk = notesGroupKeyOf(k, scope);
+    if (!gk) return;                                  // no letters — cannot key an item note
+    if (!rep.has(gk) || k.localeCompare(rep.get(gk)) < 0) rep.set(gk, k);
+  };
+  Object.keys(n).forEach(k => { if (String(n[k] == null ? '' : n[k]) !== '') put(k); });
+  // BY FOOD only: a food whose notes are ALREADY all-servings notes sitting on
+  // separate preparations has no exact-name note to seed it, yet it is exactly
+  // what this scope exists to fold — so item keys seed the map too. BY ITEM they
+  // are deliberately left out: there, one item note is a group of one.
+  if (scope === 'food' || scope === 'head') Object.keys(it).forEach(k => put(k));
   const out = [];
-  rep.forEach((name, pk) => {
-    const p = notesConsolidationPlan(name, n, it);
+  rep.forEach((name, gk) => {
+    const p = notesConsolidationPlan(name, n, it, scope);
     if (p && p.offer) out.push(p);                    // 2+ serving notes, or 1 plus an item note
   });
   return out.sort((a, b) => a.key.localeCompare(b.key));
+}
+
+// How many notes a plan folds — sources plus every all-servings note it absorbs.
+// BY ITEM existings is 0 or 1, so this equals v75's `+ (existing !== null ? 1 : 0)`.
+function nmNoteCount(p) { return p.sources.length + p.existings.length; }
+
+// The preparations a BY FOOD merge is about to join, named in full. The user must
+// never fold 'baked' into 'mashed' without seeing both words on screen first.
+function nmPrepLabels(p) {
+  const base = p.key.split(' ').filter(Boolean);
+  const out = [];
+  p.itemKeys.forEach(k => {
+    const rest = k.split(' ').filter(Boolean);
+    base.forEach(w => { const i = rest.indexOf(w); if (i >= 0) rest.splice(i, 1); });
+    const label = rest.join(' ') || 'plain';
+    if (!out.includes(label)) out.push(label);
+  });
+  return out;
+}
+
+// PURE. WHY the list is empty. v75 printed one sentence for every no-result
+// case, and it was the wrong sentence: it told the user he had no potato notes
+// when the truth was that he had three, on three preparations, each a group of
+// one. These four answers are genuinely different and only one of them is a
+// failure, so they get four different messages.
+//   'none'         — no notes anywhere yet
+//   'consolidated' — no search, nothing left to fold: a SUCCESS state
+//   'nomatch'      — the search finds nothing in any note name or key
+//   'unfoldable'   — notes DO match, but not two inside one group. Carries how
+//                    many, on which items, and what the looser scope would offer.
+function notesBatchDiagnosis(q, scope, notes, itemNotes) {
+  const n = notes || loadFoodNotes(), it = itemNotes || loadFoodNotesItem();
+  const nonEmpty = (o, k) => String(o[k] == null ? '' : o[k]) !== '';
+  const named = Object.keys(n).filter(k => nonEmpty(n, k));
+  const itemed = Object.keys(it).filter(k => nonEmpty(it, k));
+  if (!named.length && !itemed.length) return { kind: 'none', q: '', notes: 0, items: [], foodGroups: 0, foodNotes: 0 };
+  const s = String(q || '').trim().toLowerCase();
+  if (!s) return { kind: 'consolidated', q: '', notes: named.length + itemed.length, items: [], foodGroups: 0, foodNotes: 0 };
+  // Matched the same way the list filters — by name and by group key, in BOTH
+  // scopes, so "your search found nothing" is never said about a note the other
+  // scope can see.
+  const hit = k => k.toLowerCase().includes(s)
+    || notesGroupKeyOf(k, scope).includes(s) || notesGroupKeyOf(k, 'food').includes(s);
+  const mNamed = named.filter(hit), mItemed = itemed.filter(hit);
+  if (!mNamed.length && !mItemed.length) return { kind: 'nomatch', q, notes: 0, items: [], foodGroups: 0, foodNotes: 0 };
+  const items = [...new Set(mNamed.map(k => poolKeyOf(k)).concat(mItemed))]
+    .filter(Boolean).sort((a, b) => a.localeCompare(b));
+  // Would a LOOSER scope have something to offer for this same search? Only
+  // worth asking when the user is standing in a tighter one. v76: try by-food
+  // first, then by-name — so the offer always points one step looser, not
+  // straight to the loosest, and 'head' itself offers nothing further.
+  const looser = scope === 'item' ? ['food', 'head'] : scope === 'food' ? ['head'] : [];
+  let food = [], foodScope = null;
+  for (const sc of looser) {
+    const hit = notesBatchCandidates(n, it, sc)
+      .filter(p => p.key.includes(s) || p.sources.some(x => x.name.toLowerCase().includes(s)));
+    if (hit.length) { food = hit; foodScope = sc; break; }
+  }
+  return {
+    kind: 'unfoldable', q, notes: mNamed.length + mItemed.length, items,
+    foodGroups: food.length,
+    foodScope,                                   // which looser scope actually helps
+    foodNotes: food.reduce((a, p) => a + nmNoteCount(p), 0)
+  };
+}
+
+// PURE. The diagnosis as the sentence the user reads. Kept next to the data so
+// the wording can never drift from what was actually measured.
+function notesBatchEmptyHTML(d) {
+  const list = d.items.map(i => `<b>${esc(i)}</b>`).join(' · ');
+  if (d.kind === 'none') return `<div class="nm-empty">You have no food notes yet.<br>
+    <span>Notes are written on a food from the Summary table or a Food Profile. This screen folds them together once you have two on one food.</span></div>`;
+  if (d.kind === 'consolidated') return `<div class="nm-empty">✅ Nothing left to combine — all ${d.notes} of your notes are already consolidated.<br>
+    <span>A food reappears here once it has notes on two different serving sizes, or a serving note plus an all-servings note.</span></div>`;
+  if (d.kind === 'nomatch') return `<div class="nm-empty small">No note mentions “${esc(d.q)}” — no food name or note key matches it.</div>`;
+  // 'unfoldable' — the case that sent him looking for a bug.
+  const head = `${d.notes} note${d.notes === 1 ? '' : 's'} mention${d.notes === 1 ? 's' : ''} “${esc(d.q)}”, on ${d.items.length} separate item${d.items.length === 1 ? '' : 's'}: ${list}.`;
+  if (d.foodGroups) return `<div class="nm-empty">${head}<br>
+    <span>Each of those items holds only one note, so there is nothing to fold <b>within</b> an item — that is why this list is empty, not because the notes are missing.</span>
+    <div class="nm-offer"><button type="button" class="nm-btn nm-offer-btn" onclick="nmSetScope('${d.foodScope || 'food'}')">${d.foodScope === 'head' ? '🧺 Group by name instead →' : '🥔 Group by food instead →'}</button>
+      <span>Folds ${d.foodNotes} of them into ${d.foodGroups} note${d.foodGroups === 1 ? '' : 's'}, ${d.foodScope === 'head' ? 'by first word' : 'across preparations'}. You will see every one named before anything is saved.</span></div></div>`;
+  return `<div class="nm-empty">${head}<br>
+    <span>They are already consolidated — one note per item is the finished state, so there is nothing left to fold.</span></div>`;
 }
 
 // PURE. The whole batch resolved against COPIES of both stores, so the app can
@@ -8999,22 +9174,34 @@ function notesBatchWritePlan(picks, notes, itemNotes) {
   const n = { ...notes }, it = { ...itemNotes };
   const undo = { notes: {}, item: {} };
   picks.forEach(p => {
-    // null = "this key did not exist", the pre-image convention executeUndo reads
-    if (!(p.key in undo.item)) undo.item[p.key] = (p.key in it) ? it[p.key] : null;
     p.sources.forEach(s => { if (s.name in n) { undo.notes[s.name] = n[s.name]; delete n[s.name]; } });
-    it[p.key] = p.combined;
+    // BY ITEM this loop runs once, on p.key — v75 exactly. BY FOOD it runs on
+    // every preparation, so the one combined text shows on all of them.
+    (p.itemKeys || [p.key]).forEach(ik => {
+      // null = "this key did not exist", the pre-image convention executeUndo reads
+      if (!(ik in undo.item)) undo.item[ik] = (ik in it) ? it[ik] : null;
+      it[ik] = p.combined;
+    });
   });
   return { notes: n, item: it, undo };
 }
 
-let _nmSel = new Set();     // pool keys ticked — survives every re-search, like the trial picker
+let _nmSel = new Set();     // group keys ticked — survives every re-search, like the trial picker
 let _nmSearch = '';
 let _nmStage = 'pick';      // 'pick' → 'review'; nothing is written in either
-let _nmDrafts = {};         // pool key → edited result, so ← Back does not lose typing
+let _nmDrafts = {};         // group key → edited result, so ← Back does not lose typing
 let _nmBusy = false;        // one snapshot + one apply per click, never two
+// 'item' | 'food'. NOT persisted, on purpose: BY FOOD is the looser scope — it
+// joins text across preparations — so every open of this screen starts in the
+// tighter one the user can see and reason about. A sticky looser scope would let
+// a later session begin in a mode nobody chose that session. The cost is one tap,
+// and the empty state offers that tap directly. No new storage key exists, and
+// fst_pool_portions and every analysis key are untouched.
+let _nmScope = 'item';
 
 function openNotesBatchMerge() {
   _nmSel = new Set(); _nmSearch = ''; _nmStage = 'pick'; _nmDrafts = {}; _nmBusy = false;
+  _nmScope = 'item';
   const bg = document.getElementById('notes-batch-bg'); if (!bg) return;
   bg.style.display = 'flex';
   renderNotesBatch();
@@ -9026,6 +9213,15 @@ function closeNotesBatchMerge() {
   _nmSel = new Set(); _nmDrafts = {}; _nmStage = 'pick';
 }
 function nmSetSearch(v) { _nmSearch = String(v || ''); renderNotesBatchList(); }
+// Changing the grouping changes what a tick MEANS — 'potato baked' and 'potato'
+// are keys in different namespaces — so the selection and any typed drafts are
+// dropped rather than silently re-pointed at a wider merge.
+function nmSetScope(sc) {
+  const next = (sc === 'food' || sc === 'head') ? sc : 'item';
+  if (next === _nmScope) return;
+  _nmScope = next; _nmSel = new Set(); _nmDrafts = {}; _nmStage = 'pick';
+  renderNotesBatch();
+}
 function nmToggle(pk, on) { if (on) _nmSel.add(pk); else _nmSel.delete(pk); nmSyncBtn(); }
 function nmDraft(pk, v) { _nmDrafts[pk] = v; }
 function nmBackToPick() { _nmStage = 'pick'; renderNotesBatch(); }
@@ -9041,15 +9237,24 @@ function renderNotesBatch() {
   const body = document.getElementById('notes-batch-body'), foot = document.getElementById('notes-batch-foot');
   if (!body || !foot) return;
   if (_nmStage === 'review') { renderNotesBatchReview(body, foot); return; }
-  const cands = notesBatchCandidates();
-  // An empty list is a real answer, not a bug — say so instead of showing nothing.
-  if (!cands.length) {
-    body.innerHTML = `<div class="nm-empty">Nothing to combine right now — every food already has a single note.<br>
-      <span>A food appears here once it has notes on two different serving sizes, or a serving note plus an all-servings note.</span></div>`;
+  // No notes at all is the one case with nothing to configure — say so and stop.
+  const d0 = notesBatchDiagnosis('', _nmScope);
+  if (d0.kind === 'none') {
+    body.innerHTML = notesBatchEmptyHTML(d0);
     foot.innerHTML = `<button type="button" class="nm-btn" onclick="closeNotesBatchMerge()">Close</button>`;
     return;
   }
+  const btn = (sc, label) => `<button type="button" class="note-scope-btn${_nmScope === sc ? ' on' : ''}" aria-pressed="${_nmScope === sc}" onclick="nmSetScope('${sc}')">${label}</button>`;
   body.innerHTML = `
+    <div class="nm-scope-row">
+      <div class="note-scope-seg" role="group" aria-label="How notes are grouped">${btn('item', '🍽️ By item')}${btn('food', '🥔 By food')}${btn('head', '🧺 By name')}</div>
+      <span class="nm-scope-hint">${
+        _nmScope === 'head'
+          ? 'Loosest — everything starting with the same word folds together, so <b>every</b> potato spelling counts as one. It can also join things that merely share a first word (<b>Olive oil</b> with <b>Olive tapenade</b>), so read the members before you save.'
+        : _nmScope === 'food'
+          ? 'Preparations fold together — <b>baked</b> and <b>mashed</b> potato count as one food. Wordings it does not recognise stay separate. Every preparation is named before you save.'
+          : 'Preparations stay separate — <b>baked</b> and <b>mashed</b> are different foods, each folding only its own notes.'}</span>
+    </div>
     <input id="nm-search" type="text" class="nm-search" placeholder="🔍 Filter foods…" value="${escAttr(_nmSearch)}" oninput="nmSetSearch(this.value)">
     <div id="nm-list"></div>`;
   foot.innerHTML = `
@@ -9063,19 +9268,24 @@ function renderNotesBatch() {
 function renderNotesBatchList() {
   const el = document.getElementById('nm-list'); if (!el) return;
   const q = _nmSearch.trim().toLowerCase();
-  const all = notesBatchCandidates();
+  const all = notesBatchCandidates(null, null, _nmScope);
   const shown = q ? all.filter(p => p.key.includes(q) || p.sources.some(s => s.name.toLowerCase().includes(q))) : all;
   el.innerHTML = shown.map(p => {
-    const n = p.sources.length + (p.existing !== null ? 1 : 0);
+    const n = nmNoteCount(p);
     const first = String(p.combined).split('\n').find(l => l.trim() !== '') || '';
+    // BY FOOD, the row itself names what is being joined — the user must be able
+    // to see he is folding across preparations before he even ticks the box.
+    const preps = (p.scope !== 'item' && p.itemKeys.length > 1)
+      ? `<span class="nm-row-preps">combining notes from: ${esc(nmPrepLabels(p).join(' · '))}</span>` : '';
     return `<label class="nm-row">
       <input type="checkbox" ${_nmSel.has(p.key) ? 'checked' : ''} data-k="${escAttr(p.key)}" onchange="nmToggle(this.dataset.k, this.checked)">
       <span class="nm-row-main">
         <span class="nm-row-name">${esc(p.key)}<span class="nm-count">${n} notes → 1</span></span>
+        ${preps}
         <span class="nm-row-prev">${esc(first.length > 90 ? first.slice(0, 90) + '…' : first)}</span>
       </span>
     </label>`;
-  }).join('') || `<div class="nm-empty small">No food with notes to combine matches “${esc(_nmSearch)}”.</div>`;
+  }).join('') || notesBatchEmptyHTML(notesBatchDiagnosis(_nmSearch, _nmScope));
   // A filter must never look like it un-ticked something.
   const hidden = [..._nmSel].filter(k => !shown.some(p => p.key === k)).length;
   if (hidden) el.insertAdjacentHTML('afterbegin', `<div class="nm-kept">${hidden} ticked food${hidden === 1 ? '' : 's'} hidden by this filter — still selected.</div>`);
@@ -9085,21 +9295,27 @@ function renderNotesBatchList() {
 // The per-food before/after. Every source note in full, and one editable result
 // per food. Still read-only: this only draws what a merge WOULD do.
 function renderNotesBatchReview(body, foot) {
-  const picks = notesBatchCandidates().filter(p => _nmSel.has(p.key));
+  const picks = notesBatchCandidates(null, null, _nmScope).filter(p => _nmSel.has(p.key));
   if (!picks.length) { _nmStage = 'pick'; renderNotesBatch(); return; }
-  const nNotes = picks.reduce((a, p) => a + p.sources.length + (p.existing !== null ? 1 : 0), 0);
+  const nNotes = picks.reduce((a, p) => a + nmNoteCount(p), 0);
   body.innerHTML = `
     <div class="nm-legend">Nothing has been written yet. Each food below folds <b>only its own</b> notes — text never moves between foods. Edit any result before saving.<br>
+      ${_nmScope === 'food' ? 'Grouped <b>by food</b>: preparations fold together, and each one is named under its food below.<br>' : ''}
       🛟 One safety snapshot is saved before the batch, and ↩️ Undo puts all ${picks.length} food${picks.length === 1 ? '' : 's'} back at once.</div>
     ${picks.map(p => {
-      const ex = p.existing !== null
-        ? `<div class="note-merge-src"><div class="note-merge-name">🍽️ Current all-servings note</div><div class="note-merge-text">${esc(p.existing)}</div></div>` : '';
+      const multi = p.existings.length > 1;
+      const ex = p.existings.map(e => `<div class="note-merge-src"><div class="note-merge-name">🍽️ Current all-servings note${multi ? ' — ' + esc(e.key) : ''}</div><div class="note-merge-text">${esc(e.text)}</div></div>`).join('');
       const src = p.sources.map(s => `<div class="note-merge-src"><div class="note-merge-name">📏 ${esc(s.name)}</div><div class="note-merge-text">${esc(s.text)}</div></div>`).join('');
-      const n = p.sources.length + (p.existing !== null ? 1 : 0);
+      const n = nmNoteCount(p);
+      // The joint, spelled out. A BY FOOD merge may never happen without every
+      // preparation it touches being on screen first.
+      const preps = (p.scope !== 'item' && p.itemKeys.length > 1)
+        ? `<div class="nm-preps">🥔 combining notes from: <b>${esc(nmPrepLabels(p).join(' · '))}</b><br>
+           <span>The result is saved onto all ${p.itemKeys.length} of those preparations. Your verdicts, pooling and lift are not affected — they still judge each preparation on its own.</span></div>` : '';
       const draft = (_nmDrafts[p.key] !== undefined) ? _nmDrafts[p.key] : p.combined;
       return `<div class="note-merge-panel">
         <div class="note-merge-h">📝 ${esc(p.key)} — ${n} note${n === 1 ? '' : 's'} into one</div>
-        ${ex}${src}
+        ${preps}${ex}${src}
         <div class="note-merge-name">Result for “${esc(p.key)}”</div>
         <textarea class="nm-result" data-k="${escAttr(p.key)}" oninput="nmDraft(this.dataset.k, this.value)">${esc(draft)}</textarea>
       </div>`;
@@ -9116,7 +9332,7 @@ async function applyNotesBatchMerge() {
   // plans from the CURRENT stores — never from anything cached at preview time.
   const typed = {};
   document.querySelectorAll('#notes-batch-body textarea.nm-result').forEach(t => { typed[t.dataset.k] = t.value; });
-  const picks = notesBatchCandidates().filter(p => _nmSel.has(p.key)).map(p => {
+  const picks = notesBatchCandidates(null, null, _nmScope).filter(p => _nmSel.has(p.key)).map(p => {
     const raw = typed[p.key] !== undefined ? typed[p.key] : (_nmDrafts[p.key] !== undefined ? _nmDrafts[p.key] : p.combined);
     return { ...p, combined: String(raw).trim() };
   });
@@ -9143,7 +9359,7 @@ async function applyNotesBatchMerge() {
     return;
   }
   _nmBusy = false;
-  const nNotes = picks.reduce((a, p) => a + p.sources.length + (p.existing !== null ? 1 : 0), 0);
+  const nNotes = picks.reduce((a, p) => a + nmNoteCount(p), 0);
   const nFoods = picks.length;
   closeNotesBatchMerge();
   renderSummary();
@@ -19021,7 +19237,8 @@ function runSelfTest() {
     // previewNotesConsolidation does for applyNotesConsolidation.
     const src = String(renderNotesBatch) + String(renderNotesBatchList) + String(notesBatchCandidates)
       + String(notesBatchWritePlan) + String(openNotesBatchMerge) + String(closeNotesBatchMerge)
-      + String(nmGoReview) + String(nmToggle) + String(nmSetSearch) + String(renderSummary);
+      + String(nmGoReview) + String(nmToggle) + String(nmSetSearch) + String(renderSummary)
+      + String(nmSetScope) + String(notesBatchDiagnosis) + String(notesBatchEmptyHTML) + String(nmPrepLabels);
     return !/applyNotesBatchMerge\(/.test(src) ? true : 'a render or open path applies the batch';
   });
   t('batch: closing the picker mid-flow writes nothing and drops the selection', () => {
@@ -19031,6 +19248,130 @@ function runSelfTest() {
   });
   t('batch: one click cannot apply the batch twice', () =>
     /_nmBusy/.test(String(applyNotesBatchMerge)) ? true : 'a double-click could apply twice');
+
+  // ── v76: a grouping scope for NOTES, and an empty state that diagnoses ──
+  // The report that started this: "it doesn't see all food, like potato". Three
+  // preparations, one note each, is three groups of one under the item key — so
+  // nothing was offerable and the picker said "no food ... matches potato",
+  // which read as "you have no potato notes". He had three.
+  const NS_POTATO = { '🥔 Potato baked 100g': 'skin on', '🥔 Potato mashed': 'butter hurts', '🥔 Potato boiled 200g': 'fine' };
+  t('v76 scope: the notes key is NOT the analysis key', () =>
+    (notesGroupKeyOf('🥔 Potato baked 100g', 'item') === 'potato baked'
+      && notesGroupKeyOf('🥔 Potato baked 100g', 'food') === 'potato')
+      ? true : 'notesGroupKeyOf does not split item vs food');
+  t('v76 scope: poolKeyOf still keeps preparations apart (v72.1 intact)', () =>
+    (poolKeyOf('🥔 Potato baked 100g') !== poolKeyOf('🥔 Potato mashed')
+      && notesGroupKeyOf('🥔 Potato baked 100g') === poolKeyOf('🥔 Potato baked 100g'))
+      ? true : 'the analysis key moved');
+  t('v76 BY ITEM: his three preparations offer nothing (the reported symptom)', () =>
+    notesBatchCandidates(NS_POTATO, {}, 'item').length === 0 ? true : 'by-item offered a merge it cannot do');
+  t('v76 BY FOOD: the same three fold into ONE candidate', () => {
+    const c = notesBatchCandidates(NS_POTATO, {}, 'food');
+    return (c.length === 1 && c[0].key === 'potato' && c[0].sources.length === 3)
+      ? true : 'by-food gave ' + JSON.stringify(c.map(p => [p.key, p.sources.length]));
+  });
+  t('v76 BY FOOD: the preview NAMES every preparation being folded', () => {
+    const p = notesBatchCandidates(NS_POTATO, {}, 'food')[0];
+    const labels = nmPrepLabels(p);
+    return (labels.length === 3 && ['baked', 'mashed', 'boiled'].every(x => labels.includes(x)))
+      ? true : 'preps shown: ' + JSON.stringify(labels);
+  });
+  t('v76 BY FOOD: the result is written to EVERY preparation, so all of them show it', () => {
+    const c = notesBatchCandidates(NS_POTATO, {}, 'food');
+    const w = notesBatchWritePlan(c, NS_POTATO, {});
+    const want = ['potato baked', 'potato boiled', 'potato mashed'];
+    return want.every(k => typeof w.item[k] === 'string'
+      && ['skin on', 'butter hurts', 'fine'].every(txt => w.item[k].includes(txt)))
+      ? true : 'item keys written: ' + JSON.stringify(Object.keys(w.item));
+  });
+  t('v76 BY FOOD: NOTHING LOST and nothing crossed between base foods', () => {
+    const n = { ...NS_POTATO, '🍚 Rice 100g': 'rice A', '🍚 Rice 150g': 'rice B' };
+    const c = notesBatchCandidates(n, {}, 'food');
+    const pot = c.find(p => p.key === 'potato'), rice = c.find(p => p.key === 'rice');
+    if (!pot || !rice) return 'expected a potato and a rice group';
+    if (!['skin on', 'butter hurts', 'fine'].every(x => pot.combined.includes(x))) return 'potato lost text';
+    if (!['rice A', 'rice B'].every(x => rice.combined.includes(x))) return 'rice lost text';
+    return (!/rice [AB]/.test(pot.combined) && !/skin on|butter|fine/.test(rice.combined))
+      ? true : 'text crossed between two different base foods';
+  });
+  t('v76 BY FOOD: an unfoldable food is byte-identical afterwards', () => {
+    const n = { ...NS_POTATO, '🥒 Cucumber raw 70g': 'lonely' };
+    const w = notesBatchWritePlan(notesBatchCandidates(n, {}, 'food'), n, {});
+    return (w.notes['🥒 Cucumber raw 70g'] === 'lonely' && !('cucumber' in w.item))
+      ? true : 'a food with nothing to fold was touched';
+  });
+  t('v76 BY FOOD: ONE undo restores BOTH stores across every preparation', () => {
+    const it0 = { 'potato baked': 'prior item note' };
+    const w = notesBatchWritePlan(notesBatchCandidates(NS_POTATO, it0, 'food'), NS_POTATO, it0);
+    const n = { ...w.notes }, it = { ...w.item };
+    Object.keys(w.undo.notes).forEach(k => { if (w.undo.notes[k] === null) delete n[k]; else n[k] = w.undo.notes[k]; });
+    Object.keys(w.undo.item).forEach(k => { if (w.undo.item[k] === null) delete it[k]; else it[k] = w.undo.item[k]; });
+    return (nbCanon(n) === nbCanon(NS_POTATO) && nbCanon(it) === nbCanon(it0))
+      ? true : 'undo did not restore: ' + JSON.stringify([n, it]);
+  });
+  t('v76 BY ITEM is unchanged by the new parameter (v75 fixture, same answer)', () => {
+    const a = notesBatchCandidates(NB_NOTES, NB_ITEM).map(p => p.key).join('|');
+    const b = notesBatchCandidates(NB_NOTES, NB_ITEM, 'item').map(p => p.key).join('|');
+    return (a === 'cheese|fries|rice' && a === b) ? true : `default="${a}" explicit="${b}"`;
+  });
+  t('v76 BY ITEM write plan still touches exactly one item key per food', () => {
+    const w = notesBatchWritePlan(notesBatchCandidates(NB_NOTES, NB_ITEM), NB_NOTES, NB_ITEM);
+    return JSON.stringify(Object.keys(w.item).sort()) === JSON.stringify(['cheese', 'fries', 'olives', 'rice'])
+      ? true : 'item keys written: ' + JSON.stringify(Object.keys(w.item).sort());
+  });
+  // ── the four empty states. v75 printed one sentence for all of them. ──
+  t('v76 empty: no notes at all says so', () =>
+    eq(notesBatchDiagnosis('', 'item', {}, {}).kind, 'none'));
+  t('v76 empty: already consolidated is a SUCCESS state, not a failure', () => {
+    const d = notesBatchDiagnosis('', 'item', { 'Bread 40g': 'a' }, {});
+    return (d.kind === 'consolidated' && d.notes === 1) ? true : JSON.stringify(d);
+  });
+  t('v76 empty: a search that matches nothing says no note mentions it', () =>
+    eq(notesBatchDiagnosis('zzzz', 'item', NS_POTATO, {}).kind, 'nomatch'));
+  t('v76 empty: THE REPORTED CASE — notes exist, counted, named, and by-food offered', () => {
+    const d = notesBatchDiagnosis('potato', 'item', NS_POTATO, {});
+    return (d.kind === 'unfoldable' && d.notes === 3 && d.items.length === 3
+      && d.items.join('|') === 'potato baked|potato boiled|potato mashed'
+      && d.foodGroups === 1 && d.foodNotes === 3)
+      ? true : JSON.stringify(d);
+  });
+  t('v76 empty: the reported case NEVER claims the notes are missing', () => {
+    const html = notesBatchEmptyHTML(notesBatchDiagnosis('potato', 'item', NS_POTATO, {}));
+    return (/3 notes mention/.test(html) && /nmSetScope\('food'\)/.test(html) && !/No food with notes/.test(html))
+      ? true : 'the misleading sentence survived: ' + html.slice(0, 160);
+  });
+  t('v76 empty: in the by-food scope there is no further scope to offer', () => {
+    const d = notesBatchDiagnosis('cucumber', 'food', { 'Cucumber raw 70g': 'x' }, {});
+    return (d.kind === 'unfoldable' && d.foodGroups === 0) ? true : JSON.stringify(d);
+  });
+  t('v76 empty: a blank note is not counted as a note', () =>
+    eq(notesBatchDiagnosis('', 'item', { 'A 1g': '' }, {}).kind, 'none'));
+  t('v76: the diagnosis is READ-ONLY — it writes nothing and mutates nothing', () => {
+    const n = { ...NS_POTATO }, i = {};
+    notesBatchDiagnosis('potato', 'item', n, i);
+    const src = String(notesBatchDiagnosis) + String(notesBatchEmptyHTML) + String(nmPrepLabels) + String(notesGroupKeyOf);
+    return (nbCanon(n) === nbCanon(NS_POTATO) && !Object.keys(i).length
+      && !/saveFoodNotes|saveFoodNotesItem|localStorage\.setItem/.test(src))
+      ? true : 'the empty state can write';
+  });
+  t('v76: changing scope drops the selection (a tick cannot become a wider merge)', () => {
+    const src = String(nmSetScope);
+    return (/_nmSel = new Set\(\)/.test(src) && /_nmDrafts = \{\}/.test(src) && /_nmStage = 'pick'/.test(src))
+      ? true : 'a by-item tick could survive into a by-food merge';
+  });
+  t('v76: the scope is NOT persisted and touches no analysis key', () => {
+    const src = String(nmSetScope) + String(openNotesBatchMerge) + String(renderNotesBatch)
+      + String(notesBatchCandidates) + String(notesGroupKeyOf);
+    return (!/localStorage/.test(src) && !/fst_pool_portions/.test(src)) ? true
+      : 'the notes scope reaches storage or an analysis key';
+  });
+  t('v76: every open of the picker starts in the tighter scope', () =>
+    /_nmScope = 'item'/.test(String(openNotesBatchMerge)) ? true : 'the looser scope could persist into a new session');
+  t('v76: a by-food merge cannot be confirmed without the preparations on screen', () => {
+    const src = String(renderNotesBatchReview);
+    return (/nmPrepLabels\(p\)/.test(src) && /combining notes from/.test(src))
+      ? true : 'the review can hide which preparations are being joined';
+  });
 
   // ── backup round-trip ──
   const parsedBackup = JSON.parse(buildBackupJSON().json);
