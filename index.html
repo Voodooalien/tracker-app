@@ -563,6 +563,60 @@
     min-height: 120px; font-size: 13px; margin-top: 3px;
   }
   .note-merge-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 10px; flex-wrap: wrap; }
+  /* v75 batch merge — token-only colours so it holds in all 10 palettes */
+  .nm-card {
+    background: var(--card); color: var(--text); border-radius: 14px;
+    max-width: 560px; width: 100%; max-height: 86vh;
+    display: flex; flex-direction: column; padding: 18px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.45);
+  }
+  .nm-sub { font-size: 12px; color: var(--muted); margin: 0 0 12px; line-height: 1.5; }
+  .nm-body { overflow-y: auto; flex: 1; padding-right: 4px; }
+  .nm-foot { margin-top: 14px; display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+  .nm-btn {
+    padding: 8px 16px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--card); color: var(--text); font-family: inherit;
+    font-size: 13px; font-weight: 700; cursor: pointer;
+  }
+  /* #fff, not --on-fill: --on-fill is the ink for solid --wN/--pos/--neg fills,
+     and it is DARK in the dark palettes — on a --navy fill it renders dark-on-dark.
+     --navy is a deep colour in all 10 palettes, so white is the partner that holds
+     (measured 8.5:1 to 19.1:1), which is what every other primary button uses. */
+  .nm-btn.primary { background: var(--navy); color: #fff; border-color: var(--navy); }
+  .nm-btn:disabled { cursor: default; }
+  .nm-search {
+    width: 100%; box-sizing: border-box; padding: 8px 10px; border-radius: 8px;
+    border: 1px solid var(--border); background: var(--bg); color: var(--text);
+    font-family: inherit; font-size: 13px; margin-bottom: 8px;
+  }
+  .nm-row {
+    display: flex; align-items: flex-start; gap: 9px; padding: 8px 4px;
+    border-bottom: 1px solid var(--border); cursor: pointer;
+    /* the global `label` rule uppercases everything inside it — the preview is
+       the user's own prose and has to read back exactly as they wrote it */
+    text-transform: none; letter-spacing: normal;
+  }
+  .nm-row-main { flex: 1; min-width: 0; }
+  .nm-row-name { display: block; font-size: 13px; font-weight: 700; color: var(--text); }
+  .nm-count {
+    display: inline-block; font-size: 10.5px; font-weight: 700; color: var(--w2);
+    border: 1.5px solid var(--w2); border-radius: 5px; padding: 1px 6px; margin-left: 6px;
+  }
+  .nm-row-prev {
+    display: block; font-size: 11.5px; color: var(--muted); line-height: 1.45; margin-top: 2px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .nm-kept { font-size: 11px; color: var(--muted); padding: 6px 4px; }
+  .nm-empty { font-size: 13px; color: var(--text); padding: 14px 4px; line-height: 1.6; }
+  .nm-empty span { font-size: 12px; color: var(--muted); }
+  .nm-empty.small { font-size: 12.5px; color: var(--muted); }
+  .nm-legend { font-size: 11.5px; color: var(--muted); line-height: 1.5; margin-bottom: 10px; }
+  textarea.nm-result {
+    width: 100%; box-sizing: border-box; min-height: 110px; margin-top: 3px;
+    padding: 8px 10px; border: 1.5px solid var(--border); border-radius: 7px;
+    background: var(--bg); color: var(--text);
+    font-family: inherit; font-size: 13px; line-height: 1.5; resize: vertical;
+  }
   .fp-note-tag {
     display: inline-block; font-size: 10px; font-weight: 700;
     border: 1.5px solid var(--border); color: var(--muted);
@@ -4110,7 +4164,7 @@ try {
   </div>
 
   <div style="margin-left: auto; display: flex; align-items: center; gap: 4px;">
-    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v74</span>
+    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v75</span>
   </div>
 
   <div id="nav-more-tray" style="display:none; flex-basis:100%; flex-wrap:wrap; gap:4px; padding-top:6px; margin-top:4px; border-top:1px dashed rgba(255,255,255,0.18);">
@@ -5001,6 +5055,16 @@ html body select.status-badge-select.status-blacklist {
       <button onclick="closeTrialPicker()" style="padding:8px 16px; border-radius:8px; border:1px solid var(--border); background:var(--card); color:var(--text); cursor:pointer;">Cancel</button>
       <button id="trialpick-start" onclick="startPickedTrials()" style="padding:8px 18px; border-radius:8px; border:none; background:var(--navy); color:#fff; font-weight:700; cursor:pointer; opacity:.5;" disabled>Start 0 trials</button>
     </div>
+  </div>
+</div>
+
+<!-- ═══ Batch note merge (v75) ═══ -->
+<div id="notes-batch-bg" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:10000; align-items:center; justify-content:center; padding:16px;" onclick="if(event.target===this)closeNotesBatchMerge()">
+  <div class="nm-card">
+    <h3 style="margin:0 0 6px;">📝 Merge notes</h3>
+    <p class="nm-sub">Tick the foods whose serving notes should fold into one note each. A food only ever combines with its <b>own</b> notes — nothing moves between foods. You see every food's result, and can edit it, before anything is saved.</p>
+    <div id="notes-batch-body" class="nm-body"></div>
+    <div id="notes-batch-foot" class="nm-foot"></div>
   </div>
 </div>
 
@@ -8889,6 +8953,208 @@ async function applyNotesConsolidation() {
 document.getElementById('notes-modal-bg').addEventListener('click', function(e) { if (e.target === this) closeNotesModal(); });
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && document.getElementById('notes-modal-bg').classList.contains('open')) closeNotesModal();
+});
+
+// ─── Batch consolidation: many foods, one pass (v75) ─────────────────────────
+// Exactly the rule the single-food editor already uses, applied to several foods
+// at once: each ticked food folds ITS OWN serving notes together. Rice's notes
+// become one rice note, cheese's become one cheese note, and they never mix —
+// every write is keyed by that food's own poolKeyOf, and a food's sources are
+// only the names that key to it.
+//
+// Eight merges at once is eight chances to lose text, so this is NOT a single
+// "merge 8 foods?" confirm: every ticked food shows its own sources in full and
+// its own editable result before a store is touched. One snapshot covers the
+// batch (not one per food — that would spam the snapshot ring), and one undo
+// record puts all of it back.
+
+// PURE. Every food that actually has something to combine, as full plans — built
+// by the same notesConsolidationPlan the single-food editor uses, so the two
+// screens can never disagree about what a merge would do. Writes nothing.
+function notesBatchCandidates(notes, itemNotes) {
+  const n = notes || loadFoodNotes(), it = itemNotes || loadFoodNotesItem();
+  // One representative serving name per pool key. The plan is keyed by the pool
+  // key, so WHICH of a food's names we hand it cannot change the result.
+  const rep = new Map();
+  Object.keys(n).forEach(k => {
+    if (String(n[k] == null ? '' : n[k]) === '') return;
+    const pk = poolKeyOf(k);
+    if (!pk) return;                                  // no letters — cannot key an item note
+    if (!rep.has(pk) || k.localeCompare(rep.get(pk)) < 0) rep.set(pk, k);
+  });
+  const out = [];
+  rep.forEach((name, pk) => {
+    const p = notesConsolidationPlan(name, n, it);
+    if (p && p.offer) out.push(p);                    // 2+ serving notes, or 1 plus an item note
+  });
+  return out.sort((a, b) => a.key.localeCompare(b.key));
+}
+
+// PURE. The whole batch resolved against COPIES of both stores, so the app can
+// do all of the thinking before either store is written — that is what makes the
+// write all-or-nothing. Returns the two finished maps plus ONE undo record
+// covering every food: executeUndo's 'notes' branch is already key-by-key, so a
+// batch undo is the same code path a single merge has used since v73.
+function notesBatchWritePlan(picks, notes, itemNotes) {
+  const n = { ...notes }, it = { ...itemNotes };
+  const undo = { notes: {}, item: {} };
+  picks.forEach(p => {
+    // null = "this key did not exist", the pre-image convention executeUndo reads
+    if (!(p.key in undo.item)) undo.item[p.key] = (p.key in it) ? it[p.key] : null;
+    p.sources.forEach(s => { if (s.name in n) { undo.notes[s.name] = n[s.name]; delete n[s.name]; } });
+    it[p.key] = p.combined;
+  });
+  return { notes: n, item: it, undo };
+}
+
+let _nmSel = new Set();     // pool keys ticked — survives every re-search, like the trial picker
+let _nmSearch = '';
+let _nmStage = 'pick';      // 'pick' → 'review'; nothing is written in either
+let _nmDrafts = {};         // pool key → edited result, so ← Back does not lose typing
+let _nmBusy = false;        // one snapshot + one apply per click, never two
+
+function openNotesBatchMerge() {
+  _nmSel = new Set(); _nmSearch = ''; _nmStage = 'pick'; _nmDrafts = {}; _nmBusy = false;
+  const bg = document.getElementById('notes-batch-bg'); if (!bg) return;
+  bg.style.display = 'flex';
+  renderNotesBatch();
+}
+// Closing is a full abandon at any stage. No store is touched before the confirm
+// button, so there is nothing to roll back — just drop the selection and drafts.
+function closeNotesBatchMerge() {
+  const bg = document.getElementById('notes-batch-bg'); if (bg) bg.style.display = 'none';
+  _nmSel = new Set(); _nmDrafts = {}; _nmStage = 'pick';
+}
+function nmSetSearch(v) { _nmSearch = String(v || ''); renderNotesBatchList(); }
+function nmToggle(pk, on) { if (on) _nmSel.add(pk); else _nmSel.delete(pk); nmSyncBtn(); }
+function nmDraft(pk, v) { _nmDrafts[pk] = v; }
+function nmBackToPick() { _nmStage = 'pick'; renderNotesBatch(); }
+function nmGoReview() { if (_nmSel.size) { _nmStage = 'review'; renderNotesBatch(); } }
+function nmSyncBtn() {
+  const b = document.getElementById('nm-next'); if (!b) return;
+  const n = _nmSel.size;
+  b.textContent = n ? `Review ${n} food${n === 1 ? '' : 's'} →` : 'Pick at least one food';
+  b.disabled = n === 0; b.style.opacity = n === 0 ? '.5' : '1';
+}
+
+function renderNotesBatch() {
+  const body = document.getElementById('notes-batch-body'), foot = document.getElementById('notes-batch-foot');
+  if (!body || !foot) return;
+  if (_nmStage === 'review') { renderNotesBatchReview(body, foot); return; }
+  const cands = notesBatchCandidates();
+  // An empty list is a real answer, not a bug — say so instead of showing nothing.
+  if (!cands.length) {
+    body.innerHTML = `<div class="nm-empty">Nothing to combine right now — every food already has a single note.<br>
+      <span>A food appears here once it has notes on two different serving sizes, or a serving note plus an all-servings note.</span></div>`;
+    foot.innerHTML = `<button type="button" class="nm-btn" onclick="closeNotesBatchMerge()">Close</button>`;
+    return;
+  }
+  body.innerHTML = `
+    <input id="nm-search" type="text" class="nm-search" placeholder="🔍 Filter foods…" value="${escAttr(_nmSearch)}" oninput="nmSetSearch(this.value)">
+    <div id="nm-list"></div>`;
+  foot.innerHTML = `
+    <button type="button" class="nm-btn" onclick="closeNotesBatchMerge()">Cancel</button>
+    <button type="button" id="nm-next" class="nm-btn primary" onclick="nmGoReview()">Pick at least one food</button>`;
+  renderNotesBatchList();
+}
+
+// Only the list is redrawn on a keystroke, so ticks survive a re-search — the
+// selection lives in _nmSel, exactly the way openTrialPicker holds its own.
+function renderNotesBatchList() {
+  const el = document.getElementById('nm-list'); if (!el) return;
+  const q = _nmSearch.trim().toLowerCase();
+  const all = notesBatchCandidates();
+  const shown = q ? all.filter(p => p.key.includes(q) || p.sources.some(s => s.name.toLowerCase().includes(q))) : all;
+  el.innerHTML = shown.map(p => {
+    const n = p.sources.length + (p.existing !== null ? 1 : 0);
+    const first = String(p.combined).split('\n').find(l => l.trim() !== '') || '';
+    return `<label class="nm-row">
+      <input type="checkbox" ${_nmSel.has(p.key) ? 'checked' : ''} data-k="${escAttr(p.key)}" onchange="nmToggle(this.dataset.k, this.checked)">
+      <span class="nm-row-main">
+        <span class="nm-row-name">${esc(p.key)}<span class="nm-count">${n} notes → 1</span></span>
+        <span class="nm-row-prev">${esc(first.length > 90 ? first.slice(0, 90) + '…' : first)}</span>
+      </span>
+    </label>`;
+  }).join('') || `<div class="nm-empty small">No food with notes to combine matches “${esc(_nmSearch)}”.</div>`;
+  // A filter must never look like it un-ticked something.
+  const hidden = [..._nmSel].filter(k => !shown.some(p => p.key === k)).length;
+  if (hidden) el.insertAdjacentHTML('afterbegin', `<div class="nm-kept">${hidden} ticked food${hidden === 1 ? '' : 's'} hidden by this filter — still selected.</div>`);
+  nmSyncBtn();
+}
+
+// The per-food before/after. Every source note in full, and one editable result
+// per food. Still read-only: this only draws what a merge WOULD do.
+function renderNotesBatchReview(body, foot) {
+  const picks = notesBatchCandidates().filter(p => _nmSel.has(p.key));
+  if (!picks.length) { _nmStage = 'pick'; renderNotesBatch(); return; }
+  const nNotes = picks.reduce((a, p) => a + p.sources.length + (p.existing !== null ? 1 : 0), 0);
+  body.innerHTML = `
+    <div class="nm-legend">Nothing has been written yet. Each food below folds <b>only its own</b> notes — text never moves between foods. Edit any result before saving.<br>
+      🛟 One safety snapshot is saved before the batch, and ↩️ Undo puts all ${picks.length} food${picks.length === 1 ? '' : 's'} back at once.</div>
+    ${picks.map(p => {
+      const ex = p.existing !== null
+        ? `<div class="note-merge-src"><div class="note-merge-name">🍽️ Current all-servings note</div><div class="note-merge-text">${esc(p.existing)}</div></div>` : '';
+      const src = p.sources.map(s => `<div class="note-merge-src"><div class="note-merge-name">📏 ${esc(s.name)}</div><div class="note-merge-text">${esc(s.text)}</div></div>`).join('');
+      const n = p.sources.length + (p.existing !== null ? 1 : 0);
+      const draft = (_nmDrafts[p.key] !== undefined) ? _nmDrafts[p.key] : p.combined;
+      return `<div class="note-merge-panel">
+        <div class="note-merge-h">📝 ${esc(p.key)} — ${n} note${n === 1 ? '' : 's'} into one</div>
+        ${ex}${src}
+        <div class="note-merge-name">Result for “${esc(p.key)}”</div>
+        <textarea class="nm-result" data-k="${escAttr(p.key)}" oninput="nmDraft(this.dataset.k, this.value)">${esc(draft)}</textarea>
+      </div>`;
+    }).join('')}`;
+  foot.innerHTML = `
+    <button type="button" class="nm-btn" onclick="nmBackToPick()">← Back</button>
+    <button type="button" class="nm-btn primary" onclick="applyNotesBatchMerge()">Merge ${picks.length} food${picks.length === 1 ? '' : 's'} ✓</button>`;
+}
+
+// The ONE write path. Everything above this line is read-only.
+async function applyNotesBatchMerge() {
+  if (_nmBusy) return;
+  // Take the edited text off the screen the user just read, and re-derive the
+  // plans from the CURRENT stores — never from anything cached at preview time.
+  const typed = {};
+  document.querySelectorAll('#notes-batch-body textarea.nm-result').forEach(t => { typed[t.dataset.k] = t.value; });
+  const picks = notesBatchCandidates().filter(p => _nmSel.has(p.key)).map(p => {
+    const raw = typed[p.key] !== undefined ? typed[p.key] : (_nmDrafts[p.key] !== undefined ? _nmDrafts[p.key] : p.combined);
+    return { ...p, combined: String(raw).trim() };
+  });
+  if (!picks.length) return;
+  // An emptied box would delete that food's writing outright. Refuse the WHOLE
+  // batch and name the food — never half-apply, never silently skip one.
+  const blank = picks.find(p => !p.combined);
+  if (blank) { alert('“' + blank.key + '” has an empty result box.\n\nNothing was merged. Put its text back, or untick it, and try again.'); return; }
+  _nmBusy = true;
+  const ok = await noteSafetySnapshot(`Combine notes for ${picks.length} food${picks.length === 1 ? '' : 's'}`);
+  if (!ok) { _nmBusy = false; return; }
+  const before = { notes: loadFoodNotes(), item: loadFoodNotesItem() };
+  const plan = notesBatchWritePlan(picks, before.notes, before.item);
+  // ALL-OR-NOTHING. Both stores are computed in full before either is written,
+  // and if the second write fails the first is put straight back — so a batch can
+  // never leave some foods merged and others not with no way back.
+  try {
+    saveFoodNotes(plan.notes);
+    try { saveFoodNotesItem(plan.item); }
+    catch (e) { saveFoodNotes(before.notes); throw e; }
+  } catch (e) {
+    _nmBusy = false;
+    alert('Nothing was merged — the notes could not be saved (' + (e && e.message) + ').\n\nEvery note is exactly as it was.');
+    return;
+  }
+  _nmBusy = false;
+  const nNotes = picks.reduce((a, p) => a + p.sources.length + (p.existing !== null ? 1 : 0), 0);
+  const nFoods = picks.length;
+  closeNotesBatchMerge();
+  renderSummary();
+  if (_notesFood) renderNotesScope();       // an open note editor must not show stale text
+  if (_fpFood) renderFoodProfile();
+  startUndo({ type: 'notes', ...plan.undo },
+    `${nNotes} notes combined across ${nFoods} food${nFoods === 1 ? '' : 's'} · 🛟 snapshot saved first`);
+}
+document.addEventListener('keydown', e => {
+  const bg = document.getElementById('notes-batch-bg');
+  if (e.key === 'Escape' && bg && bg.style.display === 'flex') closeNotesBatchMerge();
 });
 
 // ─── Daily Check-In ───────────────────────────────────────────────────────────
@@ -14921,6 +15187,7 @@ function summaryControlsHTML(totalEntries, shownEntries) {
         <button class="summary-chip-btn ${_poolPortions?'active':''}" onclick="togglePoolPortions()" title="Judge all portion sizes of one food as a single sample: 'Fries 70g' and 'Fries 90g' pool into 'Fries'. Changes Verdicts and Strong Suspects too. No mark is copied between servings — each one still counts only what you marked on it. A food is kept SEPARATE when its gram levels genuinely disagree, or when one base name covers two different preparations that behave differently. Every pooled row lists the names folded into it. The per-gram breakdown never changes.">🔗 Ignore portion size</button>
         <button class="summary-chip-btn" onclick="openItemTypesModal()" title="Review & fix how each item is classified (food / condiment / supplement / activity)">🏷️ Item types</button>
         <button class="summary-chip-btn" onclick="openFoodIdentity()" title="Fix duplicate spellings: rename a food or merge two names — preview first, snapshot saved, one-step undo">🧬 Merge / rename</button>
+        <button class="summary-chip-btn" onclick="openNotesBatchMerge()" title="Tick several foods and fold each one's serving-size notes into a single note. Each food combines only with its OWN notes — nothing moves between foods. You see and can edit every food's result first; one snapshot before the batch, one Undo for all of it.">📝 Merge notes</button>
         <input class="summary-search-input" type="text" placeholder="Search foods..." value="${escAttr(_summarySearch)}" oninput="setSummarySearch(this.value)">
       </div>
       <div style="font-size:12px;color:var(--muted);">Showing ${shownEntries} of ${totalEntries} logs • ${summaryRangeLabel()}</div>
@@ -18662,6 +18929,108 @@ function runSelfTest() {
     return (notes['Fries 70g'] === 'salty' && notes['Fries 120g'] === 'worse when big' && !('fries' in item))
       ? true : JSON.stringify([notes, item]);
   });
+
+  // ── batch note merge (v75): many foods, one pass, nothing lost ──
+  // A deliberately hostile fixture: three foods that qualify for three different
+  // reasons, and two bystanders that must not be touched at all — bread (one lone
+  // serving note) and olives (an item note with no serving note to fold into it).
+  const NB_NOTES = {
+    'Rice 100g': 'rice: sticky',
+    'Rice 150g': 'rice: too much',
+    '🍚 Rice 200g': 'rice: fine with fish',
+    'Cheese 30g': 'cheese: sharp',
+    'Cheese 60g': 'cheese: heavy',
+    'Fries 70g': 'fries: salty',
+    'Bread 40g': 'bread: lonely note'
+  };
+  const NB_ITEM = { fries: 'fries: the all-servings one', olives: 'olives: item note untouched' };
+  const nbCanon = o => JSON.stringify(Object.keys(o).sort().map(k => [k, o[k]]));
+  t('batch: only foods with something to combine are offered', () => {
+    // rice = 3 serving notes, cheese = 2, fries = 1 plus an item note.
+    // bread's lone note and olives' lone item note have nothing to combine WITH.
+    const c = notesBatchCandidates(NB_NOTES, NB_ITEM).map(p => p.key);
+    return eq(c.join('|'), 'cheese|fries|rice');
+  });
+  t('batch: a lone serving note is never offered on its own', () =>
+    notesBatchCandidates({ 'Bread 40g': 'lonely' }, {}).length === 0 ? true : 'offered a pointless one-note merge');
+  t('batch: NOTHING LOST — every source text lands in its own food, and in no other', () => {
+    const picks = notesBatchCandidates(NB_NOTES, NB_ITEM);
+    const w = notesBatchWritePlan(picks, NB_NOTES, NB_ITEM);
+    const bad = [];
+    picks.forEach(p => {
+      const got = w.item[p.key];
+      if (typeof got !== 'string') { bad.push(p.key + ' got no combined note'); return; }
+      // 1. nothing lost: every source, plus any prior item note, is still readable
+      if (p.existing !== null && !got.includes(p.existing)) bad.push(p.key + ' dropped its all-servings note');
+      p.sources.forEach(s => { if (!got.includes(s.text)) bad.push(p.key + ' dropped "' + s.name + '"'); });
+      // 2. nothing crossed: no OTHER food's text got in (each text names its food)
+      picks.forEach(o => { if (o.key !== p.key) o.sources.forEach(s => {
+        if (got.includes(s.text)) bad.push(p.key + ' swallowed ' + o.key + "'s text");
+      }); });
+    });
+    return bad.length ? bad.join('; ') : true;
+  });
+  t('batch: a food nobody ticked is byte-identical afterwards', () => {
+    const picks = notesBatchCandidates(NB_NOTES, NB_ITEM).filter(p => p.key === 'rice');
+    const w = notesBatchWritePlan(picks, NB_NOTES, NB_ITEM);
+    return (w.notes['Cheese 30g'] === 'cheese: sharp' && w.notes['Cheese 60g'] === 'cheese: heavy'
+      && w.notes['Bread 40g'] === 'bread: lonely note' && w.notes['Fries 70g'] === 'fries: salty'
+      && w.item.fries === 'fries: the all-servings one' && w.item.olives === 'olives: item note untouched'
+      && !('cheese' in w.item) && !('bread' in w.item))
+      ? true : 'an unticked food moved: ' + JSON.stringify([w.notes, w.item]);
+  });
+  t('batch: building the plan writes NOTHING — both stores handed in are untouched', () => {
+    const before = nbCanon(NB_NOTES) + '|' + nbCanon(NB_ITEM);
+    notesBatchWritePlan(notesBatchCandidates(NB_NOTES, NB_ITEM), NB_NOTES, NB_ITEM);
+    return before === nbCanon(NB_NOTES) + '|' + nbCanon(NB_ITEM) ? true : 'the batch plan mutated the stores it was handed';
+  });
+  t('batch: ONE undo record returns BOTH stores to the pre-batch state', () => {
+    const w = notesBatchWritePlan(notesBatchCandidates(NB_NOTES, NB_ITEM), NB_NOTES, NB_ITEM);
+    // executeUndo's 'notes' branch, replayed verbatim against the written stores
+    const n = { ...w.notes }, it = { ...w.item };
+    Object.keys(w.undo.notes).forEach(k => { if (w.undo.notes[k] === null) delete n[k]; else n[k] = w.undo.notes[k]; });
+    Object.keys(w.undo.item).forEach(k => { if (w.undo.item[k] === null) delete it[k]; else it[k] = w.undo.item[k]; });
+    return (nbCanon(n) === nbCanon(NB_NOTES) && nbCanon(it) === nbCanon(NB_ITEM))
+      ? true : 'undo did not restore the pre-batch state: ' + JSON.stringify([n, it]);
+  });
+  t('batch: ONE snapshot for the whole batch, taken before any write', () => {
+    const src = String(applyNotesBatchMerge);
+    const nSnap = (src.match(/noteSafetySnapshot\(/g) || []).length;
+    const iSnap = src.indexOf('noteSafetySnapshot('), iSave = src.indexOf('saveFoodNotes(');
+    return (nSnap === 1 && iSnap > -1 && iSave > iSnap) ? true
+      : `snapshots=${nSnap}, snapshot@${iSnap}, first write@${iSave}`;
+  });
+  t('batch: a declined snapshot writes nothing at all', () => {
+    const src = String(applyNotesBatchMerge);
+    const iOk = src.indexOf('if (!ok)'), iSave = src.indexOf('saveFoodNotes(');
+    return (iOk > -1 && iSave > iOk && /if \(!ok\)[^\n]*return;/.test(src))
+      ? true : 'a refused snapshot does not stop the batch before the write';
+  });
+  t('batch: an emptied result box refuses the WHOLE batch, before the snapshot', () => {
+    const src = String(applyNotesBatchMerge);
+    const iBlank = src.indexOf('const blank'), iSnap = src.indexOf('noteSafetySnapshot(');
+    return (iBlank > -1 && iSnap > iBlank && /if \(blank\)[^\n]*return;/.test(src))
+      ? true : 'an empty box could delete a food\'s writing';
+  });
+  t('batch: the write is all-or-nothing — a failed second store rolls the first back', () =>
+    /catch \(e\) \{ saveFoodNotes\(before\.notes\); throw e; \}/.test(String(applyNotesBatchMerge))
+      ? true : 'a half-written batch could leave some foods merged and others not');
+  t('batch: never automatic — only the confirm button applies it', () => {
+    // Same tripwire as the single-food flow: the review renderer is excluded
+    // because it only EMITS the confirm button's markup, exactly as
+    // previewNotesConsolidation does for applyNotesConsolidation.
+    const src = String(renderNotesBatch) + String(renderNotesBatchList) + String(notesBatchCandidates)
+      + String(notesBatchWritePlan) + String(openNotesBatchMerge) + String(closeNotesBatchMerge)
+      + String(nmGoReview) + String(nmToggle) + String(nmSetSearch) + String(renderSummary);
+    return !/applyNotesBatchMerge\(/.test(src) ? true : 'a render or open path applies the batch';
+  });
+  t('batch: closing the picker mid-flow writes nothing and drops the selection', () => {
+    const src = String(closeNotesBatchMerge);
+    return (!/saveFoodNotes|saveFoodNotesItem/.test(src) && /_nmSel = new Set\(\)/.test(src) && /_nmDrafts = \{\}/.test(src))
+      ? true : 'closing the picker can write, or leaves a stale selection behind';
+  });
+  t('batch: one click cannot apply the batch twice', () =>
+    /_nmBusy/.test(String(applyNotesBatchMerge)) ? true : 'a double-click could apply twice');
 
   // ── backup round-trip ──
   const parsedBackup = JSON.parse(buildBackupJSON().json);
