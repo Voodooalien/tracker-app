@@ -646,6 +646,71 @@
   .nm-empty span { font-size: 12px; color: var(--muted); }
   .nm-empty.small { font-size: 12.5px; color: var(--muted); }
   .nm-legend { font-size: 11.5px; color: var(--muted); line-height: 1.5; margin-bottom: 10px; }
+  /* v77 HAND-PICKED mode. Token-only, and deliberately reusing only pairs this
+     file has already measured: --text on --card/--bg (the one pair every palette
+     defines together), --muted for secondary, and a --w2 BORDER for emphasis
+     instead of a fill. Nothing here fills with --navy, so --on-fill — which is
+     DARK in the dark palettes and measured 1.04:1 on a --navy fill — is never
+     involved. The two --text-on-bg spots are the same pair .nm-search already
+     uses for the user's own typing. */
+  .nm-mode-seg {
+    display: flex; border: 1.5px solid var(--border); border-radius: 8px;
+    overflow: hidden; margin-bottom: 8px;
+  }
+  .nm-mode-btn {
+    flex: 1; background: var(--card); color: var(--muted); border: none;
+    font-family: inherit; font-size: 12.5px; font-weight: 700;
+    padding: 9px 8px; cursor: pointer; transition: all .12s;
+    text-transform: none; letter-spacing: normal;
+  }
+  .nm-mode-btn + .nm-mode-btn { border-left: 1.5px solid var(--border); }
+  .nm-mode-btn.on {
+    background: var(--bg); color: var(--text); font-weight: 800;
+    box-shadow: inset 0 -3px 0 var(--w2);
+  }
+  .nm-mode-hint { font-size: 11px; color: var(--muted); line-height: 1.45; margin-bottom: 10px; }
+  .nm-selbar {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    padding: 6px 4px 8px; border-bottom: 1px solid var(--border); margin-bottom: 4px;
+  }
+  .nm-selcount { flex: 1; min-width: 120px; font-size: 11.5px; font-weight: 700; color: var(--text); }
+  .nm-selcount.muted { font-weight: 400; color: var(--muted); }
+  .nm-linkbtn {
+    background: none; border: 1.5px solid var(--border); border-radius: 6px;
+    color: var(--muted); font-family: inherit; font-size: 11px; font-weight: 700;
+    padding: 3px 9px; cursor: pointer;
+  }
+  /* Both tags live inside .nm-row, a <label>: the global label rule uppercases
+     and letter-spaces its contents, and these sit beside the user's own food
+     words. .nm-row resets both; these stay explicit so a future move of the
+     markup cannot silently re-inherit them. */
+  .nm-tag {
+    display: inline-block; font-size: 10.5px; font-weight: 700;
+    border-radius: 5px; padding: 1px 6px; margin-left: 6px;
+    text-transform: none; letter-spacing: normal; white-space: nowrap;
+  }
+  /* MEASURED, not assumed. --w2 INK first read 2.29:1 on --card in obsidian dark
+     (that palette sets --w2:#52525b, a mid grey, against --card:#18181b). Whether
+     a food already has a note is a primary signal here, so the ink is --text —
+     the one pair every palette defines together — and the --w2 border carries
+     the emphasis instead, the same fix .nm-offer-btn documents. The has/none
+     difference never rests on colour anyway: the words and the border style
+     (solid vs dashed) both differ. */
+  .nm-tag.has  { color: var(--text); border: 1.5px solid var(--w2); }
+  .nm-tag.none { color: var(--muted); border: 1.5px dashed var(--border); }
+  .nm-recv { display: flex; flex-wrap: wrap; gap: 5px; margin: 5px 0 4px; }
+  /* Descendant selector on purpose: these chips live inside .nm-preps, whose
+     shipped `.nm-preps span { color: var(--muted) }` outspecifies a lone class
+     and was measured greying them out. Which foods RECEIVE the note is the
+     disclosure this screen exists for — it does not get to be secondary text. */
+  .nm-recv .nm-recv-item {
+    font-size: 11px; font-weight: 700; color: var(--text); background: var(--card);
+    border: 1.5px solid var(--border); border-radius: 6px; padding: 2px 7px;
+    text-transform: none; letter-spacing: normal;
+  }
+  /* Same reason: "this food gains a note" must stay readable, so the ink stays
+     --text and only the border changes. */
+  .nm-recv .nm-recv-item.new { border-color: var(--w2); border-style: dashed; }
   textarea.nm-result {
     width: 100%; box-sizing: border-box; min-height: 110px; margin-top: 3px;
     padding: 8px 10px; border: 1.5px solid var(--border); border-radius: 7px;
@@ -4199,7 +4264,7 @@ try {
   </div>
 
   <div style="margin-left: auto; display: flex; align-items: center; gap: 4px;">
-    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v76</span>
+    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v77</span>
   </div>
 
   <div id="nav-more-tray" style="display:none; flex-basis:100%; flex-wrap:wrap; gap:4px; padding-top:6px; margin-top:4px; border-top:1px dashed rgba(255,255,255,0.18);">
@@ -5097,7 +5162,7 @@ html body select.status-badge-select.status-blacklist {
 <div id="notes-batch-bg" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:10000; align-items:center; justify-content:center; padding:16px;" onclick="if(event.target===this)closeNotesBatchMerge()">
   <div class="nm-card">
     <h3 style="margin:0 0 6px;">📝 Merge notes</h3>
-    <p class="nm-sub">Tick the foods whose serving notes should fold into one note each. A food only ever combines with its <b>own</b> notes — nothing moves between foods. You see every food's result, and can edit it, before anything is saved.</p>
+    <p class="nm-sub">Put one note on several foods, or fold a food's serving notes into one. Nothing is written until you have seen the result and can edit it — then one 🛟 snapshot before, one ↩️ Undo after.</p>
     <div id="notes-batch-body" class="nm-body"></div>
     <div id="notes-batch-foot" class="nm-foot"></div>
   </div>
@@ -9186,6 +9251,101 @@ function notesBatchWritePlan(picks, notes, itemNotes) {
   return { notes: n, item: it, undo };
 }
 
+// ── v77: the HAND-PICKED group ───────────────────────────────────────────────
+// No key heuristic can know that 'millet', 'millet boiled' and 'kasha millet'
+// are one food to him. He knows instantly. So the primary way to build a group
+// is now: type a search, see EVERY food that matches — including ones with no
+// note yet — and tick the ones that belong together. The ticks ARE the group.
+// It also removes the over-merge risk the loosest rule carries ('Olive oil' with
+// 'Olive tapenade'), because a first word never decides anything: he does.
+//
+// Everything here is PURE. The ticked keys are turned into the SAME plan shape
+// notesConsolidationPlan produces, so notesBatchWritePlan, the preview, the one
+// snapshot, the all-or-nothing write and the single undo record are the code
+// that already shipped. No second write path and no third store.
+
+// Every food name the app knows, folded onto the key a note is filed under.
+// Universe = the logged entries + loadFoodDictionary() (retired spellings) +
+// any key that already carries a note, so a note on a food he no longer logs is
+// still reachable. Rows are keyed by poolKeyOf — the same key an all-servings
+// note uses — so ticking one row is ticking exactly one note destination.
+function nmFoodUniverse(entries, dict, notes, itemNotes) {
+  const es = entries || loadMigrated(), dc = dict || loadFoodDictionary();
+  const n = notes || loadFoodNotes(), it = itemNotes || loadFoodNotesItem();
+  const rows = new Map();
+  const get = k => {
+    if (!rows.has(k)) rows.set(k, { key: k, names: [], texts: [] });
+    return rows.get(k);
+  };
+  const addName = f => {
+    const k = poolKeyOf(f || '');
+    if (!k) return null;                          // no letters — cannot key a note
+    const r = get(k);
+    if (f && !r.names.includes(f)) r.names.push(f);
+    return r;
+  };
+  es.forEach(e => { if (e && e.food) addName(String(e.food)); });
+  dc.forEach(f => { if (f) addName(String(f)); });
+  // Item notes first: an all-servings note is the one the food already shows.
+  Object.keys(it).forEach(k => {
+    const t = String(it[k] == null ? '' : it[k]);
+    if (t && k) get(k).texts.push(t);
+  });
+  Object.keys(n).forEach(k => {
+    const t = String(n[k] == null ? '' : n[k]);
+    if (!t) return;
+    const r = addName(k);
+    if (r) r.texts.push(t);
+  });
+  return [...rows.values()].map(r => ({
+    key: r.key,
+    names: r.names.slice().sort((a, b) => a.localeCompare(b)),
+    notes: r.texts.length,
+    first: (r.texts[0] || '').split('\n').find(l => l.trim() !== '') || ''
+  })).sort((a, b) => a.key.localeCompare(b.key));
+}
+
+// A readable name for a hand-picked group. Only ever a label: notesBatchWritePlan
+// writes to p.itemKeys, never to p.key.
+function nmManualLabel(keys) {
+  const k = keys || [];
+  return k.slice(0, 3).join(' · ') + (k.length > 3 ? ` +${k.length - 3} more` : '');
+}
+
+// PURE. The ticked item keys, as one plan. Sources are ONLY the serving notes
+// living on a ticked food, so a food he did not tick is untouchable by
+// construction rather than by care.
+function nmManualPlan(keys, notes, itemNotes) {
+  const n = notes || loadFoodNotes(), it = itemNotes || loadFoodNotesItem();
+  const itemKeys = [...new Set((keys || []).map(k => String(k || '').trim()).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b));
+  if (!itemKeys.length) return null;
+  const inGroup = new Set(itemKeys);
+  const sources = Object.keys(n)
+    .filter(k => inGroup.has(poolKeyOf(k)) && String(n[k] == null ? '' : n[k]) !== '')
+    .sort((a, b) => a.localeCompare(b))
+    .map(k => ({ name: k, text: String(n[k]) }));
+  const existings = itemKeys.filter(k => it[k] !== undefined)
+    .map(k => ({ key: k, text: String(it[k] == null ? '' : it[k]) }));
+  // Same de-duplicating joiner every other notes screen uses.
+  const texts = [];
+  existings.forEach(e => { if (e.text && !texts.includes(e.text)) texts.push(e.text); });
+  sources.forEach(s => { if (!texts.includes(s.text)) texts.push(s.text); });
+  // Which ticked foods hold writing TODAY. The rest are gaining a note they
+  // never had, and the review screen has to say so in those words — that is the
+  // whole point of binding them, and it must not be a surprise.
+  const held = new Set(existings.filter(e => e.text).map(e => e.key)
+    .concat(sources.map(s => poolKeyOf(s.name))));
+  return {
+    key: nmManualLabel(itemKeys), scope: 'manual', itemKeys, sources, existings,
+    existing: existings.length ? existings[0].text : null,
+    receivers: itemKeys.map(k => ({ key: k, had: held.has(k) })),
+    combined: texts.join('\n———\n'),
+    distinct: texts.length,
+    offer: true
+  };
+}
+
 let _nmSel = new Set();     // group keys ticked — survives every re-search, like the trial picker
 let _nmSearch = '';
 let _nmStage = 'pick';      // 'pick' → 'review'; nothing is written in either
@@ -9198,10 +9358,24 @@ let _nmBusy = false;        // one snapshot + one apply per click, never two
 // and the empty state offers that tap directly. No new storage key exists, and
 // fst_pool_portions and every analysis key are untouched.
 let _nmScope = 'item';
+// v77: WHO decides the group. 'manual' — he searches, ticks the foods he knows
+// belong together, and those exact ticks become one group. 'auto' — the v75/v76
+// key rules propose the groups. Manual is the default because it is how he
+// thinks and because a hand-picked group cannot over-merge. The two modes keep
+// SEPARATE selections, so a tick a rule made can never be mistaken for one he
+// made himself, or the reverse.
+let _nmMode = 'manual';
+let _nmManSel = new Set();  // item keys hand-ticked — survives every re-search
+let _nmManDraft = null;     // the edited shared note, or null for "use the combine"
+let _nmManDraftSig = '';    // the selection it was typed against. Changing the
+                            // selection drops it, so an edited result can never
+                            // be saved over a food whose note it predates.
+function nmManSig() { return [..._nmManSel].sort().join(''); }
 
 function openNotesBatchMerge() {
   _nmSel = new Set(); _nmSearch = ''; _nmStage = 'pick'; _nmDrafts = {}; _nmBusy = false;
   _nmScope = 'item';
+  _nmMode = 'manual'; _nmManSel = new Set(); _nmManDraft = null; _nmManDraftSig = '';
   const bg = document.getElementById('notes-batch-bg'); if (!bg) return;
   bg.style.display = 'flex';
   renderNotesBatch();
@@ -9211,8 +9385,12 @@ function openNotesBatchMerge() {
 function closeNotesBatchMerge() {
   const bg = document.getElementById('notes-batch-bg'); if (bg) bg.style.display = 'none';
   _nmSel = new Set(); _nmDrafts = {}; _nmStage = 'pick';
+  _nmManSel = new Set(); _nmManDraft = null; _nmManDraftSig = '';
 }
-function nmSetSearch(v) { _nmSearch = String(v || ''); renderNotesBatchList(); }
+function nmSetSearch(v) {
+  _nmSearch = String(v || '');
+  if (_nmMode === 'manual') renderNotesBatchManualList(); else renderNotesBatchList();
+}
 // Changing the grouping changes what a tick MEANS — 'potato baked' and 'potato'
 // are keys in different namespaces — so the selection and any typed drafts are
 // dropped rather than silently re-pointed at a wider merge.
@@ -9225,27 +9403,72 @@ function nmSetScope(sc) {
 function nmToggle(pk, on) { if (on) _nmSel.add(pk); else _nmSel.delete(pk); nmSyncBtn(); }
 function nmDraft(pk, v) { _nmDrafts[pk] = v; }
 function nmBackToPick() { _nmStage = 'pick'; renderNotesBatch(); }
-function nmGoReview() { if (_nmSel.size) { _nmStage = 'review'; renderNotesBatch(); } }
+function nmSelCount() { return _nmMode === 'manual' ? _nmManSel.size : _nmSel.size; }
+function nmGoReview() { if (nmSelCount()) { _nmStage = 'review'; renderNotesBatch(); } }
+// Switching mode never carries a selection across — the two lists mean different
+// things, and a tick must always be attributable to whoever made it.
+function nmSetMode(m) {
+  const next = m === 'auto' ? 'auto' : 'manual';
+  if (next === _nmMode) return;
+  _nmMode = next; _nmStage = 'pick';
+  renderNotesBatch();
+}
+function nmManToggle(k, on) { if (on) _nmManSel.add(k); else _nmManSel.delete(k); nmSyncCount(); nmSyncBtn(); }
+function nmManClear() { _nmManSel = new Set(); renderNotesBatchManualList(); }
+function nmManDraftSet(v) { _nmManDraft = v; _nmManDraftSig = nmManSig(); }
+// The text on screen for a group. A manual draft is honoured only while the
+// selection it was typed against is still the selection — otherwise a result
+// edited before a food was added could be written over that food's own note.
+function nmDraftFor(p) {
+  if (_nmMode === 'manual') return (_nmManDraft !== null && _nmManDraftSig === nmManSig()) ? _nmManDraft : p.combined;
+  return _nmDrafts[p.key] !== undefined ? _nmDrafts[p.key] : p.combined;
+}
+// The ticked group(s), re-derived from the CURRENT stores. Read-only.
+function nmPicks() {
+  if (_nmMode === 'manual') { const p = nmManualPlan([..._nmManSel]); return p ? [p] : []; }
+  return notesBatchCandidates(null, null, _nmScope).filter(p => _nmSel.has(p.key));
+}
 function nmSyncBtn() {
   const b = document.getElementById('nm-next'); if (!b) return;
-  const n = _nmSel.size;
-  b.textContent = n ? `Review ${n} food${n === 1 ? '' : 's'} →` : 'Pick at least one food';
+  const n = nmSelCount();
+  b.textContent = !n ? 'Pick at least one food'
+    : _nmMode === 'manual' ? `Review shared note (${n}) →`
+    : `Review ${n} food${n === 1 ? '' : 's'} →`;
   b.disabled = n === 0; b.style.opacity = n === 0 ? '.5' : '1';
+}
+function nmSyncCount() {
+  const el = document.getElementById('nm-selbar'); if (!el) return;
+  const n = _nmManSel.size;
+  el.innerHTML = n
+    ? `<span class="nm-selcount">✋ ${n} food${n === 1 ? '' : 's'} selected — they will share one note</span>
+       <button type="button" class="nm-linkbtn" onclick="nmManClear()">Clear</button>`
+    : `<span class="nm-selcount muted">Nothing ticked yet. Ticks stay put when you change the search.</span>`;
+}
+// The mode switch, on every pick screen so the two are never confusable.
+function nmModeRowHTML() {
+  const b = (m, label) => `<button type="button" class="nm-mode-btn${_nmMode === m ? ' on' : ''}" aria-pressed="${_nmMode === m}" onclick="nmSetMode('${m}')">${label}</button>`;
+  return `<div class="nm-mode-seg" role="group" aria-label="Who decides which foods are grouped">${b('manual', '✋ I pick the foods')}${b('auto', '⚙️ Group them for me')}</div>
+    <div class="nm-mode-hint">${_nmMode === 'manual'
+      ? 'Search, then tick every food that is the same thing to you. <b>Your ticks are the group</b> — no rule guesses. They end up sharing one note, and a ticked food with no note yet gains it.'
+      : 'A rule proposes the groups from the food names, and each group folds <b>only its own</b> notes — text never moves between groups. Good for tidying up one food\'s serving sizes.'}</div>`;
 }
 
 function renderNotesBatch() {
   const body = document.getElementById('notes-batch-body'), foot = document.getElementById('notes-batch-foot');
   if (!body || !foot) return;
   if (_nmStage === 'review') { renderNotesBatchReview(body, foot); return; }
+  if (_nmMode === 'manual') { renderNotesBatchManual(body, foot); return; }
   // No notes at all is the one case with nothing to configure — say so and stop.
+  // The mode row stays: with no notes yet, hand-picking is the mode that still
+  // does something, so the way out must be on screen.
   const d0 = notesBatchDiagnosis('', _nmScope);
   if (d0.kind === 'none') {
-    body.innerHTML = notesBatchEmptyHTML(d0);
+    body.innerHTML = nmModeRowHTML() + notesBatchEmptyHTML(d0);
     foot.innerHTML = `<button type="button" class="nm-btn" onclick="closeNotesBatchMerge()">Close</button>`;
     return;
   }
   const btn = (sc, label) => `<button type="button" class="note-scope-btn${_nmScope === sc ? ' on' : ''}" aria-pressed="${_nmScope === sc}" onclick="nmSetScope('${sc}')">${label}</button>`;
-  body.innerHTML = `
+  body.innerHTML = nmModeRowHTML() + `
     <div class="nm-scope-row">
       <div class="note-scope-seg" role="group" aria-label="How notes are grouped">${btn('item', '🍽️ By item')}${btn('food', '🥔 By food')}${btn('head', '🧺 By name')}</div>
       <span class="nm-scope-hint">${
@@ -9261,6 +9484,50 @@ function renderNotesBatch() {
     <button type="button" class="nm-btn" onclick="closeNotesBatchMerge()">Cancel</button>
     <button type="button" id="nm-next" class="nm-btn primary" onclick="nmGoReview()">Pick at least one food</button>`;
   renderNotesBatchList();
+}
+
+// ── v77 MANUAL pick screen ───────────────────────────────────────────────────
+// Type a food name, see EVERY food that matches — not only ones that already
+// have a note — tick the ones that belong together.
+function renderNotesBatchManual(body, foot) {
+  body.innerHTML = nmModeRowHTML() + `
+    <input id="nm-search" type="text" class="nm-search" placeholder="🔍 Type a food name — millet, potato…" value="${escAttr(_nmSearch)}" oninput="nmSetSearch(this.value)">
+    <div id="nm-selbar" class="nm-selbar"></div>
+    <div id="nm-list"></div>`;
+  foot.innerHTML = `
+    <button type="button" class="nm-btn" onclick="closeNotesBatchMerge()">Cancel</button>
+    <button type="button" id="nm-next" class="nm-btn primary" onclick="nmGoReview()">Pick at least one food</button>`;
+  renderNotesBatchManualList();
+}
+// Only the list is redrawn on a keystroke, so ticks survive a re-search — the
+// selection lives in _nmManSel, exactly the way openTrialPicker holds its own.
+function renderNotesBatchManualList() {
+  const el = document.getElementById('nm-list'); if (!el) return;
+  const q = _nmSearch.trim().toLowerCase();
+  const all = nmFoodUniverse();
+  const match = q ? all.filter(r => r.key.includes(q) || r.names.some(x => x.toLowerCase().includes(q))) : all;
+  const shown = match.slice(0, 300);
+  el.innerHTML = shown.map(r => {
+    // The spellings behind the key, so he can recognise the row as his food.
+    const spell = r.names.filter(x => x.toLowerCase() !== r.key);
+    const tag = r.notes
+      ? `<span class="nm-tag has">📝 ${r.notes} note${r.notes === 1 ? '' : 's'}</span>`
+      : `<span class="nm-tag none">no note yet</span>`;
+    return `<label class="nm-row">
+      <input type="checkbox" ${_nmManSel.has(r.key) ? 'checked' : ''} data-k="${escAttr(r.key)}" onchange="nmManToggle(this.dataset.k, this.checked)">
+      <span class="nm-row-main">
+        <span class="nm-row-name">${esc(r.key)}${tag}</span>
+        ${spell.length ? `<span class="nm-row-preps">logged as: ${esc(spell.slice(0, 3).join(' · '))}${spell.length > 3 ? ' +' + (spell.length - 3) : ''}</span>` : ''}
+        ${r.notes ? `<span class="nm-row-prev">${esc(r.first.length > 90 ? r.first.slice(0, 90) + '…' : r.first)}</span>` : ''}
+      </span>
+    </label>`;
+  }).join('') || `<div class="nm-empty small">No food name matches “${esc(_nmSearch)}”. This list holds every food you have logged plus every retired spelling — try a shorter word.</div>`;
+  if (match.length > shown.length)
+    el.insertAdjacentHTML('beforeend', `<div class="nm-kept">Showing the first ${shown.length} of ${match.length} — type more to narrow it.</div>`);
+  // A filter must never look like it un-ticked something.
+  const hidden = [..._nmManSel].filter(k => !shown.some(r => r.key === k)).length;
+  if (hidden) el.insertAdjacentHTML('afterbegin', `<div class="nm-kept">${hidden} ticked food${hidden === 1 ? '' : 's'} outside this search — still selected.</div>`);
+  nmSyncCount(); nmSyncBtn();
 }
 
 // Only the list is redrawn on a keystroke, so ticks survive a re-search — the
@@ -9295,8 +9562,9 @@ function renderNotesBatchList() {
 // The per-food before/after. Every source note in full, and one editable result
 // per food. Still read-only: this only draws what a merge WOULD do.
 function renderNotesBatchReview(body, foot) {
-  const picks = notesBatchCandidates(null, null, _nmScope).filter(p => _nmSel.has(p.key));
+  const picks = nmPicks();
   if (!picks.length) { _nmStage = 'pick'; renderNotesBatch(); return; }
+  if (_nmMode === 'manual') { renderNotesBatchReviewManual(body, foot, picks[0]); return; }
   const nNotes = picks.reduce((a, p) => a + nmNoteCount(p), 0);
   body.innerHTML = `
     <div class="nm-legend">Nothing has been written yet. Each food below folds <b>only its own</b> notes — text never moves between foods. Edit any result before saving.<br>
@@ -9312,7 +9580,7 @@ function renderNotesBatchReview(body, foot) {
       const preps = (p.scope !== 'item' && p.itemKeys.length > 1)
         ? `<div class="nm-preps">🥔 combining notes from: <b>${esc(nmPrepLabels(p).join(' · '))}</b><br>
            <span>The result is saved onto all ${p.itemKeys.length} of those preparations. Your verdicts, pooling and lift are not affected — they still judge each preparation on its own.</span></div>` : '';
-      const draft = (_nmDrafts[p.key] !== undefined) ? _nmDrafts[p.key] : p.combined;
+      const draft = nmDraftFor(p);
       return `<div class="note-merge-panel">
         <div class="note-merge-h">📝 ${esc(p.key)} — ${n} note${n === 1 ? '' : 's'} into one</div>
         ${preps}${ex}${src}
@@ -9325,6 +9593,37 @@ function renderNotesBatchReview(body, foot) {
     <button type="button" class="nm-btn primary" onclick="applyNotesBatchMerge()">Merge ${picks.length} food${picks.length === 1 ? '' : 's'} ✓</button>`;
 }
 
+// The hand-picked group's before/after. One group, so one panel: every source
+// note in full, an editable result, and — the part a rule-made group never
+// needed — the explicit list of foods that will RECEIVE the note, with the ones
+// gaining a note they never had called out as exactly that. Still read-only.
+function renderNotesBatchReviewManual(body, foot, p) {
+  const gains = p.receivers.filter(r => !r.had);
+  const n = nmNoteCount(p);
+  const src = p.existings.map(e => `<div class="note-merge-src"><div class="note-merge-name">🍽️ All-servings note on ${esc(e.key)}</div><div class="note-merge-text">${esc(e.text)}</div></div>`).join('')
+    + p.sources.map(s => `<div class="note-merge-src"><div class="note-merge-name">📏 ${esc(s.name)}</div><div class="note-merge-text">${esc(s.text)}</div></div>`).join('');
+  body.innerHTML = `
+    <div class="nm-legend">✋ <b>You</b> picked these ${p.itemKeys.length} food${p.itemKeys.length === 1 ? '' : 's'} — no rule chose them. Nothing has been written yet.<br>
+      🛟 One safety snapshot is saved first, and ↩️ Undo puts every one of them back at once.</div>
+    <div class="note-merge-panel">
+      <div class="note-merge-h">📝 One shared note for ${p.itemKeys.length} food${p.itemKeys.length === 1 ? '' : 's'}</div>
+      <div class="nm-preps">📥 <b>This note is saved onto:</b>
+        <div class="nm-recv">${p.receivers.map(r =>
+          `<span class="nm-recv-item${r.had ? '' : ' new'}">${esc(r.key)}${r.had ? '' : ' · gains a note'}</span>`).join('')}</div>
+        <span>${gains.length
+          ? `${gains.length} of them ${gains.length === 1 ? 'has' : 'have'} no note today and will show this one from now on.`
+          : 'All of them already had writing, and all of them end up with the text below.'}
+          Your verdicts, pooling and lift are not affected — they still judge each food on its own.</span>
+      </div>
+      ${n ? src : `<div class="nm-empty small">None of the ticked foods has a note yet — type the shared note below.</div>`}
+      <div class="note-merge-name">The shared note</div>
+      <textarea class="nm-result" data-k="${escAttr(p.key)}" oninput="nmManDraftSet(this.value)">${esc(nmDraftFor(p))}</textarea>
+    </div>`;
+  foot.innerHTML = `
+    <button type="button" class="nm-btn" onclick="nmBackToPick()">← Back</button>
+    <button type="button" class="nm-btn primary" onclick="applyNotesBatchMerge()">Save to ${p.itemKeys.length} food${p.itemKeys.length === 1 ? '' : 's'} ✓</button>`;
+}
+
 // The ONE write path. Everything above this line is read-only.
 async function applyNotesBatchMerge() {
   if (_nmBusy) return;
@@ -9332,8 +9631,8 @@ async function applyNotesBatchMerge() {
   // plans from the CURRENT stores — never from anything cached at preview time.
   const typed = {};
   document.querySelectorAll('#notes-batch-body textarea.nm-result').forEach(t => { typed[t.dataset.k] = t.value; });
-  const picks = notesBatchCandidates(null, null, _nmScope).filter(p => _nmSel.has(p.key)).map(p => {
-    const raw = typed[p.key] !== undefined ? typed[p.key] : (_nmDrafts[p.key] !== undefined ? _nmDrafts[p.key] : p.combined);
+  const picks = nmPicks().map(p => {
+    const raw = typed[p.key] !== undefined ? typed[p.key] : nmDraftFor(p);
     return { ...p, combined: String(raw).trim() };
   });
   if (!picks.length) return;
@@ -9360,13 +9659,18 @@ async function applyNotesBatchMerge() {
   }
   _nmBusy = false;
   const nNotes = picks.reduce((a, p) => a + nmNoteCount(p), 0);
-  const nFoods = picks.length;
+  // Manual is ONE group, so "how many foods" is how many it lands on, not how
+  // many groups were ticked. Read before closing, which resets the mode state.
+  const manual = _nmMode === 'manual';
+  const nFoods = manual ? (picks[0].itemKeys || []).length : picks.length;
   closeNotesBatchMerge();
   renderSummary();
   if (_notesFood) renderNotesScope();       // an open note editor must not show stale text
   if (_fpFood) renderFoodProfile();
   startUndo({ type: 'notes', ...plan.undo },
-    `${nNotes} notes combined across ${nFoods} food${nFoods === 1 ? '' : 's'} · 🛟 snapshot saved first`);
+    manual
+      ? `One note now shared by ${nFoods} food${nFoods === 1 ? '' : 's'} · 🛟 snapshot saved first`
+      : `${nNotes} notes combined across ${nFoods} food${nFoods === 1 ? '' : 's'} · 🛟 snapshot saved first`);
 }
 document.addEventListener('keydown', e => {
   const bg = document.getElementById('notes-batch-bg');
@@ -15403,7 +15707,7 @@ function summaryControlsHTML(totalEntries, shownEntries) {
         <button class="summary-chip-btn ${_poolPortions?'active':''}" onclick="togglePoolPortions()" title="Judge all portion sizes of one food as a single sample: 'Fries 70g' and 'Fries 90g' pool into 'Fries'. Changes Verdicts and Strong Suspects too. No mark is copied between servings — each one still counts only what you marked on it. A food is kept SEPARATE when its gram levels genuinely disagree, or when one base name covers two different preparations that behave differently. Every pooled row lists the names folded into it. The per-gram breakdown never changes.">🔗 Ignore portion size</button>
         <button class="summary-chip-btn" onclick="openItemTypesModal()" title="Review & fix how each item is classified (food / condiment / supplement / activity)">🏷️ Item types</button>
         <button class="summary-chip-btn" onclick="openFoodIdentity()" title="Fix duplicate spellings: rename a food or merge two names — preview first, snapshot saved, one-step undo">🧬 Merge / rename</button>
-        <button class="summary-chip-btn" onclick="openNotesBatchMerge()" title="Tick several foods and fold each one's serving-size notes into a single note. Each food combines only with its OWN notes — nothing moves between foods. You see and can edit every food's result first; one snapshot before the batch, one Undo for all of it.">📝 Merge notes</button>
+        <button class="summary-chip-btn" onclick="openNotesBatchMerge()" title="Search a food name, tick every spelling of it you find, and give them all one shared note — a ticked food with no note yet gains it. Or let a rule group them for you and fold each food's own serving notes. You see and can edit the result first; one snapshot before, one Undo for all of it.">📝 Merge notes</button>
         <input class="summary-search-input" type="text" placeholder="Search foods..." value="${escAttr(_summarySearch)}" oninput="setSummarySearch(this.value)">
       </div>
       <div style="font-size:12px;color:var(--muted);">Showing ${shownEntries} of ${totalEntries} logs • ${summaryRangeLabel()}</div>
@@ -19238,12 +19542,19 @@ function runSelfTest() {
     const src = String(renderNotesBatch) + String(renderNotesBatchList) + String(notesBatchCandidates)
       + String(notesBatchWritePlan) + String(openNotesBatchMerge) + String(closeNotesBatchMerge)
       + String(nmGoReview) + String(nmToggle) + String(nmSetSearch) + String(renderSummary)
-      + String(nmSetScope) + String(notesBatchDiagnosis) + String(notesBatchEmptyHTML) + String(nmPrepLabels);
+      + String(nmSetScope) + String(notesBatchDiagnosis) + String(notesBatchEmptyHTML) + String(nmPrepLabels)
+      // v77 hand-picked mode — same tripwire, same exclusion for the review
+      // renderer (it only EMITS the confirm button's markup).
+      + String(nmFoodUniverse) + String(nmManualPlan) + String(nmManualLabel) + String(nmPicks)
+      + String(renderNotesBatchManual) + String(renderNotesBatchManualList) + String(nmModeRowHTML)
+      + String(nmSetMode) + String(nmManToggle) + String(nmManClear) + String(nmSyncCount)
+      + String(nmManDraftSet) + String(nmDraftFor) + String(nmSelCount) + String(nmSyncBtn);
     return !/applyNotesBatchMerge\(/.test(src) ? true : 'a render or open path applies the batch';
   });
   t('batch: closing the picker mid-flow writes nothing and drops the selection', () => {
     const src = String(closeNotesBatchMerge);
-    return (!/saveFoodNotes|saveFoodNotesItem/.test(src) && /_nmSel = new Set\(\)/.test(src) && /_nmDrafts = \{\}/.test(src))
+    return (!/saveFoodNotes|saveFoodNotesItem/.test(src) && /_nmSel = new Set\(\)/.test(src) && /_nmDrafts = \{\}/.test(src)
+      && /_nmManSel = new Set\(\)/.test(src) && /_nmManDraft = null/.test(src))
       ? true : 'closing the picker can write, or leaves a stale selection behind';
   });
   t('batch: one click cannot apply the batch twice', () =>
@@ -19371,6 +19682,143 @@ function runSelfTest() {
     const src = String(renderNotesBatchReview);
     return (/nmPrepLabels\(p\)/.test(src) && /combining notes from/.test(src))
       ? true : 'the review can hide which preparations are being joined';
+  });
+
+  // ── v77: the HAND-PICKED group ──
+  // "i want to type food name, and checkmark all foods under the found search
+  // if i find them matching, so i select for example all millet related food
+  // and make their notes shared." No key rule can know those five spellings are
+  // one food; he can. The ticks are the group.
+  const MG_ENTRIES = [
+    { food: '🌾 Millet 100g' }, { food: '🌾 Millet 150g' }, { food: 'Kasha 80g' },
+    { food: 'Millet flakes 40g' }, { food: '🍚 Rice 100g' }
+  ];
+  const MG_DICT = ['Hirse 60g'];                    // a retired spelling, still tickable
+  const MG_NOTES = { '🌾 Millet 100g': 'millet: soak overnight', 'Kasha 80g': 'kasha: same thing', '🍚 Rice 100g': 'rice: untouched' };
+  const MG_ITEM = { rice: 'rice: item note untouched' };
+  const MG_PICK = ['millet', 'kasha', 'millet flakes'];   // 2 with notes, 1 without
+  t('v77 universe: foods with NO note are listed, so they can be bound too', () => {
+    const u = nmFoodUniverse(MG_ENTRIES, MG_DICT, MG_NOTES, MG_ITEM);
+    const flakes = u.find(r => r.key === 'millet flakes');
+    return (flakes && flakes.notes === 0) ? true : 'a note-less food is not offerable: ' + JSON.stringify(u.map(r => [r.key, r.notes]));
+  });
+  t('v77 universe: retired dictionary spellings are in it', () =>
+    nmFoodUniverse(MG_ENTRIES, MG_DICT, MG_NOTES, MG_ITEM).some(r => r.key === 'hirse')
+      ? true : 'a retired name cannot be picked');
+  t('v77 universe: de-duplicated by the SAME key a note is filed under', () => {
+    const m = nmFoodUniverse(MG_ENTRIES, MG_DICT, MG_NOTES, MG_ITEM).find(r => r.key === 'millet');
+    return (m && m.names.length === 2 && m.names.every(x => /Millet 1[05]0g/.test(x)))
+      ? true : 'two servings of one food are not one row: ' + JSON.stringify(m);
+  });
+  t('v77 universe: a food with notes shows how many, and a first-line preview', () => {
+    const m = nmFoodUniverse(MG_ENTRIES, MG_DICT, MG_NOTES, MG_ITEM).find(r => r.key === 'millet');
+    return (m.notes === 1 && m.first === 'millet: soak overnight') ? true : JSON.stringify(m);
+  });
+  t('v77 universe: a note on a food no longer logged is still reachable', () =>
+    nmFoodUniverse([], [], { 'Ghost 10g': 'still here' }, { orphan: 'and this' })
+      .map(r => r.key).sort().join('|') === 'ghost|orphan'
+      ? true : 'a note could become unreachable');
+  t('v77 universe: PURE — it writes nothing and mutates nothing it is handed', () => {
+    const n = { ...MG_NOTES }, i = { ...MG_ITEM }, e = MG_ENTRIES.slice();
+    nmFoodUniverse(e, MG_DICT, n, i);
+    const src = String(nmFoodUniverse) + String(nmManualPlan) + String(nmManualLabel);
+    return (nbCanon(n) === nbCanon(MG_NOTES) && nbCanon(i) === nbCanon(MG_ITEM) && e.length === 5
+      && !/saveFoodNotes|saveFoodNotesItem|localStorage\.setItem/.test(src))
+      ? true : 'the hand-picked path can write while only looking';
+  });
+  t('v77 manual: THE ASK — one note reaches all three ticked foods, note-less one included', () => {
+    const p = nmManualPlan(MG_PICK, MG_NOTES, MG_ITEM);
+    const w = notesBatchWritePlan([p], MG_NOTES, MG_ITEM);
+    const bad = [];
+    MG_PICK.forEach(k => {
+      if (typeof w.item[k] !== 'string') { bad.push(k + ' received nothing'); return; }
+      if (!w.item[k].includes('millet: soak overnight')) bad.push(k + ' lost the millet text');
+      if (!w.item[k].includes('kasha: same thing')) bad.push(k + ' lost the kasha text');
+    });
+    return bad.length ? bad.join('; ') : true;
+  });
+  t('v77 manual: the food that had NO note is the one that gains it', () => {
+    const p = nmManualPlan(MG_PICK, MG_NOTES, MG_ITEM);
+    const gains = p.receivers.filter(r => !r.had).map(r => r.key);
+    return (gains.length === 1 && gains[0] === 'millet flakes')
+      ? true : 'the review would not show who gains a note: ' + JSON.stringify(p.receivers);
+  });
+  t('v77 manual: a food nobody ticked is byte-identical afterwards', () => {
+    const w = notesBatchWritePlan([nmManualPlan(MG_PICK, MG_NOTES, MG_ITEM)], MG_NOTES, MG_ITEM);
+    return (w.notes['🍚 Rice 100g'] === 'rice: untouched' && w.item.rice === 'rice: item note untouched'
+      && !('hirse' in w.item)) ? true : 'an unticked food moved: ' + JSON.stringify([w.notes, w.item]);
+  });
+  t('v77 manual: ONE undo restores all three — including REMOVING the gained note', () => {
+    const w = notesBatchWritePlan([nmManualPlan(MG_PICK, MG_NOTES, MG_ITEM)], MG_NOTES, MG_ITEM);
+    if (w.undo.item['millet flakes'] !== null) return 'the gained note has no "did not exist" pre-image';
+    // executeUndo's 'notes' branch, replayed verbatim
+    const n = { ...w.notes }, it = { ...w.item };
+    Object.keys(w.undo.notes).forEach(k => { if (w.undo.notes[k] === null) delete n[k]; else n[k] = w.undo.notes[k]; });
+    Object.keys(w.undo.item).forEach(k => { if (w.undo.item[k] === null) delete it[k]; else it[k] = w.undo.item[k]; });
+    return (nbCanon(n) === nbCanon(MG_NOTES) && nbCanon(it) === nbCanon(MG_ITEM))
+      ? true : 'undo did not restore: ' + JSON.stringify([n, it]);
+  });
+  t('v77 manual: an existing all-servings note on a ticked food is absorbed, not dropped', () => {
+    const it0 = { ...MG_ITEM, 'millet flakes': 'flakes: prior all-servings note' };
+    const p = nmManualPlan(MG_PICK, MG_NOTES, it0);
+    const w = notesBatchWritePlan([p], MG_NOTES, it0);
+    return MG_PICK.every(k => w.item[k].includes('flakes: prior all-servings note'))
+      && w.undo.item['millet flakes'] === 'flakes: prior all-servings note'
+      ? true : 'a prior item note was lost: ' + JSON.stringify([p.combined, w.undo.item]);
+  });
+  t('v77 manual: unticking removes a food from the group entirely', () => {
+    const w = notesBatchWritePlan([nmManualPlan(['millet', 'kasha'], MG_NOTES, MG_ITEM)], MG_NOTES, MG_ITEM);
+    return !('millet flakes' in w.item) ? true : 'an unticked food still received the note';
+  });
+  t('v77 manual: no ticks is no plan at all', () =>
+    (nmManualPlan([], MG_NOTES, MG_ITEM) === null && nmManualPlan(['  '], MG_NOTES, MG_ITEM) === null)
+      ? true : 'an empty selection produced a write plan');
+  t('v77 manual: the plan writes to itemKeys, never to the display label', () => {
+    const p = nmManualPlan(MG_PICK, MG_NOTES, MG_ITEM);
+    const w = notesBatchWritePlan([p], MG_NOTES, MG_ITEM);
+    return (p.key.includes(' · ') && !(p.key in w.item))
+      ? true : 'the label leaked into the store as a key: ' + p.key;
+  });
+  t('v77 manual: ticks survive a re-search (only the list redraws)', () => {
+    const src = String(nmSetSearch) + String(renderNotesBatchManualList);
+    return (!/_nmManSel = new Set/.test(src) && /_nmManSel\.has/.test(String(renderNotesBatchManualList)))
+      ? true : 'changing the search drops the selection';
+  });
+  t('v77 manual: a filter that hides a tick SAYS it is still selected', () =>
+    /still selected/.test(String(renderNotesBatchManualList))
+      ? true : 'a filter can look like it un-ticked something');
+  t('v77 manual: an edited result is dropped the moment the selection changes', () => {
+    const src = String(nmDraftFor) + String(nmManDraftSet) + String(nmManSig);
+    return (/_nmManDraftSig === nmManSig\(\)/.test(src) && /_nmManDraftSig = nmManSig\(\)/.test(src))
+      ? true : 'text typed for 2 foods could be saved onto a 3rd whose note it predates';
+  });
+  t('v77 manual: the review NAMES every food that receives the note', () => {
+    const src = String(renderNotesBatchReviewManual);
+    return (/p\.receivers\.map/.test(src) && /gains a note/.test(src) && /nm-recv/.test(src))
+      ? true : 'the review can hide who is about to receive the note';
+  });
+  t('v77: the two modes never share a selection', () =>
+    (/_nmMode === 'manual'/.test(String(nmPicks)) && !/_nmSel\b/.test(String(nmManToggle))
+      && !/_nmManSel\b/.test(String(nmToggle)) && /_nmStage = 'pick'/.test(String(nmSetMode)))
+      ? true : 'a rule-made tick and a hand-made tick can be confused');
+  t('v77: hand-picking is the mode every open starts in', () =>
+    /_nmMode = 'manual'/.test(String(openNotesBatchMerge)) ? true : 'the picker does not open in his mode');
+  t('v77: the auto (rule-grouped) mode still works, byte for byte', () => {
+    const a = notesBatchCandidates(NB_NOTES, NB_ITEM).map(p => p.key).join('|');
+    const b = notesBatchCandidates(NS_POTATO, {}, 'food').map(p => p.key).join('|');
+    return (a === 'cheese|fries|rice' && b === 'potato') ? true : `by-item="${a}" by-food="${b}"`;
+  });
+  t('v77: ONE write path — the manual plan goes through notesBatchWritePlan', () => {
+    const src = String(applyNotesBatchMerge);
+    return (/nmPicks\(\)/.test(src) && (src.match(/notesBatchWritePlan\(/g) || []).length === 1
+      && !/nmManualPlan\(/.test(src))
+      ? true : 'the hand-picked group has its own write path';
+  });
+  t('v77: no third store — the manual path touches only the two notes maps', () => {
+    const src = String(nmManualPlan) + String(nmFoodUniverse) + String(nmPicks)
+      + String(renderNotesBatchManual) + String(renderNotesBatchManualList) + String(renderNotesBatchReviewManual);
+    return !/localStorage|fst_pool_portions|fst_food_status/.test(src)
+      ? true : 'the hand-picked mode reaches storage or an analysis key directly';
   });
 
   // ── backup round-trip ──
