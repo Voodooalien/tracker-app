@@ -4264,7 +4264,7 @@ try {
   </div>
 
   <div style="margin-left: auto; display: flex; align-items: center; gap: 4px;">
-    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v77</span>
+    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v78</span>
   </div>
 
   <div id="nav-more-tray" style="display:none; flex-basis:100%; flex-wrap:wrap; gap:4px; padding-top:6px; margin-top:4px; border-top:1px dashed rgba(255,255,255,0.18);">
@@ -4390,10 +4390,18 @@ try {
 .status-banned { background: #F87171 !important; color: #08111a !important; border: 1.5px solid #FECACA !important; }
 
 /* The specific Dark B.List look you requested */
-.status-blacklist { 
-  background: rgba(0, 0, 0, 0.7) !important; 
-  color: #ffffff !important; 
-  border: 1.5px solid rgba(255, 255, 255, 0.1) !important; 
+.status-blacklist {
+  background: rgba(0, 0, 0, 0.7) !important;
+  color: #ffffff !important;
+  border: 1.5px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+/* v78 Toxic — the only badge LOUDER than B.List: solid black, red type,
+   red rim. Deliberately not translucent so it never blends into a row. */
+.status-toxic {
+  background: #0A0A0A !important;
+  color: #FF6B6B !important;
+  border: 1.5px solid #EF4444 !important;
 }
 
 /* =========================================================================
@@ -4417,10 +4425,17 @@ html body select.status-badge-select.status-limit { background: #FFEDD5 !importa
 html body select.status-badge-select.status-banned { background: #F87171 !important; color: #08111a !important; border: 1.5px solid #FECACA !important; }
 
 /* Unified Translucent Dark B.List Look */
-html body select.status-badge-select.status-blacklist { 
-  background: rgba(0, 0, 0, 0.7) !important; 
-  color: #ffffff !important; 
-  border: 1.5px solid rgba(255, 255, 255, 0.1) !important; 
+html body select.status-badge-select.status-blacklist {
+  background: rgba(0, 0, 0, 0.7) !important;
+  color: #ffffff !important;
+  border: 1.5px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+/* Unified Toxic look (v78) */
+html body select.status-badge-select.status-toxic {
+  background: #0A0A0A !important;
+  color: #FF6B6B !important;
+  border: 1.5px solid #EF4444 !important;
 }
 
 /* ── Modern Navigation Bar ── */
@@ -15056,7 +15071,7 @@ function renderExperiments() {
 // (e.g. "Suspect" as well as "🚩 Suspect").
 function learnedLabelDir(lbl) {
   if (!lbl) return null;
-  if (/suspect|limit|banned|b\.?\s*list|blacklist/i.test(lbl)) return 'avoid';
+  if (/suspect|limit|banned|b\.?\s*list|blacklist|toxic/i.test(lbl)) return 'avoid';
   if (/vital|safe|positive/i.test(lbl)) return 'safe';
   return null; // Meh / N/A → no lean
 }
@@ -15148,8 +15163,8 @@ function learnedRow(i, kind) {
   </div>`;
 }
 
-const LEARNED_STATUS_OPTS = ['N/A', '🏅 Vital', '✅ Safe', '👍 Positive', '🤷‍♂️ Meh', '🚩 Suspect', '⚠️ Limit', '⛔ Banned', '🩻 B.List'];
-const LEARNED_STATUS_CLS = { 'N/A': 'status-na', '🏅 Vital': 'status-vital', '✅ Safe': 'status-safe', '👍 Positive': 'status-positive', '🤷‍♂️ Meh': 'status-meh', '🚩 Suspect': 'status-suspect', '⚠️ Limit': 'status-limit', '⛔ Banned': 'status-banned', '🩻 B.List': 'status-blacklist' };
+const LEARNED_STATUS_OPTS = ['N/A', '🏅 Vital', '✅ Safe', '👍 Positive', '🤷‍♂️ Meh', '🚩 Suspect', '⚠️ Limit', '⛔ Banned', '🩻 B.List', '☠️ Toxic'];
+const LEARNED_STATUS_CLS = { 'N/A': 'status-na', '🏅 Vital': 'status-vital', '✅ Safe': 'status-safe', '👍 Positive': 'status-positive', '🤷‍♂️ Meh': 'status-meh', '🚩 Suspect': 'status-suspect', '⚠️ Limit': 'status-limit', '⛔ Banned': 'status-banned', '🩻 B.List': 'status-blacklist', '☠️ Toxic': 'status-toxic' };
 
 function learnedSetStatus(food, label) {
   const s = loadFoodStatus();
@@ -16325,7 +16340,7 @@ function renderSummary() {
 
     // Status Logic
     const statusVal = ciLookup(foodStatuses, noteKey) || 'N/A';
-    const clsMap = { 'N/A':'status-na', '🏅 Vital':'status-vital', '✅ Safe':'status-safe', '👍 Positive':'status-positive', '🤷‍♂️ Meh':'status-meh', '🚩 Suspect':'status-suspect', '⚠️ Limit':'status-limit', '⛔ Banned':'status-banned', '🩻 B.List':'status-blacklist' };
+    const clsMap = { 'N/A':'status-na', '🏅 Vital':'status-vital', '✅ Safe':'status-safe', '👍 Positive':'status-positive', '🤷‍♂️ Meh':'status-meh', '🚩 Suspect':'status-suspect', '⚠️ Limit':'status-limit', '⛔ Banned':'status-banned', '🩻 B.List':'status-blacklist', '☠️ Toxic':'status-toxic' };
     const curCls = clsMap[statusVal] || 'status-na';
     const optionsHTML = Object.keys(clsMap).map(k => `<option value="${k}" ${k===statusVal?'selected':''}>${k}</option>`).join('');
     const statusSelect = `<select class="status-badge-select ${curCls}" ${_pg ? `title="${escAttr('Saved on ' + noteKey + ' — the pooled row is a label, not a logged name')}"` : ''} onchange="changeFoodStatus(${escAttr(JSON.stringify(noteKey))}, this.value)">${optionsHTML}</select>`;
