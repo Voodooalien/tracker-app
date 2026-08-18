@@ -4264,7 +4264,7 @@ try {
   </div>
 
   <div style="margin-left: auto; display: flex; align-items: center; gap: 4px;">
-    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v78</span>
+    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v79</span>
   </div>
 
   <div id="nav-more-tray" style="display:none; flex-basis:100%; flex-wrap:wrap; gap:4px; padding-top:6px; margin-top:4px; border-top:1px dashed rgba(255,255,255,0.18);">
@@ -5193,6 +5193,7 @@ html body select.status-badge-select.status-toxic {
       <div id="note-scope-showing"></div>
     </div>
     <div class="note-scope-hint" id="note-scope-hint"></div>
+    <div id="note-link-row"></div>
     <div id="note-consolidate-row"></div>
     <div id="note-consolidate-preview"></div>
     <textarea id="notes-textarea" placeholder="Write observations, patterns, or anything useful about this food…"></textarea>
@@ -7425,8 +7426,13 @@ function executeUndo() {
     const it = loadFoodNotesItem();
     Object.keys(state.item || {}).forEach(k => { if (state.item[k] === null) delete it[k]; else it[k] = state.item[k]; });
     saveFoodNotesItem(it);
+    // v79: groups are restored WHOLESALE, not key-by-key — the pre-image is the
+    // entire array, so undoing a merge un-binds exactly what it bound. Absent on
+    // pre-v79 undo records and on saves that touched no group: leave them alone.
+    if (state.groups) saveNoteGroups(state.groups);
     renderSummary();
     if (_fpFood) renderFoodProfile();
+    if (_notesFood) renderNotesScope();
     toast('Notes restored ✓');
   } else if (state.type === 'bulkwin') {
     const entries = loadMigrated();
@@ -8128,7 +8134,7 @@ function warnItemNoteCollision(c) {
 // merge can be reverted one step without touching anything logged afterwards.
 function migrateFoodReferences(oldName, newName, undo) {
   const oldNorm = normFood(oldName);
-  const report = { notes: 0, status: 0, bundles: 0, experiments: 0, dictionary: 0, faceMap: 0, itemTypes: 0, itemNotes: 0, itemNoteCollision: null };
+  const report = { notes: 0, status: 0, bundles: 0, experiments: 0, dictionary: 0, faceMap: 0, itemTypes: 0, itemNotes: 0, itemNoteCollision: null, noteGroups: 0 };
 
   // notes/status maps can hold stray keys under old casings — move them all
   const notes = loadFoodNotes();
@@ -8188,6 +8194,19 @@ function migrateFoodReferences(oldName, newName, undo) {
     } else {
       // 'hold' — nowhere safe to park, so nothing moves and nothing is lost
       report.itemNoteCollision = iPlan;
+    }
+  }
+
+  // v79: a note GROUP is keyed by pool key, and a rename can change it
+  // ("Blueberries frozen" → "Blueberries"). Left alone, the group would keep
+  // syncing a key nothing reads any more and quietly stop syncing the live one.
+  const gFrom = poolKeyOf(oldName), gTo = poolKeyOf(newName);
+  if (gFrom && gTo && gFrom !== gTo) {
+    const gBefore = loadNoteGroups();
+    if (gBefore.some(g => g.includes(gFrom))) {
+      if (undo && undo.noteGroups === null) undo.noteGroups = gBefore;
+      saveNoteGroups(noteGroupsRenamed(gBefore, gFrom, gTo));
+      report.noteGroups = 1;
     }
   }
 
@@ -8352,6 +8371,9 @@ function undoFoodMerge() {
     Object.keys(u.itemNotes).forEach(k => { if (u.itemNotes[k] === null) delete iNotes[k]; else iNotes[k] = u.itemNotes[k]; });
     saveFoodNotesItem(iNotes);
   }
+  // v79: whole-array pre-image, present only when the merge actually re-keyed a
+  // group. null on every older undo record — those merges bound nothing.
+  if (u.noteGroups) saveNoteGroups(u.noteGroups);
   const status = loadFoodStatus();
   Object.keys(u.status || {}).forEach(k => { if (u.status[k] === null) delete status[k]; else status[k] = u.status[k]; });
   saveFoodStatus(status);
@@ -8541,7 +8563,7 @@ async function confirmFoodMerge() {
     if (!confirm('Could not save a safety snapshot first (' + (e && e.message) + ').\n\nProceed with the merge anyway?')) return;
   }
   // 2. surgical undo record + apply
-  const undo = { ts: Date.now(), from, to, entries: [], notes: {}, status: {}, bundles: [], experiments: [], dictionary: [], faceMap: [], itemTypes: {}, itemNotes: {} };
+  const undo = { ts: Date.now(), from, to, entries: [], notes: {}, status: {}, bundles: [], experiments: [], dictionary: [], faceMap: [], itemTypes: {}, itemNotes: {}, noteGroups: null };
   const entries = loadMigrated();
   entries.forEach(e => { if (e.food === from) { undo.entries.push({ id: e.id, food: e.food }); e.food = to; } });
   save(entries);
@@ -8580,6 +8602,92 @@ function loadFoodNotesItem() {
   catch { return {}; }
 }
 function saveFoodNotesItem(obj) { localStorage.setItem('fst_food_notes_item', JSON.stringify(obj)); }
+
+// ─── Note GROUPS (v79) ───────────────────────────────────────────────────────
+// The gap this closes: the 📝 merge screen COPIES one text onto each member's
+// own item key. Nothing recorded that they belonged together, so the next edit
+// on any one of them moved that copy alone and the group silently drifted apart
+// — "I merged them and they still show different notes".
+//
+// So a merge of 2+ foods now also records WHICH keys it bound, and an
+// all-servings save writes to every member of that group. Deliberately a
+// write-time rule, NOT a read-time one: resolveFoodNote() is untouched, so
+// every surface still reads a note exactly the way it did before, and a group
+// that somehow went missing degrades to v78 behaviour rather than to a blank
+// note. Members hold real text of their own — no indirection, no note that
+// lives nowhere.
+//
+// Shape: an array of member arrays, each holding poolKeyOf() keys. Groups of
+// fewer than 2 are meaningless and are dropped on load, so the store can never
+// accumulate singletons.
+function loadNoteGroups() {
+  try {
+    const a = JSON.parse(localStorage.getItem('fst_note_groups') || '[]');
+    return Array.isArray(a) ? sanitizeNoteGroups(a) : [];
+  } catch { return []; }
+}
+function saveNoteGroups(arr) { localStorage.setItem('fst_note_groups', JSON.stringify(sanitizeNoteGroups(arr))); }
+
+// PURE. Strings only, de-duplicated, singletons dropped, and one key can never
+// sit in two groups (the first wins) — every consumer below may then assume a
+// key has at most one group without re-checking.
+function sanitizeNoteGroups(arr) {
+  const out = [], claimed = new Set();
+  (Array.isArray(arr) ? arr : []).forEach(g => {
+    if (!Array.isArray(g)) return;
+    const mem = [];
+    g.forEach(k => {
+      const key = String(k == null ? '' : k).trim();
+      if (key && !claimed.has(key) && !mem.includes(key)) mem.push(key);
+    });
+    if (mem.length >= 2) { mem.forEach(k => claimed.add(k)); out.push(mem.sort((a, b) => a.localeCompare(b))); }
+  });
+  return out;
+}
+
+// PURE. The keys that share this key's note, INCLUDING it. Never empty: an
+// ungrouped key is its own audience, which is what makes every caller below a
+// plain loop with no grouped/ungrouped branch.
+function noteGroupMembers(key, groups) {
+  const k = String(key == null ? '' : key).trim();
+  if (!k) return [];
+  const g = (groups || loadNoteGroups()).find(x => x.includes(k));
+  return g ? g.slice() : [k];
+}
+
+// PURE. Bind these keys together, absorbing any group they already touch —
+// merging {a,b} with {b,c} must yield ONE group of three, not two overlapping
+// ones that each claim b.
+function noteGroupsWith(groups, keys) {
+  const add = [...new Set((keys || []).map(k => String(k == null ? '' : k).trim()).filter(Boolean))];
+  if (add.length < 2) return sanitizeNoteGroups(groups);
+  const touched = new Set(add);
+  const kept = [];
+  (groups || []).forEach(g => {
+    if (g.some(k => touched.has(k))) g.forEach(k => touched.add(k));
+    else kept.push(g);
+  });
+  kept.push([...touched]);
+  return sanitizeNoteGroups(kept);
+}
+
+// PURE. Drop one key out of its group. sanitize turns a leftover pair-minus-one
+// into nothing, so unlinking the second-to-last member dissolves the group
+// rather than leaving a group of one that shares with nobody.
+function noteGroupsWithout(groups, key) {
+  const k = String(key == null ? '' : key).trim();
+  if (!k) return sanitizeNoteGroups(groups);
+  return sanitizeNoteGroups((groups || []).map(g => g.filter(x => x !== k)));
+}
+
+// PURE. A rename can change a food's pool key ("Blueberries frozen" →
+// "Blueberries"), and a group pointing at the dead key would keep syncing a
+// name nothing reads while dropping the live one.
+function noteGroupsRenamed(groups, fromKey, toKey) {
+  const f = String(fromKey == null ? '' : fromKey).trim(), t = String(toKey == null ? '' : toKey).trim();
+  if (!f || !t || f === t) return sanitizeNoteGroups(groups);
+  return sanitizeNoteGroups((groups || []).map(g => g.map(x => x === f ? t : x)));
+}
 
 // THE read order. Every surface that shows a note calls this and nothing else,
 // so two screens can never disagree about what a food's note is:
@@ -8765,7 +8873,7 @@ function calcStorageMeterLive() {
     logs: storedBytes('fst_entries'),
     checkins: storedBytes('fst_checkins') + storedBytes('fst_checkin_syms') + storedBytes('fst_checkin_order'),
     diary: storedBytes('fst_archives'),
-    notes: storedBytes('fst_food_notes') + storedBytes('fst_food_notes_item'),
+    notes: storedBytes('fst_food_notes') + storedBytes('fst_food_notes_item') + storedBytes('fst_note_groups'),
   };
   let total = 0;
   const keys = (typeof window.__fstKeys === 'function') ? window.__fstKeys() : [];
@@ -8980,6 +9088,23 @@ function renderNotesScope() {
         : `<span class="note-scope-tag exact">📏 Showing this serving's own note</span>`)
     : `<span class="note-scope-tag none">No note yet</span>`;
 
+  // v79: two things the old modal could not say, and both are why a merged food
+  // looked broken — it never showed that a save reaches other foods, and never
+  // admitted when a serving note was hiding the shared one.
+  const pk0 = poolKeyOf(_notesFood);
+  const members = pk0 ? noteGroupMembers(pk0) : [];
+  let linkHtml = '';
+  if (members.length > 1) {
+    const others = members.filter(k => k !== pk0);
+    linkHtml += `<div class="note-scope-hint">🔗 <b>Linked.</b> An all-servings save here also writes to ${others.map(k => '<b>' + esc(k) + '</b>').join(', ')}.
+      <button type="button" class="note-consolidate-btn" onclick="unlinkNoteGroup()">Unlink this food</button></div>`;
+  }
+  if (cur && cur.scope === 'exact' && pk0 && loadFoodNotesItem()[pk0] !== undefined) {
+    linkHtml += `<div class="note-scope-hint">📏 <b>This serving's own note is hiding the all-servings note</b>${members.length > 1 ? ` shared by these ${members.length} foods` : ''} — that is why this box can differ from the other rows.
+      <button type="button" class="note-consolidate-btn" onclick="dropServingOverride()">Remove this serving's note</button></div>`;
+  }
+  document.getElementById('note-link-row').innerHTML = linkHtml;
+
   const plan = notesConsolidationPlan(_notesFood);
   const row = document.getElementById('note-consolidate-row');
   row.innerHTML = (plan && plan.offer)
@@ -8988,6 +9113,52 @@ function renderNotesScope() {
     : '';
   document.getElementById('note-consolidate-preview').innerHTML = '';
 }
+// v79: leave the group. Text is NOT touched — unlinking is about where future
+// saves land, and silently deleting his writing to "tidy up" would be exactly the
+// kind of surprise this whole feature exists to remove.
+function unlinkNoteGroup() {
+  const pk = poolKeyOf(_notesFood);
+  if (!pk) return;
+  const before = loadNoteGroups();
+  if (!before.some(g => g.includes(pk))) return;
+  const NL = String.fromCharCode(10);
+  if (!confirm("Unlink " + pk + "?" + NL + NL + "Its note text stays exactly as it is. Saving a note here will simply stop updating the foods it was linked to.")) return;
+  saveNoteGroups(noteGroupsWithout(before, pk));
+  renderNotesScope();
+  startUndo({ type: 'notes', notes: {}, item: {}, groups: before }, 'Unlinked — every note left exactly as it was');
+}
+
+// v79: the shadow. An exact-name note wins over the shared one for this row, and
+// there was no way to see that, let alone reverse it — so a linked food could
+// show stale text forever while the modal insisted the note was shared.
+async function dropServingOverride() {
+  const food = _notesFood;
+  const pk = poolKeyOf(food);
+  if (!food || !pk) return;
+  const notes = loadFoodNotes();
+  const hits = Object.keys(notes).filter(k => normFood(k) === normFood(food));
+  const shared = loadFoodNotesItem()[pk];
+  if (!hits.length || shared === undefined) return;
+  const NL = String.fromCharCode(10);
+  const losing = hits.map(k => String(notes[k] == null ? '' : notes[k])).join(NL + '———' + NL);
+  const ask = "Remove this serving's own note?" + NL + NL
+    + "This row will then show the all-servings note instead." + NL + NL
+    + "The text being removed:" + NL + NL + losing;
+  if (!confirm(ask)) return;
+  if (!(await noteSafetySnapshot("Remove this serving's own note"))) return;
+  if (!_notesFood || _notesFood !== food) return;   // the modal moved on while we waited
+  const undo = { notes: {}, item: {} };
+  const live = loadFoodNotes();
+  hits.forEach(k => { if (k in live) { undo.notes[k] = live[k]; delete live[k]; } });
+  saveFoodNotes(live);
+  _notesScope = 'item';
+  document.getElementById('notes-textarea').value = String(shared);
+  renderNotesScope();
+  renderSummary();
+  if (_fpFood) renderFoodProfile();
+  startUndo({ type: 'notes', ...undo }, 'Serving note removed — the shared note shows here now · 🛟 snapshot saved first');
+}
+
 function setNotesScope(sc) {
   _notesScope = (sc === 'exact') ? 'exact' : 'item';
   renderNotesScope();
@@ -9040,17 +9211,29 @@ async function saveNotesModal() {
     // MOVES up to item scope — its text is what is being saved, and Undo puts
     // it back exactly where it was.
     const undo = { notes: {}, item: {} };
-    undo.item[pk] = (pk in item) ? item[pk] : null;
     let moved = 0;
     Object.keys(notes).filter(k => normFood(k) === normFood(food)).forEach(k => {
       undo.notes[k] = notes[k]; delete notes[k]; moved++;
     });
-    if (val) item[pk] = val; else delete item[pk];
+    // v79 THE FIX. Before this, the save wrote to `pk` alone — so a food merged
+    // into a group drifted apart again on the first edit, which is exactly the
+    // "I merged them and the popups still disagree" report. Every member gets
+    // the same text, or loses it together when the box is emptied. An ungrouped
+    // food returns [pk], so this loop IS the old single write.
+    const members = noteGroupMembers(pk);
+    members.forEach(k => {
+      if (!(k in undo.item)) undo.item[k] = (k in item) ? item[k] : null;
+      if (val) item[k] = val; else delete item[k];
+    });
     saveFoodNotes(notes);
     saveFoodNotesItem(item);
     const n = itemServingNames(food).length;
+    const shared = members.length > 1;
     closeNotesModal();
-    if (moved) startUndo({ type: 'notes', ...undo }, `Note now covers all ${n} serving${n === 1 ? '' : 's'} of “${pk}”`);
+    if (moved) startUndo({ type: 'notes', ...undo }, shared
+      ? `Note now covers all ${n} serving${n === 1 ? '' : 's'} — and the ${members.length} foods linked to it`
+      : `Note now covers all ${n} serving${n === 1 ? '' : 's'} of “${pk}”`);
+    else if (shared) toast(val ? `Saved to all ${members.length} linked foods ✓` : `Cleared on all ${members.length} linked foods ✓`);
     else toast(val ? `Note saved for all ${n} serving${n === 1 ? '' : 's'} ✓` : 'Note cleared ✓');
   }
   renderSummary();
@@ -9105,9 +9288,14 @@ async function applyNotesConsolidation() {
   if (!_notesFood || _notesFood !== food) return;   // the modal moved on while we waited
   const notes = loadFoodNotes(), item = loadFoodNotesItem();
   const undo = { notes: {}, item: {} };
-  undo.item[plan.key] = (plan.key in item) ? item[plan.key] : null;
   plan.sources.forEach(s => { if (s.name in notes) { undo.notes[s.name] = notes[s.name]; delete notes[s.name]; } });
-  item[plan.key] = combined;
+  // v79: same rule as an all-servings save — if this food is linked to others,
+  // the combined text lands on all of them. Ungrouped, noteGroupMembers returns
+  // [plan.key] and this is v78 byte-for-byte.
+  noteGroupMembers(plan.key).forEach(k => {
+    if (!(k in undo.item)) undo.item[k] = (k in item) ? item[k] : null;
+    item[k] = combined;
+  });
   saveFoodNotes(notes);
   saveFoodNotesItem(item);
   document.getElementById('note-consolidate-preview').innerHTML = '';
@@ -9250,20 +9438,30 @@ function notesBatchEmptyHTML(d) {
 // write all-or-nothing. Returns the two finished maps plus ONE undo record
 // covering every food: executeUndo's 'notes' branch is already key-by-key, so a
 // batch undo is the same code path a single merge has used since v73.
-function notesBatchWritePlan(picks, notes, itemNotes) {
+function notesBatchWritePlan(picks, notes, itemNotes, groups) {
   const n = { ...notes }, it = { ...itemNotes };
-  const undo = { notes: {}, item: {} };
+  // v79: the groups this batch binds. The pre-image is the WHOLE array, not
+  // key-by-key: it is a handful of short string arrays, and one undo record
+  // that restores it wholesale cannot half-apply.
+  const before = sanitizeNoteGroups(groups || loadNoteGroups());
+  let gs = before;
+  const undo = { notes: {}, item: {}, groups: before };
   picks.forEach(p => {
     p.sources.forEach(s => { if (s.name in n) { undo.notes[s.name] = n[s.name]; delete n[s.name]; } });
     // BY ITEM this loop runs once, on p.key — v75 exactly. BY FOOD it runs on
     // every preparation, so the one combined text shows on all of them.
-    (p.itemKeys || [p.key]).forEach(ik => {
+    const keys = p.itemKeys || [p.key];
+    keys.forEach(ik => {
       // null = "this key did not exist", the pre-image convention executeUndo reads
       if (!(ik in undo.item)) undo.item[ik] = (ik in it) ? it[ik] : null;
       it[ik] = p.combined;
     });
+    // v79: 2+ keys is the user saying "these are one food to me". Recording it
+    // is what makes the NEXT edit reach all of them instead of only the row he
+    // happened to open. A single-key merge binds nothing — there is no group.
+    if (keys.length >= 2) gs = noteGroupsWith(gs, keys);
   });
-  return { notes: n, item: it, undo };
+  return { notes: n, item: it, groups: gs, undo };
 }
 
 // ── v77: the HAND-PICKED group ───────────────────────────────────────────────
@@ -9658,14 +9856,21 @@ async function applyNotesBatchMerge() {
   _nmBusy = true;
   const ok = await noteSafetySnapshot(`Combine notes for ${picks.length} food${picks.length === 1 ? '' : 's'}`);
   if (!ok) { _nmBusy = false; return; }
-  const before = { notes: loadFoodNotes(), item: loadFoodNotesItem() };
-  const plan = notesBatchWritePlan(picks, before.notes, before.item);
-  // ALL-OR-NOTHING. Both stores are computed in full before either is written,
-  // and if the second write fails the first is put straight back — so a batch can
-  // never leave some foods merged and others not with no way back.
+  const before = { notes: loadFoodNotes(), item: loadFoodNotesItem(), groups: loadNoteGroups() };
+  const plan = notesBatchWritePlan(picks, before.notes, before.item, before.groups);
+  // ALL-OR-NOTHING. Every store is computed in full before any is written, and
+  // a later failure puts the earlier ones straight back — so a batch can never
+  // leave some foods merged and others not with no way back. v79 adds the group
+  // store as the third and last write: it is the one that makes the binding
+  // outlive this click, so a batch that could not record it must not claim the
+  // foods are bound.
   try {
     saveFoodNotes(plan.notes);
-    try { saveFoodNotesItem(plan.item); }
+    try {
+      saveFoodNotesItem(plan.item);
+      try { saveNoteGroups(plan.groups); }
+      catch (e) { saveFoodNotesItem(before.item); saveFoodNotes(before.notes); throw e; }
+    }
     catch (e) { saveFoodNotes(before.notes); throw e; }
   } catch (e) {
     _nmBusy = false;
@@ -16397,6 +16602,7 @@ function buildBackupJSON() {
       customSyms: loadCustomSyms(),
       foodNotes: loadFoodNotes(),
       foodNotesItem: loadFoodNotesItem(), // v73: item-level notes travel — they are your own writing, not a device preference
+      noteGroups: loadNoteGroups(),      // v79: which foods share one note — losing it would silently un-link them on the next edit
       foodStatus: loadFoodStatus(),
       checkins: loadCheckins(),
       checkinSyms: loadCheckinSyms(),
@@ -16430,7 +16636,7 @@ function markBackupDone(msg) {
 // Answers "if I restored this file right now, what exactly would change?"
 // The file goes through the SAME normalizer a real restore uses, then every
 // section is diffed against live data. Nothing is written anywhere.
-const VB_COVERED_KEYS = ['fst_entries','fst_custom_syms','fst_food_notes','fst_food_notes_item','fst_food_status','fst_checkins','fst_checkin_syms','fst_checkin_order','fst_archives','fst_bundles','fst_experiments','fst_food_dictionary','fst_face_map','fst_item_types','fst_trial_metrics','fst_theme','fst_ui_style'];
+const VB_COVERED_KEYS = ['fst_entries','fst_custom_syms','fst_food_notes','fst_food_notes_item','fst_note_groups','fst_food_status','fst_checkins','fst_checkin_syms','fst_checkin_order','fst_archives','fst_bundles','fst_experiments','fst_food_dictionary','fst_face_map','fst_item_types','fst_trial_metrics','fst_theme','fst_ui_style'];
 // v71: fst_palette / fst_typography are DEVICE-LOCAL, not backed up. They are a
 // per-screen preference (an OLED phone wants Eclipse; the desktop may not), and
 // listing them as covered would claim the backup carries something it does not.
@@ -16506,6 +16712,15 @@ function verifyBackupText(text, fileName) {
     d: _vbDiffMaps(toMap(Object.keys(fni === null ? lni : fni), k => k, k => String((fni === null ? lni : fni)[k])),
                    toMap(Object.keys(lni), k => k, k => String(lni[k]))) });
 
+  // v79: linked foods. Same null rule as item notes — a file that predates them
+  // keeps the live links, so diff it against itself rather than reporting a
+  // false "would be deleted".
+  const fg = norm.noteGroups, lg = loadNoteGroups();
+  const gKey = g => g.join(' + ');
+  sections.push({ label: '🔗 Linked foods (shared notes)', unit: 'links',
+    fileN: fg === null ? lg.length : fg.length, liveN: lg.length,
+    d: _vbDiffMaps(toMap(fg === null ? lg : fg, gKey, gKey), toMap(lg, gKey, gKey)) });
+
   const fs = norm.foodStatus, ls = loadFoodStatus();
   sections.push({ label: '🏷️ Food statuses', unit: 'statuses',
     fileN: Object.keys(fs).length, liveN: Object.keys(ls).length,
@@ -16574,6 +16789,10 @@ function verifyBackupText(text, fileName) {
       fileN: norm.faceMap.length, liveN: loadFaceMap().length,
       d: _vbDiffMaps(toMap(norm.faceMap, m => m.id, m => JSON.stringify(m)),
                      toMap(normalizeImportedBackupData({ faceMap: loadFaceMap() }).faceMap, m => m.id, m => JSON.stringify(m))) });
+  }
+
+  if (norm.noteGroups === null && loadNoteGroups().length) {
+    vbNotes.push(`🔗 This backup predates linked foods (${loadNoteGroups().length} live) — restoring keeps yours, but re-save a backup to cover them.`);
   }
 
   if (norm.foodNotesItem === null && Object.keys(loadFoodNotesItem()).length) {
@@ -16773,6 +16992,11 @@ function normalizeImportedBackupData(rawData) {
         .filter(([k, v]) => k && v != null && String(v) !== '')
         .map(([k, v]) => [String(k), String(v)]))
     : null;
+  // v79: null when absent — a pre-v79 backup must NOT wipe live note groups
+  // (same absent-vs-empty rule as foodNotesItem). Singletons and non-strings are
+  // dropped by the same sanitizer the live store uses, so an edited file cannot
+  // introduce a shape the app would then have to defend against everywhere.
+  const normNoteGroups = Array.isArray(data.noteGroups) ? sanitizeNoteGroups(data.noteGroups) : null;
   const normFoodStatus = data.foodStatus && typeof data.foodStatus === 'object' ? data.foodStatus : {};
   // v68 (audit batch 3): null when the field is absent — a pre-era backup must
   // not wipe the live custom check-in symptom list (same rule as dictionary).
@@ -16910,6 +17134,7 @@ function normalizeImportedBackupData(rawData) {
     customSyms: normCustomSyms,
     foodNotes: normFoodNotes,
     foodNotesItem: normFoodNotesItem,
+    noteGroups: normNoteGroups,
     foodStatus: normFoodStatus,
     checkins: normCheckins,
     checkinSyms: normCheckinSyms,
@@ -16974,6 +17199,7 @@ async function importFullBackup(text, inputEl) {
     save(data.entries);
     saveFoodNotes(data.foodNotes);
     if (data.foodNotesItem !== null) saveFoodNotesItem(data.foodNotesItem); // v73: pre-era backups lack the field — keep the live item notes
+    if (data.noteGroups !== null) saveNoteGroups(data.noteGroups);          // v79: pre-era backups lack the field — keep the live links
     saveFoodStatus(data.foodStatus);
     if (data.checkinSyms !== null) saveCheckinSyms(data.checkinSyms); // pre-era backups lack the field — keep the live list
     saveCheckins(data.checkins);
@@ -18450,6 +18676,9 @@ function selfTestFixtures() {
     // its own exact-name note, plus a different PREPARATION of the same base
     // that must never see either.
     foodNotesItem: { 'cucumber raw no skin': 'item note — every size', 'oats': 'oats item note' },
+    // v79 link fixtures: one real group, plus the two shapes the sanitizer has
+    // to refuse (a singleton, and a non-array row).
+    noteGroups: [['oats', 'oats rolled'], ['lonely'], 'not-an-array'],
     foodStatus: { Banana: 'safe', TestChili: 'suspect' },
     bundles: [{ id: 'b1', name: 'Fixture bundle', items: ['Banana', 'Oats'] }],
     experiments: [{
@@ -18490,6 +18719,7 @@ function runSelfTest() {
   loadCheckinOrder = () => FX.checkinOrder;
   loadFoodNotes = () => FX.foodNotes;
   loadFoodNotesItem = () => FX.foodNotesItem;
+  loadNoteGroups = () => sanitizeNoteGroups(FX.noteGroups);
   loadFoodStatus = () => FX.foodStatus;
   loadBundles = () => FX.bundles;
   loadExperiments = () => FX.experiments;
@@ -19836,6 +20066,79 @@ function runSelfTest() {
       ? true : 'the hand-picked mode reaches storage or an analysis key directly';
   });
 
+  // ── v79 linked foods: a merge that STAYS merged ──
+  // The v78 bug in one line: the merge copied one text onto each member's own
+  // key and recorded nothing, so the next edit moved one copy and the group
+  // drifted apart. These pin the record and the fan-out that reads it.
+  const LG_KEYS = ['blueberries', 'blueberries fresh', 'blueberries frozen', 'blueberries defrosted'];
+  t('v79: the sanitizer drops singletons, junk rows and duplicate membership', () => {
+    const g = sanitizeNoteGroups([['a', 'b'], ['solo'], 'nope', ['b', 'c'], ['d', 'd', 'e']]);
+    const flat = g.flat();
+    return (g.length === 2 && !flat.includes('solo') && !flat.includes('c')
+      && flat.filter(x => x === 'b').length === 1 && flat.filter(x => x === 'd').length === 1)
+      ? true : 'sanitized to ' + JSON.stringify(g);
+  });
+  t('v79: an ungrouped key is its own audience (the fan-out stays a plain loop)', () =>
+    (eq(noteGroupMembers('nothing-linked', []).join(), 'nothing-linked')
+      && eq(noteGroupMembers('', []).length, 0)) ? true : 'an ungrouped key did not return just itself');
+  t('v79: overlapping groups merge into ONE, never two that both claim a key', () => {
+    const g = noteGroupsWith(noteGroupsWith([], ['a', 'b']), ['b', 'c']);
+    return (g.length === 1 && g[0].length === 3) ? true : JSON.stringify(g);
+  });
+  t('v79: binding fewer than two keys binds nothing', () =>
+    (noteGroupsWith([], ['only']).length === 0 && noteGroupsWith([], []).length === 0)
+      ? true : 'a single key created a group that shares with nobody');
+  t('v79: unlinking the second-to-last member dissolves the group', () => {
+    const g = noteGroupsWithout(noteGroupsWith([], ['a', 'b']), 'a');
+    return g.length === 0 ? true : 'left a group of one: ' + JSON.stringify(g);
+  });
+  t('v79: a rename carries the group to the new pool key', () => {
+    const g = noteGroupsRenamed(noteGroupsWith([], ['blueberries frozen', 'blueberries']), 'blueberries frozen', 'blueberries fresh');
+    return (g.length === 1 && g[0].includes('blueberries fresh') && !g[0].includes('blueberries frozen'))
+      ? true : JSON.stringify(g);
+  });
+  t('v79: merging 2+ foods RECORDS the link (v78 recorded nothing)', () => {
+    const n0 = { 'Blueberries 100g': 'a', 'Blueberries fresh': 'b' };
+    const w = notesBatchWritePlan([nmManualPlan(LG_KEYS, n0, {})], n0, {}, []);
+    const g = w.groups.find(x => x.includes('blueberries'));
+    return (g && g.length === 4) ? true : 'the merge bound ' + JSON.stringify(w.groups);
+  });
+  t('v79: a 1-key merge still binds nothing', () => {
+    const n0 = { 'Oats 50g': 'a', 'Oats 90g': 'b' };
+    const w = notesBatchWritePlan(notesBatchCandidates(n0, {}), n0, {}, []);
+    return w.groups.length === 0 ? true : 'one item spawned a link: ' + JSON.stringify(w.groups);
+  });
+  t('v79: the merge undo un-binds exactly what it bound', () => {
+    const n0 = { 'Blueberries 100g': 'a' };
+    const w = notesBatchWritePlan([nmManualPlan(LG_KEYS, n0, {})], n0, {}, [['x', 'y']]);
+    return (w.undo.groups.length === 1 && w.undo.groups[0].join() === 'x,y')
+      ? true : 'the pre-image was not the whole prior array: ' + JSON.stringify(w.undo.groups);
+  });
+  t('v79 THE FIX: an all-servings save writes to every linked member', () => {
+    const src = String(saveNotesModal);
+    return (/noteGroupMembers\(pk\)/.test(src) && /members\.forEach/.test(src) && !/item\[pk\] = val/.test(src))
+      ? true : 'the save still writes to one key, so a linked food drifts on the next edit';
+  });
+  t('v79: the single-food combine reaches the group too', () =>
+    /noteGroupMembers\(plan\.key\)/.test(String(applyNotesConsolidation))
+      ? true : 'combining inside the modal desyncs a linked food');
+  t('v79: the read path is UNCHANGED — links are a write-time rule only', () =>
+    !/noteGroup/.test(String(resolveFoodNote))
+      ? true : 'resolveFoodNote now depends on groups; a lost group would blank a note');
+  t('v79: the modal admits when a serving note is hiding the shared one', () => {
+    const src = String(renderNotesScope);
+    return (/hiding the all-servings note/.test(src) && /dropServingOverride/.test(src) && /unlinkNoteGroup/.test(src))
+      ? true : 'the popup can still show stale text with no explanation';
+  });
+  t('v79: unlinking never deletes writing', () => {
+    const src = String(unlinkNoteGroup);
+    return (!/saveFoodNotes|saveFoodNotesItem/.test(src) && /saveNoteGroups/.test(src))
+      ? true : 'unlink touches note text';
+  });
+  t('v79: fixture links load through the same sanitizer the store uses', () =>
+    (loadNoteGroups().length === 1 && loadNoteGroups()[0].join() === 'oats,oats rolled')
+      ? true : JSON.stringify(loadNoteGroups()));
+
   // ── backup round-trip ──
   const parsedBackup = JSON.parse(buildBackupJSON().json);
   const norm = normalizeImportedBackupData(parsedBackup.data);
@@ -19848,6 +20151,18 @@ function runSelfTest() {
   t('backup: every check-in day survives', () => eq(Object.keys(norm.checkins).length, Object.keys(FX.checkins).length));
   t('backup: check-in values survive', () => eq(norm.checkins[D(1)] && norm.checkins[D(1)].c_overall, 5));
   t('backup: food notes survive', () => eq(norm.foodNotes && norm.foodNotes.Banana, 'fixture note'));
+  t('v79 backup: linked foods are exported', () =>
+    (parsedBackup.data.noteGroups && parsedBackup.data.noteGroups.length === 1
+      && parsedBackup.data.noteGroups[0].join() === 'oats,oats rolled')
+      ? true : 'noteGroups missing from the backup payload');
+  t('v79 backup: links survive the normalizer', () =>
+    (norm.noteGroups && norm.noteGroups[0].join() === 'oats,oats rolled') ? true : 'links did not round-trip');
+  t('v79 backup: an absent field normalizes to null, so a restore keeps live links', () =>
+    normalizeImportedBackupData({ entries: [] }).noteGroups === null
+      ? true : 'a pre-v79 backup would wipe the live links');
+  t('v79 backup: fst_note_groups is registered as covered, not device-local', () =>
+    (VB_COVERED_KEYS.includes('fst_note_groups') && !VB_DEVICE_LOCAL.includes('fst_note_groups'))
+      ? true : 'the key is not registered exactly once as covered');
   t('backup: item-level notes are exported', () => (parsedBackup.data.foodNotesItem && parsedBackup.data.foodNotesItem['oats'] === 'oats item note') ? true : 'foodNotesItem missing from backup payload');
   t('backup: item-level notes survive the normalizer', () => eq(norm.foodNotesItem && norm.foodNotesItem['oats'], 'oats item note'));
   t('backup: a pre-v73 file leaves item notes ALONE (null, not wiped)', () =>
