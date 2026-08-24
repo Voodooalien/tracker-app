@@ -4358,7 +4358,7 @@ try {
   </div>
 
   <div style="margin-left: auto; display: flex; align-items: center; gap: 4px;">
-    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v87</span>
+    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v88</span>
   </div>
 
   <div id="nav-more-tray" style="display:none; flex-basis:100%; flex-wrap:wrap; gap:4px; padding-top:6px; margin-top:4px; border-top:1px dashed rgba(255,255,255,0.18);">
@@ -18047,6 +18047,8 @@ const FM_FRONT_REGIONS = [
   { k:'forehead_c',  lbl:'Center forehead',       cx:150, cy:105, rx:17, ry:11 },
   { k:'temple_l',    lbl:'Left temple',           cx:84,  cy:145, rx:14, ry:20 },
   { k:'temple_r',    lbl:'Right temple',          cx:216, cy:145, rx:14, ry:20 },
+  { k:'brow_l',      lbl:'Left brow',             cx:117, cy:152, rx:18, ry:9  },
+  { k:'brow_r',      lbl:'Right brow',            cx:183, cy:152, rx:18, ry:9  },
   { k:'glabella',    lbl:'Between brows',         cx:150, cy:148, rx:14, ry:11 },
   { k:'eye_l',       lbl:'Left under-eye',        cx:116, cy:186, rx:20, ry:11 },
   { k:'eye_r',       lbl:'Right under-eye',       cx:184, cy:186, rx:20, ry:11 },
@@ -18055,7 +18057,9 @@ const FM_FRONT_REGIONS = [
   { k:'sinus_r',     lbl:'Right sinus',           cx:171, cy:203, rx:10, ry:12 },
   { k:'cheek_l',     lbl:'Left cheek',            cx:103, cy:224, rx:22, ry:24 },
   { k:'cheek_r',     lbl:'Right cheek',           cx:197, cy:224, rx:22, ry:24 },
-  { k:'mustache',    lbl:'Mustache area',         cx:150, cy:230, rx:20, ry:8 },
+  { k:'uplip_l',     lbl:'Left upper lip',        cx:131, cy:230, rx:11, ry:9 },
+  { k:'mustache',    lbl:'Upper lip centre',      cx:150, cy:230, rx:11, ry:8 },
+  { k:'uplip_r',     lbl:'Right upper lip',       cx:169, cy:230, rx:11, ry:9 },
   { k:'mouth',       lbl:'Around mouth',          cx:150, cy:250, rx:25, ry:12 },
   { k:'jaw_l',       lbl:'Left jawline',          cx:114, cy:268, rx:17, ry:12, rot:38 },
   { k:'jaw_r',       lbl:'Right jawline',         cx:186, cy:268, rx:17, ry:12, rot:-38 },
@@ -20312,6 +20316,32 @@ function runSelfTest() {
     ['l_nose_top', 'r_nose_top', 'l_neck_lymph', 'r_neck_lymph'].every(k => FM_REGION_BY_KEY[k])
       ? true : 'a new profile region is missing from a side');
   const FMS = fmRegionStats(FX.faceMap, '');
+  // v88: the two regions that were missing, plus a rename guard. Region keys are
+  // PERSISTED - every stored mark references one - so renaming a key orphans
+  // real marks silently. This pins the shipped set: adding is fine, renaming or
+  // removing fails here.
+  t('face map: brows and upper-lip sides exist on the front view', () => {
+    const want = ['brow_l', 'brow_r', 'uplip_l', 'uplip_r'];
+    const missing = want.filter(k => !FM_REGION_BY_KEY[k] || FM_REGION_BY_KEY[k].view !== 'front');
+    return missing.length ? 'missing or not front-view: ' + missing.join(', ') : true;
+  });
+  t('face map: no shipped region key was renamed or dropped', () => {
+    // marks in the wild reference these; adding new ones is fine
+    const shipped = ['hairline','forehead_ul','forehead_ur','forehead_ll','forehead_lr','forehead_c',
+      'temple_l','temple_r','glabella','eye_l','eye_r','nose','sinus_l','sinus_r','cheek_l','cheek_r',
+      'mustache','mouth','jaw_l','jaw_r','jaw_end_l','jaw_end_r','chin','neck',
+      'body_back','body_butt','body_general'];
+    const gone = shipped.filter(k => !FM_REGION_BY_KEY[k]);
+    return gone.length ? 'these keys vanished, orphaning stored marks: ' + gone.join(', ') : true;
+  });
+  t('face map: a mark on a new region is counted like any other', () => {
+    const marks = [{ id:'n1', region:'brow_l', food:'X', sev:2, date: today() },
+                   { id:'n2', region:'uplip_r', food:'X', sev:3, date: today() }];
+    const st = fmRegionStats(marks, '');
+    return (st.brow_l && st.brow_l.count === 1 && st.uplip_r && st.uplip_r.weight === 3)
+      ? true : JSON.stringify(st);
+  });
+
   t('face map: unfiltered stats aggregate all marks', () => eq(FMS.cheek_l.count + '|' + FMS.cheek_l.weight, '3|6'));
   const FMF = fmRegionStats(FX.faceMap, 'testchili'); // filter matching is case-insensitive
   t('face map: food filter is case-insensitive across views', () => eq(FMF.cheek_l.count + '|' + (FMF.l_jaw ? FMF.l_jaw.count : 0), '2|1'));
