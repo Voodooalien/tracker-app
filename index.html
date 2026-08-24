@@ -757,9 +757,10 @@
      renaming happen rarely and scoring happens every morning. */
   .ci-compact-row {
     display: flex; align-items: center; gap: 8px;
-    padding: 5px 9px; background: var(--bg); border-radius: 8px;
+    padding: 7px 10px; background: var(--bg); border-radius: 8px;
+    border: 1px solid var(--border);   /* they read as one mass without an edge */
   }
-  .ci-compact-row + .ci-compact-row { margin-top: 4px; }
+  .ci-compact-row + .ci-compact-row { margin-top: 7px; }
   .ci-compact-name {
     flex: 1 1 auto; min-width: 0; font-size: 12.5px; font-weight: 600;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -4357,7 +4358,7 @@ try {
   </div>
 
   <div style="margin-left: auto; display: flex; align-items: center; gap: 4px;">
-    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v86</span>
+    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v87</span>
   </div>
 
   <div id="nav-more-tray" style="display:none; flex-basis:100%; flex-wrap:wrap; gap:4px; padding-top:6px; margin-top:4px; border-top:1px dashed rgba(255,255,255,0.18);">
@@ -10099,7 +10100,7 @@ function setSeverity(symKey, value) {
     const existingNow = checkins[d];
     const allCiSyms = allCheckinSymptoms();
     const sym = allCiSyms.find(s => s.key === symKey);
-    if (sym) row.outerHTML = ciRowHTML(sym, d, existingNow, allCiSyms.map(s => s.key));
+    if (sym) row.outerHTML = ciRowFor(sym, d, existingNow, allCiSyms.map(s => s.key));
     cell.innerHTML = histDotHTML(existingNow[symKey]);
     updateTodayHero(); // ring + chips react without a tab rebuild
   } else {
@@ -10154,6 +10155,19 @@ function setCheckinDate(dateStr) {
 
 // One severity row — extracted so a score tap can re-render JUST its row
 // instead of rebuilding the whole tab (which reset the scroll position).
+// v87: ONE place decides which row builder is used, because two places did not
+// agree. setSeverity() patches just the tapped row for speed — and it called
+// ciRowHTML directly, so every score you tapped silently swapped that single row
+// to the CLASSIC layout while its neighbours stayed compact. The row changed
+// height under the thumb on each tap, and switching tabs re-rendered everything
+// compact again, so the list appeared to shuffle and re-settle by itself.
+// Any future partial-update path must call this, never a builder directly.
+function ciRowFor(sym, d, existing, allCiKeys) {
+  return _ciCompact
+    ? ciCompactRowHTML(sym, d, existing)
+    : ciRowHTML(sym, d, existing, allCiKeys);
+}
+
 function ciRowHTML(sym, d, existing, allCiKeys) {
   const cur = existing[sym.key] != null ? existing[sym.key] : null;
   const btns = [1,2,3,4,5].map(v => {
@@ -10233,9 +10247,7 @@ function renderCheckin() {
 
   const allCiSyms = allCheckinSymptoms();
   const allCiKeys = allCiSyms.map(s => s.key);
-  const symptomRows = allCiSyms.map(sym => _ciCompact
-    ? ciCompactRowHTML(sym, d, existing)
-    : ciRowHTML(sym, d, existing, allCiKeys)).join('');
+  const symptomRows = allCiSyms.map(sym => ciRowFor(sym, d, existing, allCiKeys)).join('');
 
   // ─── Build history matrix (Left-to-Right reading, up to 14 days) ───
   const histDates = Object.keys(checkins).sort().slice(-14);
@@ -19746,6 +19758,37 @@ function runSelfTest() {
     const h = ciCompactRowHTML(eviljs, today(), {});
     return (h.indexOf('<img') === -1 && h.indexOf('<b>bad') === -1 && h.indexOf('<script') === -1)
       ? true : 'unescaped metric name reached the markup';
+  });
+  // v87: the regression that shipped. setSeverity() patches the tapped row on
+  // its own and used the classic builder unconditionally, so a tapped row
+  // changed layout and height while its neighbours did not. Both paths go
+  // through ciRowFor now, and these hold them to producing the SAME row.
+  t('vitals row: the tap path and the full render agree in compact mode', () => {
+    const keep = _ciCompact;
+    try {
+      _ciCompact = true;
+      const viaHelper = ciRowFor(_ciSym, today(), { ci_probe: 3 }, ['ci_probe']);
+      const viaBuilder = ciCompactRowHTML(_ciSym, today(), { ci_probe: 3 });
+      return eq(viaHelper, viaBuilder);
+    } finally { _ciCompact = keep; }
+  });
+  t('vitals row: the tap path and the full render agree in classic mode', () => {
+    const keep = _ciCompact;
+    try {
+      _ciCompact = false;
+      const viaHelper = ciRowFor(_ciSym, today(), { ci_probe: 3 }, ['ci_probe']);
+      const viaBuilder = ciRowHTML(_ciSym, today(), { ci_probe: 3 }, ['ci_probe']);
+      return eq(viaHelper, viaBuilder);
+    } finally { _ciCompact = keep; }
+  });
+  t('vitals row: the two modes are genuinely different markup', () => {
+    const keep = _ciCompact;
+    try {
+      _ciCompact = true;  const c = ciRowFor(_ciSym, today(), {}, ['ci_probe']);
+      _ciCompact = false; const k = ciRowFor(_ciSym, today(), {}, ['ci_probe']);
+      return (c !== k && c.indexOf('ci-compact-row') > -1 && k.indexOf('checkin-symptom-row') > -1)
+        ? true : 'the mode switch is not actually switching anything';
+    } finally { _ciCompact = keep; }
   });
   t('compact vitals row: classic and compact drive the SAME setter', () => {
     const a = ciCompactRowHTML(_ciSym, today(), {}).indexOf("setSeverity('ci_probe',3)") > -1;
