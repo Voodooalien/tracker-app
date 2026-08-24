@@ -5574,7 +5574,7 @@ const CHECK_IN_SYMPTOMS = [
 // the anomaly engine — while overallCheckinKey() (Trials) found the same metric
 // a SECOND way, by matching /overall/i against the label. They agreed only by
 // luck: the key was minted from an older name ("Day Score") and the label was
-// later edited to "Overall Daily Score", so both happened to land. Renaming that
+// later edited to include that word, so both happened to land. Renaming that
 // metric to drop the one word would have left every trial quietly averaging its
 // other metrics instead of using this one as the verdict driver, with the
 // "drives verdict" badge simply gone and nothing else changed to hint at it.
@@ -7679,7 +7679,7 @@ function addEntry() {
     document.getElementById('inp-date').focus();
     return;
   }
-  // Multi-add: "eggs; spinach; rice waffle" logs three entries in one tap.
+  // Multi-add: "eggs; spinach; rice crumpet" logs three entries in one tap.
   // ';' is the separator because real food names contain commas.
   const foods = raw.split(';').map(s => canonicalFoodName(s.trim())).filter(Boolean);
   if (!foods.length) { document.getElementById('inp-food').focus(); return; }
@@ -10695,28 +10695,20 @@ function renderCorrelations() {
   const wrap = document.getElementById('corr-wrap');
   if (!wrap) return;
 
-  // ─── MANUALLY SET YOUR LABEL ORDER HERE ───
-  // Type the exact names/labels of your symptoms in the order you want them.
-  // This works for both Daily Scores and Custom Meal Tags.
-  const manualLabelOrder = [
-    "Calm",
-    "Focused",
-    "Energetic",
-    "Good Sleep",
-    "Overall Daily Score",
-    "Skin Reactions",
-    "Skin Chronic Flare",
-    "Bloating",
-    "Gas",
-    "Daily Pain Score",
-    "Daily Energy",
-    "Sleepy",
-    "Phlegm",
-    "S.Damage",
-    "Nose Reactions",
-    "Forehead Reactions",
-    "Back & Butt Reactions"
-  ];
+  // v86: this used to be a hand-typed list of ONE person's metric names, matched
+  // fuzzily against labels to order the columns. Two things were wrong with it.
+  //
+  // It put private data in the source, and Tracker.html is the PUBLIC artefact —
+  // deploy_to_pages.ps1 copies it straight to a world-readable index.html, so a
+  // list of somebody's tracked symptoms shipped with every single release.
+  //
+  // And it silently OVERRODE the order the user actually set. The up/down buttons
+  // on the Vitals screen write fst_checkin_order and orderedCheckinSymptoms()
+  // honours it everywhere else — then this one screen re-sorted the columns by a
+  // list baked in at build time, so reordering your metrics visibly did nothing
+  // here. That was a real bug hiding inside the privacy one.
+  //
+  // Both go away by DERIVING the order instead of declaring it.
 
   const allCheckins = loadCheckins();
   const allEntries  = loadMigrated();
@@ -10737,22 +10729,16 @@ function renderCorrelations() {
   const checkinDates = Object.keys(checkins).sort();
   const foods = [...new Set(entries.map(e => e.food))].filter(f => !q || f.toLowerCase().includes(q));
 
-  // --- Logic to sort by the Label/Name instead of Key ---
-  const sortByLabel = (a, b) => {
-    // Clean emojis from labels to match the text typed in manualLabelOrder
-    const cleanA = a.label.replace(/\p{Emoji}/gu, '').trim();
-    const cleanB = b.label.replace(/\p{Emoji}/gu, '').trim();
-    
-    let idxA = manualLabelOrder.findIndex(label => cleanA.includes(label) || label.includes(cleanA));
-    let idxB = manualLabelOrder.findIndex(label => cleanB.includes(label) || label.includes(cleanB));
-    
-    if (idxA === -1) idxA = 999;
-    if (idxB === -1) idxB = 999;
-    return idxA - idxB;
-  };
-
-  const checkinSyms = allCheckinSymptoms().sort(sortByLabel);
-  const logSyms = allSymptoms().sort(sortByLabel);
+  // Check-in metrics come in YOUR order — the one the up/down buttons on Vitals
+  // saved. No re-sorting here; that was the whole bug.
+  const checkinSyms = allCheckinSymptoms();
+  // Meal tags have no user-defined order, so lead with the positive ones via
+  // isPositiveLabel(), already the app's single definition of "positive", and
+  // keep everything else as it comes. Stable — equal ranks hold their position.
+  const logSyms = allSymptoms()
+    .map((sym, i) => ({ sym, i, pos: isPositiveLabel(sym.label) ? 0 : 1 }))
+    .sort((x, y) => x.pos - y.pos || x.i - y.i)
+    .map(x => x.sym);
 
   const dayHasLogTag = {};
   logSyms.forEach(sym => {
@@ -19569,7 +19555,7 @@ function runSelfTest() {
       ['🌿Goldenseal drops x11-13 drops pre-meal', 'supplement'],
       ['Topical skin balm', 'activity'],
       ['🥒Zafrine raw with skin 60-80g', 'food'],
-      ['🧇Waffle plain x1', 'food'],
+      ['🧇Crumpet plain x1', 'food'],
     ];
     const bad = cases.find(([f, exp]) => inferItemType(f) !== exp);
     return bad ? `${bad[0]} → ${inferItemType(bad[0])} (want ${bad[1]})` : true;
@@ -19785,7 +19771,7 @@ function runSelfTest() {
   t('overall metric: null when neither the key nor the word is present', () => {
     const keep = loadCheckinSyms;
     try {
-      loadCheckinSyms = () => [{ key: 'ci_phlegm', label: '🟢 Phlegm', emoji: '🟢', name: 'Phlegm' }];
+      loadCheckinSyms = () => [{ key: 'ci_other', label: '🟢 Some Metric', emoji: '🟢', name: 'Some Metric' }];
       return eq(overallCheckinKey(), null);
     } finally { loadCheckinSyms = keep; }
   });
