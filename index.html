@@ -1085,6 +1085,48 @@
 
 
   /* ── Daily trend arrows ── */
+  /* ── v89: daily musts ── */
+  .must-row {
+    display: flex; align-items: flex-start; gap: 10px; width: 100%;
+    padding: 11px 12px; margin-bottom: 7px;
+    background: var(--bg); border: 1px solid var(--border); border-radius: 10px;
+    font-family: inherit; font-size: 13.5px; color: var(--text);
+    text-align: left; cursor: pointer;
+  }
+  .must-row:disabled { cursor: default; opacity: .92; }
+  .must-box {
+    flex-shrink: 0; width: 22px; height: 22px; border-radius: 6px;
+    border: 2px solid var(--border); background: var(--card);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 900; font-size: 13px; color: transparent;
+  }
+  .must-row.is-done .must-box { background: var(--pos); border-color: var(--pos); color: #fff; }
+  .must-row.is-done .must-text { color: var(--muted); text-decoration: line-through; }
+  .must-text { min-width: 0; line-height: 1.4; }
+  .must-auto {
+    display: block; margin-top: 2px; font-size: 10.5px;
+    color: var(--muted); text-decoration: none; font-style: italic;
+  }
+  .must-edit {
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: 10px; padding: 10px; margin-bottom: 8px;
+  }
+  .must-edit-top { display: flex; align-items: center; gap: 6px; }
+  .must-edit-top input[type="text"] {
+    flex: 1 1 auto; min-width: 0; padding: 7px 9px; font-size: 13px; font-family: inherit;
+    border: 1.5px solid var(--border); border-radius: 7px; background: var(--card); color: var(--text);
+  }
+  .must-edit-auto { display: flex; align-items: center; gap: 6px; margin-top: 7px; flex-wrap: wrap; }
+  .must-edit-auto select {
+    flex: 1 1 190px; min-width: 0; font-size: 11.5px !important; padding: 5px 8px !important; margin-top: 0 !important;
+  }
+  .must-edit-auto input {
+    padding: 5px 8px; font-size: 12px; font-family: inherit;
+    border: 1.5px solid var(--border); border-radius: 6px; background: var(--card); color: var(--text);
+  }
+  .must-every { margin-top: 14px; font-size: 11.5px; color: var(--muted); line-height: 1.6; }
+  .must-every select { font-size: 11.5px !important; padding: 4px 8px !important; margin: 0 4px !important; width: auto !important; }
+
   /* ── v83: "since you last looked" digest ── */
   .dg-card { margin-bottom: 16px; border-left: 4px solid var(--w2); border-radius: 0 10px 10px 0; }
   .dg-head { font-size: 12.5px; font-weight: 800; margin-bottom: 8px; }
@@ -4358,7 +4400,7 @@ try {
   </div>
 
   <div style="margin-left: auto; display: flex; align-items: center; gap: 4px;">
-    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v88</span>
+    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v89</span>
   </div>
 
   <div id="nav-more-tray" style="display:none; flex-basis:100%; flex-wrap:wrap; gap:4px; padding-top:6px; margin-top:4px; border-top:1px dashed rgba(255,255,255,0.18);">
@@ -5264,6 +5306,16 @@ html body select.status-badge-select.status-toxic {
     <h3 style="margin:0 0 10px;">📋 Copy meal to…</h3>
     <div id="mealcopy-body" style="overflow-y:auto; flex:1;"></div>
     <div style="margin-top:14px; text-align:right;"><button onclick="closeMealCopy()" style="padding:8px 16px; border-radius:8px; border:1px solid var(--border); background:var(--card); color:var(--text); cursor:pointer;">Cancel</button></div>
+  </div>
+</div>
+
+<!-- ═══ Daily musts — v89 ═══ -->
+<div id="musts-modal-bg" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:10000; align-items:center; justify-content:center; padding:16px;" onclick="if(event.target===this)mustsClose()">
+  <div style="background:var(--card); color:var(--text); border-radius:14px; max-width:460px; width:100%; max-height:82vh; display:flex; flex-direction:column; padding:20px; box-shadow:0 20px 60px rgba(0,0,0,0.35);">
+    <h3 id="musts-head" style="margin:0 0 4px; font-size:17px;">Today's musts</h3>
+    <p style="font-size:11.5px; color:var(--muted); margin:0 0 14px;">Shown when you open the app, and again later while anything is outstanding.</p>
+    <div id="musts-body" style="overflow-y:auto; flex:1; padding-right:4px;"></div>
+    <div id="musts-foot" style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px; flex-wrap:wrap;"></div>
   </div>
 </div>
 
@@ -10389,6 +10441,14 @@ function renderCheckin() {
           <span class="today-chip ${ciFilled ? 'good' : 'warn'}" id="th-ci-chip">💓 ${ciFilled ? `${ciFilled} score${ciFilled === 1 ? '' : 's'} today` : 'no check-in yet'}</span>
           <button class="today-chip ${dueCount ? 'warn' : 'good'}" onclick="showTab('log')" title="Open Logs to mark them">${dueCount ? `⏳ ${dueCount} window${dueCount === 1 ? '' : 's'} due` : '✅ all windows marked'}</button>
           ${streakChip}
+          ${(() => {
+            // v89: the musts list is reachable on demand, not only when the
+            // popup decides it is owed.
+            const ms = mustsStatus(loadMusts(), loadMustsState(), loadMigrated(), checkins, today());
+            if (!ms.total) return '';
+            const all = ms.doneCount >= ms.total;
+            return `<button class="today-chip ${all ? 'good' : 'warn'}" onclick="mustsOpen(false)" title="Your daily musts">${all ? '✅' : '📋'} musts ${ms.doneCount}/${ms.total}</button>`;
+          })()}
           ${trialChip}
           ${backupChip}
         </div>
@@ -15127,6 +15187,247 @@ function renderVerdicts() {
   }).join('') || `<div class="card"><div class="empty"><span>🔍</span>No foods match.</div></div>`);
 }
 
+// ─── Daily musts (v89) ───────────────────────────────────────────────────────
+// A short list of things to do every day, shown as a popup when the app opens
+// and re-offered a few hours later while anything is still outstanding.
+//
+// It is a POPUP-ON-OPEN and not a notification, and that is a platform limit
+// rather than a shortcut. A PWA with no server cannot wake itself: background
+// push needs a server to push FROM, and Chrome removed the Notification Trigger
+// API that once allowed offline scheduling. Promising lock-screen reminders
+// would mean promising something that silently would not fire.
+//
+// Items may be MANUAL or LOG-BACKED. A log-backed item ticks itself only from
+// evidence already in the log — the same rule the trials use for adherence.
+// The app never claims you did something it cannot see.
+const MUSTS_EVERY_H_DEFAULT = 4;
+const MUSTS_AUTO_KINDS = [
+  { k: '',         label: 'Manual — I tick it myself' },
+  { k: 'newfoods', label: 'Auto — N first-ever foods logged today' },
+  { k: 'logged',   label: 'Auto — a named item logged today' },
+  { k: 'checkin',  label: 'Auto — today\'s check-in has any score' },
+];
+
+function loadMusts() {
+  try {
+    const v = JSON.parse(localStorage.getItem('fst_musts') || 'null');
+    if (v && Array.isArray(v.items)) return v;
+  } catch (e) {}
+  // Starter list, deliberately generic — edit it to whatever your day needs.
+  return { everyHours: MUSTS_EVERY_H_DEFAULT, items: [
+    { id: 'must_sun',  text: 'Sun exposure',              auto: '' },
+    { id: 'must_new',  text: 'Try 2 new foods, tiny amount', auto: 'newfoods', target: 2 },
+  ] };
+}
+function saveMusts(m) { localStorage.setItem('fst_musts', JSON.stringify(m)); }
+
+// Per-day tick state. Anything from an earlier day is dropped rather than
+// carried, so yesterday's ticks can never read as today's.
+function loadMustsState() {
+  try {
+    const v = JSON.parse(localStorage.getItem('fst_musts_state') || 'null');
+    if (v && typeof v === 'object' && v.date === today()) {
+      return { date: v.date, done: Array.isArray(v.done) ? v.done : [],
+               lastShown: Number(v.lastShown) || 0, snoozeUntil: Number(v.snoozeUntil) || 0 };
+    }
+  } catch (e) {}
+  return { date: today(), done: [], lastShown: 0, snoozeUntil: 0 };
+}
+function saveMustsState(st) { localStorage.setItem('fst_musts_state', JSON.stringify(st)); }
+
+// PURE. Does the log itself show this item was done on `dateStr`?
+function mustAutoDone(item, entries, checkins, dateStr) {
+  if (!item || !item.auto) return false;
+  const all = entries || [];
+  if (item.auto === 'newfoods') {
+    const need = Math.max(1, Number(item.target) || 2);
+    // first-ever = the food appears on no EARLIER date, which is the same
+    // definition foodExposureInfo() uses for a brand-new exposure
+    const earlier = new Set();
+    all.forEach(e => { if (e.date < dateStr) earlier.add(normFood(e.food)); });
+    const fresh = new Set();
+    all.forEach(e => {
+      if (e.date !== dateStr) return;
+      const n = normFood(e.food);
+      if (n && !earlier.has(n)) fresh.add(n);
+    });
+    return fresh.size >= need;
+  }
+  if (item.auto === 'logged') {
+    const target = normFood(item.match || item.text);
+    if (!target) return false;
+    return all.some(e => e.date === dateStr && foodMatchesTrial(e.food, target));
+  }
+  if (item.auto === 'checkin') {
+    const c = (checkins || {})[dateStr];
+    return !!(c && Object.keys(c).length);
+  }
+  return false;
+}
+
+// PURE. One row's status, so the popup and the chip cannot disagree.
+function mustsStatus(musts, state, entries, checkins, dateStr) {
+  const done = new Set((state && state.done) || []);
+  const rows = ((musts && musts.items) || []).map(it => {
+    const auto = mustAutoDone(it, entries, checkins, dateStr);
+    return { item: it, auto, done: auto || done.has(it.id) };
+  });
+  return { rows, doneCount: rows.filter(r => r.done).length, total: rows.length };
+}
+
+// PURE. Is the popup owed right now? Silent once everything is ticked.
+function mustsDue(musts, state, nowMs, entries, checkins, dateStr) {
+  const st = mustsStatus(musts, state, entries, checkins, dateStr);
+  if (!st.total || st.doneCount >= st.total) return false;
+  if (nowMs < ((state && state.snoozeUntil) || 0)) return false;
+  const gapMs = Math.max(1, Number(musts.everyHours) || MUSTS_EVERY_H_DEFAULT) * 3600000;
+  return nowMs >= (((state && state.lastShown) || 0) + gapMs);
+}
+
+let _mustsEditing = false;
+function mustsOpen(forceEdit) {
+  _mustsEditing = !!forceEdit;
+  const st = loadMustsState();
+  st.lastShown = Date.now();
+  saveMustsState(st);
+  renderMusts();
+  const bg = document.getElementById('musts-modal-bg');
+  if (bg) bg.style.display = 'flex';
+}
+function mustsClose() {
+  const bg = document.getElementById('musts-modal-bg');
+  if (bg) bg.style.display = 'none';
+  _mustsEditing = false;
+  renderCheckin();   // the hero chip reflects any ticks made
+}
+function mustsLater() {
+  const m = loadMusts();
+  const st = loadMustsState();
+  st.snoozeUntil = Date.now() + Math.max(1, Number(m.everyHours) || MUSTS_EVERY_H_DEFAULT) * 3600000;
+  saveMustsState(st);
+  mustsClose();
+  toast('Back in ' + (m.everyHours || MUSTS_EVERY_H_DEFAULT) + 'h');
+}
+function mustsToggle(id) {
+  const st = loadMustsState();
+  const i = st.done.indexOf(id);
+  if (i >= 0) st.done.splice(i, 1); else st.done.push(id);
+  saveMustsState(st);
+  renderMusts();
+  hapticTick();
+}
+function mustsSetEdit(on) { _mustsEditing = !!on; renderMusts(); }
+function mustsAddItem() {
+  const m = loadMusts();
+  m.items.push({ id: uid(), text: '', auto: '' });
+  saveMusts(m);
+  renderMusts();
+}
+function mustsDelete(id) {
+  const m = loadMusts();
+  m.items = m.items.filter(x => x.id !== id);
+  saveMusts(m);
+  renderMusts();
+}
+function mustsMove(id, dir) {
+  const m = loadMusts();
+  const i = m.items.findIndex(x => x.id === id);
+  const j = i + dir;
+  if (i < 0 || j < 0 || j >= m.items.length) return;
+  const t = m.items[i]; m.items[i] = m.items[j]; m.items[j] = t;
+  saveMusts(m);
+  renderMusts();
+}
+function mustsField(id, field, value) {
+  const m = loadMusts();
+  const it = m.items.find(x => x.id === id);
+  if (!it) return;
+  if (field === 'target') it.target = Math.max(1, parseInt(value, 10) || 1);
+  else it[field] = value;
+  saveMusts(m);
+  if (field === 'auto') renderMusts();   // the extra field appears or vanishes
+}
+function mustsEvery(h) {
+  const m = loadMusts();
+  m.everyHours = Math.max(1, parseInt(h, 10) || MUSTS_EVERY_H_DEFAULT);
+  saveMusts(m);
+  renderMusts();
+}
+
+function renderMusts() {
+  const body = document.getElementById('musts-body');
+  const head = document.getElementById('musts-head');
+  const foot = document.getElementById('musts-foot');
+  if (!body) return;
+  const m = loadMusts();
+  const st = loadMustsState();
+  const status = mustsStatus(m, st, loadMigrated(), loadCheckins(), today());
+
+  if (head) head.textContent = _mustsEditing
+    ? 'Edit your daily musts'
+    : `Today's musts — ${status.doneCount} of ${status.total}`;
+
+  if (!_mustsEditing) {
+    body.innerHTML = status.total ? status.rows.map(r => `
+      <button class="must-row ${r.done ? 'is-done' : ''}" onclick="mustsToggle('${r.item.id}')"
+        ${r.auto ? 'disabled title="Ticked from your log — nothing to do here"' : ''}>
+        <span class="must-box">${r.done ? '✓' : ''}</span>
+        <span class="must-text">${esc(r.item.text || '(unnamed)')}
+          ${r.auto ? `<span class="must-auto">auto · ${esc(mustAutoWhy(r.item))}</span>` : ''}</span>
+      </button>`).join('')
+      : `<div class="empty" style="padding:18px 6px;"><span>📋</span>No musts yet — add the things you want to do every day.</div>`;
+    if (foot) foot.innerHTML = `
+      <button class="bundle-secondary-btn" onclick="mustsSetEdit(true)">✏️ Edit list</button>
+      <button class="bundle-secondary-btn" onclick="mustsLater()">Later</button>
+      <button class="btn-primary" style="padding:8px 18px;" onclick="mustsClose()">Done</button>`;
+    return;
+  }
+
+  body.innerHTML = m.items.map((it, i) => `
+    <div class="must-edit">
+      <div class="must-edit-top">
+        <input type="text" value="${escAttr(it.text || '')}" placeholder="e.g. Sun exposure"
+          data-id="${escAttr(it.id)}" oninput="mustsField(this.dataset.id,'text',this.value)">
+        <button class="ci-move-btn" onclick="mustsMove('${it.id}',-1)" ${i === 0 ? 'disabled' : ''} title="Move up">↑</button>
+        <button class="ci-move-btn" onclick="mustsMove('${it.id}',1)" ${i === m.items.length - 1 ? 'disabled' : ''} title="Move down">↓</button>
+        <button class="delete-btn" onclick="mustsDelete('${it.id}')" title="Remove">✕</button>
+      </div>
+      <div class="must-edit-auto">
+        <select data-id="${escAttr(it.id)}" onchange="mustsField(this.dataset.id,'auto',this.value)">
+          ${MUSTS_AUTO_KINDS.map(k => `<option value="${k.k}" ${(it.auto || '') === k.k ? 'selected' : ''}>${esc(k.label)}</option>`).join('')}
+        </select>
+        ${it.auto === 'newfoods' ? `<input type="number" min="1" max="9" value="${escAttr(String(it.target || 2))}"
+            data-id="${escAttr(it.id)}" oninput="mustsField(this.dataset.id,'target',this.value)" style="width:64px;" title="How many new foods count as done">` : ''}
+        ${it.auto === 'logged' ? `<input type="text" value="${escAttr(it.match || '')}" placeholder="log name to match"
+            data-id="${escAttr(it.id)}" oninput="mustsField(this.dataset.id,'match',this.value)" title="Matched against your log the way a trial matches adherence">` : ''}
+      </div>
+    </div>`).join('') + `
+    <button class="bundle-secondary-btn" style="margin-top:10px;" onclick="mustsAddItem()">+ Add item</button>
+    <div class="must-every">
+      Ask again after
+      <select onchange="mustsEvery(this.value)">
+        ${[2,3,4,6,8].map(h => `<option value="${h}" ${(m.everyHours || MUSTS_EVERY_H_DEFAULT) === h ? 'selected' : ''}>${h} hours</option>`).join('')}
+      </select>
+      while anything is still outstanding. It stays quiet once the list is clear.
+    </div>`;
+  if (foot) foot.innerHTML = `<button class="btn-primary" style="padding:8px 18px;" onclick="mustsSetEdit(false)">Back to today</button>`;
+}
+function mustAutoWhy(it) {
+  if (it.auto === 'newfoods') return (it.target || 2) + ' first-ever foods logged today';
+  if (it.auto === 'logged')   return 'matched "' + (it.match || it.text) + '" in today\'s log';
+  if (it.auto === 'checkin')  return 'today\'s check-in has a score';
+  return '';
+}
+
+// Boot hook: offer the list when it is owed, off the paint path.
+function maybeShowMusts() {
+  try {
+    const m = loadMusts();
+    const st = loadMustsState();
+    if (mustsDue(m, st, Date.now(), loadMigrated(), loadCheckins(), today())) mustsOpen(false);
+  } catch (e) {}
+}
+
 // ─── Trials (n-of-1 elimination experiments) ─────────────────────────────────
 // A controlled test: avoid a food (elimination) → measure check-in scores vs a
 // pre-trial baseline → optionally reintroduce and watch for relapse. The app
@@ -19654,6 +19955,70 @@ function runSelfTest() {
   t('base food name strips prep + quantity + parens so variants group together', () =>
     baseFoodName('🍚Grain Zafra 75-100g (heated after fridge) [BrandCo]') === baseFoodName('🍚Grain Zafra 150g (micro) [BrandCo]')
       ? true : `${baseFoodName('🍚Grain Zafra 75-100g (heated after fridge) [BrandCo]')} != ${baseFoodName('🍚Grain Zafra 150g (micro) [BrandCo]')}`);
+  // ── v89: daily musts ──
+  // The auto-tick rules are the part that can lie, so they carry the tests: an
+  // item must never read as done on evidence the log does not contain.
+  const _mE = (daysAgo, food) => ({ id: 'mu' + daysAgo + food, date: D(daysAgo), food, logTime: '12:00', windows: {}, symptoms: {} });
+  // two words on purpose: foodMatchesTrial matches WHOLE WORDS, so a one-word
+  // name like 'OldStaple' would (correctly) not be found by 'staple' — the same
+  // rule that keeps an 'eggs' trial clear of 'eggplant'
+  const _mLog = [_mE(9, 'Old Staple'), _mE(3, 'Old Staple'), _mE(0, 'Old Staple')];
+
+  t('musts: a manual item never ticks itself', () =>
+    eq(mustAutoDone({ id: 'a', text: 'Sun exposure', auto: '' }, _mLog, {}, today()), false));
+  t('musts: new-foods counts only foods never logged before today', () => {
+    const log = _mLog.concat([_mE(0, 'BrandNewA'), _mE(0, 'BrandNewB')]);
+    return eq(mustAutoDone({ auto: 'newfoods', target: 2 }, log, {}, today()), true);
+  });
+  t('musts: a food eaten before does NOT count as new', () => {
+    // OldStaple appears today but also on earlier days, so it is not first-ever
+    const log = _mLog.concat([_mE(0, 'BrandNewA')]);
+    return eq(mustAutoDone({ auto: 'newfoods', target: 2 }, log, {}, today()), false);
+  });
+  t('musts: new-foods respects its own target', () => {
+    const log = _mLog.concat([_mE(0, 'BrandNewA')]);
+    return eq(mustAutoDone({ auto: 'newfoods', target: 1 }, log, {}, today()), true);
+  });
+  t('musts: the same new food twice in a day is still one food', () => {
+    const log = _mLog.concat([_mE(0, 'BrandNewA'), { id: 'dup', date: D(0), food: 'BrandNewA', logTime: '18:00', windows: {}, symptoms: {} }]);
+    return eq(mustAutoDone({ auto: 'newfoods', target: 2 }, log, {}, today()), false);
+  });
+  t('musts: a named item ticks from a word-level match, like trial adherence', () =>
+    eq(mustAutoDone({ auto: 'logged', match: 'staple' }, _mLog, {}, today()), true));
+  t('musts: a named item stays unticked when it is not in TODAY', () => {
+    const log = [_mE(3, 'OldStaple')];
+    return eq(mustAutoDone({ auto: 'logged', match: 'staple' }, log, {}, today()), false);
+  });
+  t('musts: the check-in item follows the real check-in', () => {
+    const withScore = { [today()]: { c_overall: 4 } };
+    return (mustAutoDone({ auto: 'checkin' }, [], withScore, today()) === true
+         && mustAutoDone({ auto: 'checkin' }, [], {}, today()) === false) ? true : 'checkin rule wrong';
+  });
+  t('musts: status merges manual ticks with auto ones', () => {
+    const m = { everyHours: 4, items: [{ id: 'x1', text: 'Manual', auto: '' }, { id: 'x2', auto: 'logged', match: 'staple' }] };
+    const st = mustsStatus(m, { done: ['x1'] }, _mLog, {}, today());
+    return (st.total === 2 && st.doneCount === 2 && st.rows[1].auto === true) ? true : JSON.stringify(st);
+  });
+
+  // when the popup is owed — the half that decides whether this nags or not
+  const _mM = { everyHours: 4, items: [{ id: 'x1', text: 'Manual', auto: '' }] };
+  t('musts: owed on the first open of a day', () =>
+    eq(mustsDue(_mM, { done: [], lastShown: 0, snoozeUntil: 0 }, 1e12, [], {}, today()), true));
+  t('musts: silent once everything is ticked', () =>
+    eq(mustsDue(_mM, { done: ['x1'], lastShown: 0, snoozeUntil: 0 }, 1e12, [], {}, today()), false));
+  t('musts: silent again right after it was shown', () =>
+    eq(mustsDue(_mM, { done: [], lastShown: 1e12 - 1000, snoozeUntil: 0 }, 1e12, [], {}, today()), false));
+  t('musts: owed again once the gap has passed', () =>
+    eq(mustsDue(_mM, { done: [], lastShown: 1e12 - 5 * 3600000, snoozeUntil: 0 }, 1e12, [], {}, today()), true));
+  t('musts: "Later" holds it off even past the gap', () =>
+    eq(mustsDue(_mM, { done: [], lastShown: 0, snoozeUntil: 1e12 + 60000 }, 1e12, [], {}, today()), false));
+  t('musts: an empty list never nags', () =>
+    eq(mustsDue({ everyHours: 4, items: [] }, { done: [], lastShown: 0 }, 1e12, [], {}, today()), false));
+  t('musts: an auto-satisfied list is silent without any manual tick', () => {
+    const m = { everyHours: 4, items: [{ id: 'x2', auto: 'logged', match: 'staple' }] };
+    return eq(mustsDue(m, { done: [], lastShown: 0, snoozeUntil: 0 }, 1e12, _mLog, {}, today()), false);
+  });
+
   // ── v83: the "since you last looked" diff ──
   t('digest: a food that moved verdict is reported, with both ends', () => {
     const c = digestChanges({ Rice: 'typical' }, { Rice: 'suspect' });
@@ -21145,6 +21510,10 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // Trial suggestion (heavy: full verdicts pass) — once, off the boot path.
     setTimeout(() => { computeTrialSuggestion(); renderTrialNudge(); }, 400);
+
+    // v89: offer the daily musts if they are owed. After the trial nudge so the
+    // two never race for the same moment, and off the paint path either way.
+    setTimeout(maybeShowMusts, 900);
 
     // PWA shortcut / deep link: long-press app icon → "Log a meal" / "Daily
     // check-in" (manifest shortcuts pass ?tab=log / ?tab=checkin).
