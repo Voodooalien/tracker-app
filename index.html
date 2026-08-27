@@ -4400,7 +4400,7 @@ try {
   </div>
 
   <div style="margin-left: auto; display: flex; align-items: center; gap: 4px;">
-    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v89</span>
+    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v90</span>
   </div>
 
   <div id="nav-more-tray" style="display:none; flex-basis:100%; flex-wrap:wrap; gap:4px; padding-top:6px; margin-top:4px; border-top:1px dashed rgba(255,255,255,0.18);">
@@ -19643,9 +19643,11 @@ function runSelfTest() {
 
   // 3. The suite.
   const results = [];
+  const _suiteT0 = performance.now();
   const t = (name, fn) => {
-    try { const r = fn(); results.push({ name, ok: r === true, detail: r === true ? '' : String(r) }); }
-    catch (e) { results.push({ name, ok: false, detail: 'threw: ' + (e && e.message) }); }
+    const _t0 = performance.now();
+    try { const r = fn(); results.push({ name, ok: r === true, detail: r === true ? '' : String(r), ms: performance.now() - _t0 }); }
+    catch (e) { results.push({ name, ok: false, detail: 'threw: ' + (e && e.message), ms: performance.now() - _t0 }); }
   };
   const eq = (got, want) => Object.is(got, want) ? true : `expected ${JSON.stringify(want)}, got ${JSON.stringify(got)}`;
   const close = (got, want, tol) => (typeof got === 'number' && Math.abs(got - want) <= (tol || 1e-9)) ? true : `expected ≈${want}, got ${JSON.stringify(got)}`;
@@ -21457,18 +21459,94 @@ function runSelfTest() {
   // 5. Report.
   const passed = results.filter(r => r.ok).length;
   const failed = results.length - passed;
+  const runMs = Math.round(performance.now() - _suiteT0);
+
+  // Which part of the app each test belongs to. Most names already read
+  // "area: what it checks", so the suite name is simply what precedes the first
+  // colon — no registry to keep in sync, and a new test joins its group by
+  // being named the way every test around it is already named. Anything without
+  // that shape lands in "core", which is exactly where the plain helper tests
+  // (addDays, normFood, esc) belong anyway.
+  const suiteOf = name => {
+    const i = name.indexOf(':');
+    if (i < 1 || i > 24) return 'core';
+    return name.slice(0, i).trim().toLowerCase();
+  };
+  const suites = {};
+  results.forEach(r => {
+    const k = suiteOf(r.name);
+    const g = suites[k] || (suites[k] = { n: 0, bad: 0, ms: 0 });
+    g.n++; g.ms += r.ms; if (!r.ok) g.bad++;
+  });
+  const allSuites = Object.entries(suites).sort((a, b) => b[1].n - a[1].n || a[0].localeCompare(b[0]));
+  // 60-odd raw groups is a wall, not an indicator: the names were never
+  // consistently namespaced, so a third of them hold a single test. Show the
+  // biggest, fold the long tail into one "other" chip. The counts still add up
+  // to the total, and "other" still filters — nothing is hidden, just grouped.
+  const TOP_SUITES = 12;
+  const topKeys = new Set(allSuites.slice(0, TOP_SUITES).map(x => x[0]));
+  const displaySuite = name => { const k = suiteOf(name); return topKeys.has(k) ? k : 'other'; };
+  const suiteList = allSuites.slice(0, TOP_SUITES);
+  const tailN = results.filter(r => !topKeys.has(suiteOf(r.name))).length;
+  const tailBad = results.filter(r => !r.ok && !topKeys.has(suiteOf(r.name))).length;
+  if (tailN) suiteList.push(['other', { n: tailN, bad: tailBad, ms: 0 }]);
+  const slowest = results.slice().sort((a, b) => b.ms - a.ms)[0];
+
   const rows = results.map(r =>
-    `<div style="padding:6px 10px; border-radius:6px; margin-bottom:4px; background:${r.ok ? 'rgba(39,174,96,0.10)' : 'rgba(231,76,60,0.14)'};">
+    `<div class="st-row" data-suite="${escAttr(displaySuite(r.name))}" data-ok="${r.ok ? '1' : '0'}"
+       style="padding:6px 10px; border-radius:6px; margin-bottom:4px; background:${r.ok ? 'rgba(39,174,96,0.10)' : 'rgba(231,76,60,0.14)'};">
        <span style="font-weight:800;">${r.ok ? '✅' : '❌'}</span> ${esc(r.name)}
+       <span class="st-ms">${r.ms >= 1 ? Math.round(r.ms) + 'ms' : ''}</span>
        ${r.ok ? '' : `<div style="margin:4px 0 0 26px; color:#E74C3C; font-weight:600;">${esc(r.detail)}</div>`}
      </div>`).join('');
+
+  const board = `
+    <div class="st-board">
+      <div class="st-tile"><b id="st-count">${results.length}</b><span>tests run</span></div>
+      <div class="st-tile ok"><b>${passed}</b><span>passed</span></div>
+      <div class="st-tile ${failed ? 'bad' : 'dim'}"><b>${failed}</b><span>failed</span></div>
+      <div class="st-tile"><b>${runMs}<i>ms</i></b><span>run time</span></div>
+      <div class="st-tile"><b>${allSuites.length}</b><span>suites</span></div>
+    </div>
+    <div class="st-bar" title="${passed} of ${results.length} passing">
+      <i style="width:${results.length ? (passed / results.length) * 100 : 0}%"></i>
+    </div>
+    <div class="st-chips">
+      <button class="st-chip is-on" data-filter="*">all <b>${results.length}</b></button>
+      ${suiteList.map(([k, g]) => `<button class="st-chip ${g.bad ? 'has-fail' : ''}" data-filter="${escAttr(k)}">${esc(k)} <b>${g.n}</b>${g.bad ? ` <s>${g.bad}✕</s>` : ''}</button>`).join('')}
+    </div>
+    <div class="st-note">Tap a suite to filter · showing the ${TOP_SUITES} largest of ${allSuites.length}${slowest && slowest.ms >= 1 ? ` · slowest: ${esc(slowest.name)} (${Math.round(slowest.ms)}ms)` : ''}</div>`;
   const overlay = document.createElement('div');
   overlay.id = 'selftest-report';
   overlay.style.cssText = 'position:fixed; inset:0; z-index:100000; overflow-y:auto; background:#101720; color:#E8EDF2; font-family:Consolas,Menlo,monospace; font-size:13px; padding:24px;';
   overlay.innerHTML = `
+    <style>
+      .st-board { display:grid; grid-template-columns:repeat(auto-fit,minmax(96px,1fr)); gap:1px; background:#22303F; border:1px solid #22303F; border-radius:10px; overflow:hidden; margin-bottom:12px; }
+      .st-tile { background:#16202B; padding:12px 14px; display:flex; flex-direction:column; gap:3px; }
+      .st-tile b { font-size:26px; font-weight:800; line-height:1; letter-spacing:-.5px; }
+      .st-tile b i { font-size:12px; font-weight:600; font-style:normal; color:#7E93A8; margin-left:2px; }
+      .st-tile span { font-size:10.5px; color:#8AA0B5; letter-spacing:.04em; text-transform:uppercase; }
+      .st-tile.ok b { color:#7DDBA3; }
+      .st-tile.bad b { color:#FF8A7A; }
+      .st-tile.dim b { color:#4E6070; }
+      .st-bar { height:5px; border-radius:3px; background:#E74C3C; overflow:hidden; margin-bottom:14px; }
+      .st-bar i { display:block; height:100%; background:linear-gradient(90deg,#4FB477,#7DDBA3); }
+      .st-chips { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px; }
+      .st-chip { font-family:inherit; font-size:11.5px; color:#B7C7D6; background:#16202B; border:1px solid #22303F; border-radius:999px; padding:5px 11px; cursor:pointer; }
+      .st-chip b { color:#E8EDF2; font-weight:800; margin-left:3px; }
+      .st-chip s { color:#FF8A7A; text-decoration:none; font-weight:800; }
+      .st-chip:hover { border-color:#3A7CA5; }
+      .st-chip.is-on { background:#3A7CA5; border-color:#3A7CA5; color:#fff; }
+      .st-chip.is-on b { color:#fff; }
+      .st-chip.has-fail { border-color:#7A3B34; }
+      .st-note { font-size:10.5px; color:#6F8598; margin-bottom:14px; }
+      .st-ms { float:right; color:#5F7488; font-size:10.5px; }
+      .st-row.is-hidden { display:none; }
+    </style>
     <div style="max-width:760px; margin:0 auto;">
       <div style="font-size:18px; font-weight:800; margin-bottom:4px;">🧪 Tracker self-test</div>
       <div style="color:#9FB2C4; margin-bottom:14px;">Canned fixtures only — your real data was not read by the tests and could not be written (all writes are blocked in this mode).</div>
+      ${board}
       <div style="font-size:15px; font-weight:800; margin-bottom:14px; color:${failed ? '#FF8A7A' : '#7DDBA3'};">
         ${failed ? `❌ ${failed} failed · ${passed} passed` : `✅ all ${passed} passed`}
       </div>
@@ -21476,6 +21554,38 @@ function runSelfTest() {
       <button onclick="location.href = location.pathname" style="margin-top:16px; background:#3A7CA5; color:#fff; border:none; border-radius:7px; padding:10px 18px; font-family:inherit; font-size:13px; font-weight:700; cursor:pointer;">← Back to the app</button>
     </div>`;
   document.body.appendChild(overlay);
+
+  // The headline number counts up on arrival — decoration over a number that is
+  // already correct in the markup. requestAnimationFrame does not fire in a
+  // throttled or background tab, and an animation that STARTS at zero would
+  // leave the headline reading "0 tests run" exactly when the tab is not in
+  // front. So the real total ships in the HTML, the animation is allowed to
+  // borrow it, and a timer puts it back regardless of whether rAF ever ran.
+  (function () {
+    const el = overlay.querySelector('#st-count');
+    if (!el) return;
+    const total = results.length, dur = 550, t0 = performance.now();
+    const settle = () => { el.textContent = total; };
+    const step = () => {
+      const p = Math.min(1, (performance.now() - t0) / dur);
+      el.textContent = Math.round(total * (1 - Math.pow(1 - p, 3)));   // ease-out
+      if (p < 1) requestAnimationFrame(step); else settle();
+    };
+    requestAnimationFrame(step);
+    setTimeout(settle, dur + 250);   // the number is right even if rAF never ticks
+  })();
+
+  // Suite chips filter the list in place.
+  overlay.querySelectorAll('.st-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      const want = chip.getAttribute('data-filter');
+      overlay.querySelectorAll('.st-chip').forEach(c => c.classList.toggle('is-on', c === chip));
+      overlay.querySelectorAll('.st-row').forEach(row => {
+        row.classList.toggle('is-hidden', want !== '*' && row.getAttribute('data-suite') !== want);
+      });
+    });
+  });
+
   document.title = (failed ? '❌ ' : '✅ ') + 'Tracker self-test';
 }
 
