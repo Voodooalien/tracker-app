@@ -2966,87 +2966,160 @@ body.dark.visual-theme-obsidian #toast {
   background:var(--bg); border:1px solid var(--border); color:var(--muted);
   font-size:10.5px; font-weight:800; display:inline-flex; align-items:center; justify-content:center;
 }
-/* face-map region modal */
+/* ── Face-map region modal — three-zone sheet (v91) ───────────────────────────
+   Head (region + search) and foot (selection + severity + Mark) are FIXED; only
+   the middle scrolls. Before this the modal body, the already-logged tag cloud
+   and the 320px pick list were three NESTED scroll areas, and the Mark button
+   sat below the list — ~620px down on a phone, and underneath the fixed JSON
+   bar (z 9999), which is why the backdrop now sits at 10000 like every other
+   modal in the app. */
 #fm-modal-bg {
-  display:none; position:fixed; inset:0; background:rgba(0,0,0,0.35);
-  z-index:500; align-items:center; justify-content:center;
+  display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45);
+  z-index:10000; align-items:center; justify-content:center;
 }
 #fm-modal-bg.open { display:flex; }
 #fm-modal {
-  background:var(--card); color:var(--text); border-radius:12px; padding:18px;
-  width:100%; max-width:460px; box-shadow:0 12px 40px rgba(0,0,0,0.25);
-  margin:16px; max-height:86vh; overflow-y:auto;
+  display:flex; flex-direction:column;
+  background:var(--card); color:var(--text); border-radius:14px;
+  width:100%; max-width:480px; box-shadow:0 18px 50px rgba(0,0,0,0.30);
+  margin:16px; max-height:88vh; overflow:hidden;
 }
-#fm-modal h3 { font-size:15px; font-weight:800; margin-bottom:2px; }
-#fm-modal .food-sub { font-size:12px; color:var(--muted); margin-bottom:12px; }
-/* Already-logged marks as compact, removable tags (was a tall list of rows) */
-.fm-mark-head {
-  font-size:10.5px; font-weight:800; text-transform:uppercase; letter-spacing:.05em;
-  color:var(--muted); margin:2px 0 7px;
+/* Phone: a bottom sheet that owns the screen. Fixed height (not max-height) so
+   the sheet does not jump as the list grows and shrinks under the search box. */
+@media (max-width:560px) {
+  #fm-modal-bg { align-items:flex-end; }
+  #fm-modal {
+    margin:0; max-width:none; border-radius:18px 18px 0 0;
+    height:92vh; max-height:92vh;
+  }
 }
-.fm-mark-tags { display:flex; flex-wrap:wrap; gap:6px; max-height:132px; overflow-y:auto; padding-bottom:2px; }
+@supports (height:100dvh) {
+  @media (max-width:560px) { #fm-modal { height:92dvh; max-height:92dvh; } }
+}
+.fm-sheet-head {
+  flex:0 0 auto; background:var(--card);
+  padding:14px 16px 13px; border-bottom:1px solid var(--border);
+}
+.fm-head-row { display:flex; align-items:flex-start; gap:10px; }
+.fm-head-titles { flex:1; min-width:0; }
+#fm-modal h3 { font-size:18px; font-weight:800; margin:0 0 3px; line-height:1.25; }
+#fm-modal .food-sub { font-size:13px; color:var(--muted); margin:0; line-height:1.35; }
+.fm-sheet-x {
+  flex:0 0 auto; width:40px; height:40px; margin:-3px -4px 0 0;
+  background:var(--bg); border:1.5px solid var(--border); border-radius:10px;
+  color:var(--muted); font-size:15px; font-weight:800; line-height:1; cursor:pointer;
+  transition:border-color .12s, color .12s;
+}
+.fm-sheet-x:hover { border-color:var(--neg); color:var(--neg); }
+#fm-add-input {
+  width:100%; margin-top:12px; padding:13px 14px;
+  border:1.5px solid var(--border); border-radius:10px;
+  background:var(--bg); color:var(--text); font-family:inherit;
+  /* 16px: anything smaller makes iOS Safari zoom the page on focus */
+  font-size:16px; font-weight:500;
+}
+#fm-add-input:focus { outline:none; border-color:var(--navy); background:var(--card); }
+/* The one and only scroll region. */
+.fm-sheet-body {
+  flex:1 1 auto; min-height:0; padding:12px 16px 18px;
+  overflow-y:auto; overscroll-behavior:contain; -webkit-overflow-scrolling:touch;
+}
+.fm-sheet-foot {
+  flex:0 0 auto; background:var(--card); border-top:1px solid var(--border);
+  padding:11px 16px calc(13px + env(safe-area-inset-bottom, 0px));
+  box-shadow:0 -6px 18px rgba(16,24,40,0.07);
+}
+/* Already-logged marks: a disclosure, closed on open, so the food list is the
+   first thing under the search box instead of ~400px down. */
+.fm-sub-marks {
+  display:inline-flex; align-items:center; gap:6px; padding:5px 10px; margin-left:2px;
+  background:var(--bg); border:1.5px solid var(--border); border-radius:999px;
+  font-family:inherit; font-size:12px; font-weight:800; color:var(--text);
+  cursor:pointer; transition:border-color .12s, background .12s;
+}
+.fm-sub-marks:hover { border-color:var(--navy); }
+.fm-sub-marks.open { border-color:var(--navy); background:var(--card); }
+.fm-mt-caret { font-size:9px; transition:transform .16s; }
+.fm-sub-marks.open .fm-mt-caret { transform:rotate(180deg); }
+.fm-mark-tags { display:flex; flex-wrap:wrap; gap:7px; margin:0 0 6px; }
 .fm-mtag {
-  display:inline-flex; align-items:center; gap:5px; padding:3px 5px 3px 9px;
-  border-radius:999px; font-size:12px; font-weight:700; color:var(--text);
+  display:inline-flex; align-items:center; gap:6px; padding:6px 5px 6px 12px;
+  border-radius:999px; font-size:13px; font-weight:700; color:var(--text);
   background:var(--bg); border:1px solid var(--border); border-left:4px solid var(--border);
 }
 .fm-mtag.s1 { border-left-color:var(--sev3); }
 .fm-mtag.s2 { border-left-color:var(--sev1); }
 .fm-mtag.s3 { border-left-color:var(--neg); }
 .fm-mtag i {
-  font-style:normal; font-weight:700; font-size:10px; color:var(--muted); background:var(--card);
-  border:1px solid var(--border); border-radius:999px; padding:1px 6px;
+  font-style:normal; font-weight:700; font-size:10.5px; color:var(--muted); background:var(--card);
+  border:1px solid var(--border); border-radius:999px; padding:2px 7px;
 }
-.fm-mtag-x { background:none; border:none; color:var(--muted); font-weight:800; font-size:12px; cursor:pointer; padding:0 2px; line-height:1; }
-.fm-mtag-x:hover { color:var(--neg); }
-.fm-mark-empty { font-size:12.5px; color:var(--muted); padding:2px 2px 6px; }
-.fm-add-h { font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); margin-bottom:8px; }
-.fm-add-wrap { margin-top:12px; border-top:1.5px dashed var(--border); padding-top:12px; }
-.fm-add-wrap input {
-  width:100%; padding:9px 12px; border:1.5px solid var(--border); border-radius:8px;
-  background:var(--bg); color:var(--text); font-family:inherit; font-size:13.5px;
+.fm-mtag-x {
+  width:28px; height:28px; flex:0 0 28px; background:none; border:none; border-radius:50%;
+  color:var(--muted); font-weight:800; font-size:13px; line-height:1; cursor:pointer;
+  transition:background .12s, color .12s;
 }
-.fm-add-wrap input:focus { outline:none; border-color:var(--navy); }
-.fm-pick-chips { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
-.fm-pick-chip {
-  display:inline-flex; align-items:center; gap:5px; background:var(--bg);
-  border:1.5px solid var(--navy); border-radius:999px; padding:4px 6px 4px 11px;
-  font-size:12.5px; font-weight:700; color:var(--text);
-}
-.fm-pick-chip button {
-  background:none; border:none; color:var(--muted); font-weight:800;
-  cursor:pointer; font-size:12px; padding:0 4px;
-}
-.fm-pick-chip button:hover { color:var(--neg); }
+.fm-mtag-x:hover { color:var(--neg); background:var(--card); }
+.fm-mark-empty { font-size:13px; color:var(--muted); line-height:1.45; padding:2px 2px 4px; }
+/* Picker list — no inner scroll any more; it flows in the body. */
 .fm-pick-list {
-  margin-top:8px; border:1.5px solid var(--border); border-radius:8px;
-  background:var(--card); max-height:min(320px, 42vh); overflow-y:auto;
+  margin-top:12px; border:1.5px solid var(--border); border-radius:10px; background:var(--card);
 }
 .fm-pick-item {
-  display:flex; align-items:center; gap:10px; padding:11px 12px;
-  font-size:14px; font-weight:600; cursor:pointer; border-bottom:1px solid var(--border);
+  display:flex; align-items:center; gap:12px; padding:12px 14px; min-height:54px;
+  font-size:15px; font-weight:600; cursor:pointer; border-bottom:1px solid var(--border);
   transition:background .1s;
 }
 .fm-pick-item:last-child { border-bottom:none; }
 .fm-pick-item:hover, .fm-pick-item.sel { background:var(--bg); }
 .fm-pick-box {
-  width:20px; height:20px; border:1.5px solid var(--border); border-radius:5px;
-  display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:800;
-  color:#fff; background:var(--card); flex:0 0 20px;
+  width:24px; height:24px; border:1.5px solid var(--border); border-radius:6px;
+  display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:800;
+  color:#fff; background:var(--card); flex:0 0 24px;
 }
 .fm-pick-item.sel .fm-pick-box { background:var(--navy); border-color:var(--navy); }
-.fm-sev-row { display:flex; gap:6px; margin:10px 0; }
+/* Foot: the pending selection, then severity, then the one button that commits. */
+/* The pending-selection tray. Capped so a big multi-pick cannot crowd out the
+   food list; it only ever scrolls past ~6 foods, and never chains that scroll
+   out to the page behind the sheet. */
+.fm-pick-chips {
+  display:flex; gap:7px; flex-wrap:wrap; max-height:78px; margin-bottom:10px;
+  overflow-y:auto; overscroll-behavior:contain; scrollbar-width:thin;
+}
+.fm-pick-chips::-webkit-scrollbar { width:5px; }
+.fm-pick-chips::-webkit-scrollbar-thumb { background:var(--border); border-radius:99px; }
+.fm-pick-chips::-webkit-scrollbar-track { background:transparent; }
+.fm-pick-chips:empty { display:none; }
+.fm-pick-chip {
+  display:inline-flex; align-items:center; gap:4px; background:var(--bg);
+  border:1.5px solid var(--navy); border-radius:999px; padding:6px 6px 6px 13px;
+  font-size:13px; font-weight:700; color:var(--text);
+}
+.fm-pick-chip button {
+  width:26px; height:26px; flex:0 0 26px; background:none; border:none; border-radius:50%;
+  color:var(--muted); font-weight:800; font-size:12px; line-height:1; cursor:pointer;
+  transition:background .12s, color .12s;
+}
+.fm-pick-chip button:hover { color:var(--neg); background:var(--card); }
+.fm-sev-row { display:flex; gap:8px; margin:0 0 10px; }
 .fm-sev-btn {
-  flex:1; background:var(--bg); border:1.5px solid var(--border); color:var(--muted);
-  border-radius:7px; padding:7px 4px; font-size:12px; font-weight:700;
+  flex:1; min-height:48px; background:var(--bg); border:1.5px solid var(--border); color:var(--muted);
+  border-radius:10px; padding:8px 5px; font-family:inherit; font-size:13.5px; font-weight:700;
   cursor:pointer; transition:all .12s; white-space:nowrap;
 }
-.fm-sev-btn.active { border-color:var(--navy); color:var(--text); background:var(--card); box-shadow:0 1px 5px rgba(16,24,40,0.12); }
-.fm-add-btn {
-  width:100%; background:var(--navy); color:#fff; border:none; border-radius:7px;
-  padding:10px; font-size:13px; font-weight:700; cursor:pointer; transition:opacity .15s;
+.fm-sev-btn.active {
+  border-color:var(--navy); border-width:2px; color:var(--text); background:var(--card);
+  box-shadow:0 2px 8px rgba(16,24,40,0.14);
 }
-.fm-add-btn:hover { opacity:.88; }
+.fm-add-btn {
+  width:100%; min-height:54px; background:var(--navy); color:#fff; border:none; border-radius:11px;
+  padding:14px; font-family:inherit; font-size:15.5px; font-weight:800; cursor:pointer;
+  transition:opacity .15s;
+}
+.fm-add-btn:hover { opacity:.9; }
+/* Nothing picked yet: dimmed and relabelled, but still tappable so the tap
+   explains itself with a toast instead of doing nothing. */
+.fm-add-btn.is-empty { opacity:.5; }
 /* ── Other-areas (non-facial) bullets + multi-select log bar ──────────────── */
 .fm-body-panel { max-width:340px; margin:14px auto 0; }
 .fm-body-h {
@@ -3084,43 +3157,64 @@ body.dark.visual-theme-obsidian #toast {
 }
 .fm-clear-sel:hover { border-color:var(--neg); color:var(--neg); }
 
-/* ── Log-modal fast pick: suspects-here + this-week window (v62) ──────────── */
-.fm-suspects-here { margin:2px 0 10px; }
+/* ── Log-modal fast pick: suspects-here + this-week window (v62, resized v91) ─ */
+.fm-suspects-here { margin:0 0 2px; }
+.fm-suspects-here:empty { display:none; }
 .fm-susp-h {
-  font-size:10.5px; font-weight:800; text-transform:uppercase; letter-spacing:.05em;
-  color:var(--muted); margin:2px 0 7px;
+  font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.05em;
+  color:var(--muted); margin:11px 0 7px;
 }
-.fm-susp-chips { display:flex; flex-wrap:wrap; gap:6px; }
+.fm-susp-chips {
+  display:flex; gap:8px; flex-wrap:nowrap; overflow-x:auto; overscroll-behavior-x:contain;
+  -webkit-overflow-scrolling:touch; scroll-snap-type:x proximity;
+  /* room for the .on chip's shadow, which an overflow box would otherwise clip */
+  padding:3px 2px 7px; margin:0 -2px;
+  scrollbar-width:thin;
+  -webkit-mask-image:linear-gradient(to right, #000 calc(100% - 28px), transparent);
+          mask-image:linear-gradient(to right, #000 calc(100% - 28px), transparent);
+}
+.fm-susp-chips::-webkit-scrollbar { height:5px; }
+.fm-susp-chips::-webkit-scrollbar-thumb { background:var(--border); border-radius:99px; }
+.fm-susp-chips::-webkit-scrollbar-track { background:transparent; }
 .fm-susp-chip {
-  display:inline-flex; align-items:center; gap:6px; background:var(--bg);
-  border:1.5px solid var(--border); border-radius:999px; padding:4px 11px 4px 6px;
-  font-size:12.5px; font-weight:700; color:var(--text); cursor:pointer; transition:all .12s;
-}
-.fm-susp-chip:hover { border-color:var(--navy); }
-.fm-susp-chip.on { border-color:var(--navy); background:var(--card); box-shadow:0 1px 5px rgba(16,24,40,0.12); }
-.fm-susp-box {
-  width:18px; height:18px; border-radius:5px; display:inline-flex; align-items:center;
-  justify-content:center; font-size:11px; font-weight:800; color:#fff; background:var(--navy);
-}
-.fm-susp-chip i { font-style:normal; font-weight:700; font-size:10px; color:var(--muted); }
-.fm-window-row { display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin:10px 0 0; }
-.fm-window-label {
-  font-size:10.5px; font-weight:800; text-transform:uppercase; letter-spacing:.05em;
-  color:var(--muted); margin-right:1px;
-}
-.fm-window-btn {
-  background:var(--bg); border:1.5px solid var(--border); color:var(--muted);
-  border-radius:999px; padding:5px 12px; font-size:12px; font-weight:700;
+  display:inline-flex; align-items:center; gap:8px; flex:0 0 auto; scroll-snap-align:start;
+  min-height:44px; background:var(--bg); white-space:nowrap;
+  border:1.5px solid var(--border); border-radius:999px; padding:6px 14px 6px 7px;
+  font-family:inherit; font-size:13.5px; font-weight:700; color:var(--text);
   cursor:pointer; transition:all .12s;
 }
-.fm-window-btn:hover { border-color:var(--navy); color:var(--navy-ink); }
-.fm-window-btn.active { background:var(--navy); border-color:var(--navy); color:#fff; }
+.fm-susp-chip:hover { border-color:var(--navy); }
+.fm-susp-chip.on {
+  border-color:var(--navy); border-width:2px; background:var(--card);
+  box-shadow:0 2px 8px rgba(16,24,40,0.14);
+}
+.fm-susp-box {
+  width:24px; height:24px; flex:0 0 24px; border-radius:7px; display:inline-flex;
+  align-items:center; justify-content:center; font-size:12px; font-weight:800;
+  color:#fff; background:var(--navy);
+}
+.fm-susp-chip i { font-style:normal; font-weight:700; font-size:11px; color:var(--muted); }
+.fm-window-row {
+  display:flex; gap:5px; margin:12px 0 0; padding:4px;
+  background:var(--bg); border:1.5px solid var(--border); border-radius:12px;
+}
+.fm-window-row:empty { display:none; }
+.fm-window-btn {
+  flex:1 1 0; min-width:0; min-height:42px; background:transparent; border:none;
+  border-radius:9px; padding:8px 4px; font-family:inherit; font-size:13px; font-weight:700;
+  color:var(--muted); cursor:pointer; white-space:nowrap; overflow:hidden;
+  text-overflow:ellipsis; transition:background .12s, color .12s;
+}
+.fm-window-btn:hover { color:var(--navy-ink); }
+.fm-window-btn.active { background:var(--navy); color:#fff; box-shadow:0 1px 4px rgba(16,24,40,0.20); }
+/* Sticky against the sheet body (the pick list has no overflow of its own, so
+   this is the nearest scrollport) — the day you are looking at stays named. */
 .fm-day-head {
   position:sticky; top:0; z-index:1; background:var(--card);
-  font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.06em;
-  color:var(--muted); padding:8px 12px 4px; border-bottom:1px solid var(--border);
+  font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.06em;
+  color:var(--muted); padding:10px 14px 6px; border-bottom:1px solid var(--border);
 }
-.fm-pick-none { padding:14px; font-size:12.5px; color:var(--muted); }
+.fm-pick-none { padding:20px 16px; font-size:13.5px; line-height:1.5; color:var(--muted); }
 
 /* ── Food Profile (v61) ── */
 .fm-profile-btn {
@@ -5394,26 +5488,34 @@ html body select.status-badge-select.status-toxic {
   </div>
 </div>
 
-<!-- ═══ Face-map region modal (v59) ═══ -->
+<!-- ═══ Face-map region modal (v59 · three-zone sheet v91) ═══ -->
 <div id="fm-modal-bg">
-  <div id="fm-modal">
-    <h3 id="fm-modal-title">Region</h3>
-    <div class="food-sub" id="fm-modal-sub"></div>
-    <div id="fm-modal-marks"></div>
-    <div class="fm-add-wrap">
-      <div class="fm-add-h">➕ Which foods reacted here?</div>
-      <div class="fm-suspects-here" id="fm-suspects-here"></div>
+  <div id="fm-modal" role="dialog" aria-modal="true" aria-labelledby="fm-modal-title">
+    <!-- FIXED head: where you tapped, and the fastest way to find a food -->
+    <div class="fm-sheet-head">
+      <div class="fm-head-row">
+        <div class="fm-head-titles">
+          <h3 id="fm-modal-title">Region</h3>
+          <div class="food-sub" id="fm-modal-sub"></div>
+        </div>
+        <button class="fm-sheet-x" type="button" onclick="closeFaceModal()" title="Close" aria-label="Close">✕</button>
+      </div>
       <input type="text" id="fm-add-input" placeholder="🔍 Search all your logged foods…" autocomplete="off"
              oninput="renderFmPickList()"
              onkeydown="if(event.key==='Enter'){event.preventDefault();fmPickTyped();}">
-      <div class="fm-pick-chips" id="fm-pick-chips"></div>
+    </div>
+    <!-- The ONE scrolling region -->
+    <div class="fm-sheet-body" id="fm-sheet-body">
+      <div id="fm-modal-marks"></div>
+      <div class="fm-suspects-here" id="fm-suspects-here"></div>
       <div class="fm-window-row" id="fm-window-row"></div>
       <div class="fm-pick-list" id="fm-pick-list"></div>
-      <div class="fm-sev-row" id="fm-sev-row"></div>
-      <button class="fm-add-btn" id="fm-add-btn" onclick="fmAddMark()">＋ Mark here</button>
     </div>
-    <div class="modal-actions" style="flex-direction:row; justify-content:flex-end;">
-      <button class="btn-cancel-note" onclick="closeFaceModal()">Done</button>
+    <!-- FIXED foot: what you picked, how bad, and the one button that commits -->
+    <div class="fm-sheet-foot">
+      <div class="fm-pick-chips" id="fm-pick-chips"></div>
+      <div class="fm-sev-row" id="fm-sev-row"></div>
+      <button class="fm-add-btn" id="fm-add-btn" type="button" onclick="fmAddMark()">＋ Mark here</button>
     </div>
   </div>
 </div>
@@ -18516,6 +18618,7 @@ let _fmView = 'front', _fmFilter = '', _fmSel = [], _fmSev = 2, _fmAnim = '', _f
 let _fmRemap = ''; // orphan food name whose inline "repoint to a logged food" picker is open
 let _fmPick = []; // foods selected in the region modal, waiting to be marked together
 let _fmWindow = 7; // log-modal "foods eaten in the last N days" window (7 / 14 / all); reset on open
+let _fmMarksOpen = false; // "Already logged here" disclosure — closed on open so the food list is the first thing you see
 // _fmSel = the spots (face regions + body areas) the user has tapped to select;
 // tapping toggles membership, then one "Log" opens the picker and marks them all.
 
@@ -18938,10 +19041,13 @@ function fmOpenLog() {
   if (!_fmSel.length) return;
   _fmPick = [];
   _fmWindow = 7; // always open on "this week" (the chosen default)
+  _fmMarksOpen = false;
   const inp = document.getElementById('fm-add-input');
   if (inp) inp.value = '';
   document.getElementById('fm-modal-bg').classList.add('open');
   renderFaceModal();
+  const body = document.getElementById('fm-sheet-body');
+  if (body) body.scrollTop = 0;
   renderFaceMap(); // keep the selected spots pulsing behind the modal
   setTimeout(() => { const i = document.getElementById('fm-add-input'); if (i && !('ontouchstart' in window)) i.focus(); }, 40);
 }
@@ -18960,9 +19066,13 @@ function renderFaceModal() {
   const r0 = FM_REGION_BY_KEY[keys[0]];
   const vw = FM_VIEWS.find(v => v.key === r0.view);
   const viewTxt = vw ? vw.label.replace('◀ ', '').replace(' ▶', '') + ' view' : 'Other area';
-  document.getElementById('fm-modal-sub').textContent = multi
-    ? labels.join(' · ')
-    : `${viewTxt} · ${marks.length ? marks.length + ' mark' + (marks.length === 1 ? '' : 's') : 'no marks yet'}`;
+  const subLead = multi ? labels.join(' · ') : viewTxt;
+  document.getElementById('fm-modal-sub').innerHTML = marks.length
+    ? `${esc(subLead)} · <button type="button" class="fm-sub-marks${_fmMarksOpen ? ' open' : ''}"
+         onclick="fmToggleMarks()" aria-expanded="${_fmMarksOpen ? 'true' : 'false'}"
+         title="Show the foods already marked ${multi ? 'on these spots' : 'here'}"
+         >${marks.length} already marked<span class="fm-mt-caret">▼</span></button>`
+    : `${esc(subLead)} · nothing marked here yet`;
   const mtag = m => {
     const n = m.sev === 1 || m.sev === 3 ? m.sev : 2;
     const tip = `${FM_SEVS[n - 1].label} · ${fmt(m.date)}${multi ? ' · ' + FM_REGION_BY_KEY[m.region].label : ''}`;
@@ -18971,9 +19081,10 @@ function renderFaceModal() {
       <button class="fm-mtag-x" data-id="${escAttr(m.id)}" onclick="fmDeleteMark(this.dataset.id)" title="Remove this mark">✕</button>
     </span>`;
   };
-  document.getElementById('fm-modal-marks').innerHTML = marks.length
-    ? `<div class="fm-mark-head">Already logged here · ${marks.length}</div><div class="fm-mark-tags">${marks.map(mtag).join('')}</div>`
-    : `<div class="fm-mark-empty">No foods linked ${multi ? 'to these spots' : 'here'} yet — add the ones you suspect below.</div>`;
+  // Collapsed by default: useful context, but not the job you opened this for.
+  // The subtitle's "N already marked" pill is the toggle.
+  document.getElementById('fm-modal-marks').innerHTML = marks.length && _fmMarksOpen
+    ? `<div class="fm-mark-tags">${marks.map(mtag).join('')}</div>` : '';
   document.getElementById('fm-sev-row').innerHTML = FM_SEVS.map(s =>
     `<button class="fm-sev-btn${s.sev === _fmSev ? ' active' : ''}" onclick="fmSetSev(${s.sev})">${s.label}</button>`).join('');
   renderFmPickChips();
@@ -18993,10 +19104,15 @@ function renderFmPickChips() {
     const nr = _fmSel.length, on = nr > 1 ? ` on ${nr} spots` : '';
     btn.textContent = _fmPick.length > 1 ? `＋ Mark ${_fmPick.length} foods${on}`
       : _fmPick.length === 1 ? `＋ Mark 1 food${on}`
-      : (nr > 1 ? `＋ Mark on ${nr} spots` : '＋ Mark here');
+      : (nr > 1 ? `Pick a food to mark on ${nr} spots` : 'Pick a food to mark here');
+    btn.classList.toggle('is-empty', _fmPick.length === 0);
   }
 }
-const FM_WINDOWS = [{ d: 7, l: 'This week' }, { d: 14, l: '2 weeks' }, { d: 3650, l: 'All foods' }];
+const FM_WINDOWS = [
+  { d: 7,    l: 'This week', t: 'Foods you ate in the last 7 days' },
+  { d: 14,   l: '2 weeks',   t: 'Foods you ate in the last 14 days' },
+  { d: 3650, l: 'All foods', t: 'Every food you have ever logged, A to Z' },
+];
 function fmSetWindow(days) { _fmWindow = days; renderFmPickList(); }
 
 // The modal food picker, rebuilt on every keystroke / toggle / window switch.
@@ -19029,7 +19145,7 @@ function renderFmPickList() {
   if (suspEl) {
     const susp = searching ? [] : fmSuspectsHere(loadFaceMap(), _fmSel).slice(0, 8);
     suspEl.innerHTML = susp.length
-      ? `<div class="fm-susp-h">⚡ Seen here before — tap to re-add</div><div class="fm-susp-chips">${susp.map(x => {
+      ? `<div class="fm-susp-h">⚡ Seen here before</div><div class="fm-susp-chips">${susp.map(x => {
           const on = sel.has(normFood(x.food));
           return `<button class="fm-susp-chip${on ? ' on' : ''}" data-food="${escAttr(x.food)}" onclick="fmTogglePick(this.dataset.food)" title="${x.count}× marked here">
             <span class="fm-susp-box">${on ? '✓' : '＋'}</span>${esc(x.food)}<i>${x.count}×</i></button>`;
@@ -19040,8 +19156,11 @@ function renderFmPickList() {
   // 2. Window toggle
   const winEl = document.getElementById('fm-window-row');
   if (winEl) {
-    winEl.innerHTML = searching ? '' : `<span class="fm-window-label">Eaten:</span>` + FM_WINDOWS.map(o =>
-      `<button class="fm-window-btn${_fmWindow === o.d ? ' active' : ''}" onclick="fmSetWindow(${o.d})">${o.l}</button>`).join('');
+    winEl.setAttribute('role', 'group');
+    winEl.setAttribute('aria-label', 'Show foods you ate in');
+    winEl.innerHTML = searching ? '' : FM_WINDOWS.map(o =>
+      `<button type="button" class="fm-window-btn${_fmWindow === o.d ? ' active' : ''}" onclick="fmSetWindow(${o.d})"
+         aria-pressed="${_fmWindow === o.d ? 'true' : 'false'}" title="${escAttr(o.t)}">${o.l}</button>`).join('');
   }
 
   // 3a. Search mode — full catalog filtered, recent matches floated to the top.
@@ -19105,6 +19224,7 @@ function fmPickTyped() {
   renderFmPickChips();
   renderFmPickList();
 }
+function fmToggleMarks() { _fmMarksOpen = !_fmMarksOpen; renderFaceModal(); }
 function fmSetSev(n) { _fmSev = n === 1 || n === 3 ? n : 2; renderFaceModal(); }
 function fmAddMark() {
   const regions = _fmSel.filter(k => FM_REGION_BY_KEY[k]);
