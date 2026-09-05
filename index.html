@@ -3211,9 +3211,21 @@ body.dark.visual-theme-obsidian #toast {
    this is the nearest scrollport) — the day you are looking at stays named. */
 .fm-day-head {
   position:sticky; top:0; z-index:1; background:var(--card);
+  display:flex; align-items:center; gap:10px;
   font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.06em;
-  color:var(--muted); padding:10px 14px 6px; border-bottom:1px solid var(--border);
+  color:var(--muted); padding:6px 7px 6px 14px; border-bottom:1px solid var(--border);
 }
+/* Blame a whole day in one tap. Lives IN the day header, so it costs the food
+   list no vertical space of its own. */
+.fm-day-all {
+  margin-left:auto; flex:0 0 auto; min-height:34px; padding:6px 13px;
+  background:var(--bg); border:1.5px solid var(--border); border-radius:999px;
+  font-family:inherit; font-size:11.5px; font-weight:800; letter-spacing:0;
+  text-transform:none; color:var(--text); cursor:pointer; white-space:nowrap;
+  transition:all .12s;
+}
+.fm-day-all:hover { border-color:var(--navy); }
+.fm-day-all.on { background:var(--navy); border-color:var(--navy); color:#fff; }
 .fm-pick-none { padding:20px 16px; font-size:13.5px; line-height:1.5; color:var(--muted); }
 
 /* ── Food Profile (v61) ── */
@@ -19003,6 +19015,53 @@ function fmRecentFoods(entries, days) {
   });
   return Object.values(per).sort((a, b) => a.ago - b.ago || a.food.localeCompare(b.food));
 }
+// Every food logged on each of the last `days` days, keyed by how many days ago
+// (0 = today), canonical spelling, A-Z, deduped within a day. PURE.
+//
+// Deliberately NOT derived from fmRecentFoods: that one lists a food ONLY under
+// its most recent day, which is right for browsing but wrong for blame. If you
+// ate a staple yesterday AND three days ago, "blame everything from three days
+// ago" must still reach it - otherwise the food you eat most often, the very one
+// most likely to be the culprit, is the one that quietly escapes.
+function fmFoodsByDay(entries, days) {
+  const t = parseYMD(today());
+  const per = {};
+  (entries || []).forEach(e => {
+    if (!e || !e.food || !e.date) return;
+    const ago = Math.round((t - parseYMD(e.date)) / 86400000);
+    if (ago < 0 || ago >= days) return;
+    const k = normFood(e.food);
+    if (!k) return;
+    if (!per[ago]) per[ago] = {};
+    if (!(k in per[ago])) per[ago][k] = e.food;
+  });
+  const out = {};
+  Object.keys(per).forEach(a => {
+    out[a] = Object.values(per[a]).sort((x, y) => x.localeCompare(y));
+  });
+  return out;
+}
+// The marks a commit should actually create: one per food x spot, minus any pair
+// already marked on the SAME DAY. Blaming three days that share a food therefore
+// stamps it once, not three times. A repeat on a LATER day is kept on purpose -
+// that recurrence is the whole signal behind the "N x" counts in "Seen here
+// before" and behind the suspect ranking. PURE.
+function fmNewMarks(marks, foods, regions, sev, dateStr) {
+  const SEP = String.fromCharCode(31); // unit separator: cannot occur in a food name
+  const key = (reg, food) => reg + SEP + normFood(food);
+  const seen = new Set((marks || [])
+    .filter(m => m && m.date === dateStr)
+    .map(m => key(m.region, m.food)));
+  const add = [];
+  let skipped = 0;
+  (foods || []).forEach(f => (regions || []).forEach(reg => {
+    const k = key(reg, f);
+    if (seen.has(k)) { skipped++; return; }
+    seen.add(k);
+    add.push({ region: reg, food: f, sev: sev, date: dateStr });
+  }));
+  return { add, skipped };
+}
 // Human day header for the recent list. Within the widest window (14d) a plain
 // "N days ago" reads fine; Today/Yesterday get names.
 function fmDayLabel(ago) {
@@ -19196,12 +19255,47 @@ function renderFmPickList() {
     el.innerHTML = `<div class="fm-pick-none">Nothing logged in the last ${_fmWindow} days. Try “All foods”, or search above.</div>`;
     return;
   }
+  // Each day header carries a one-tap "blame this whole day". Its count is the
+  // day's REAL total, which can exceed the rows printed under it - a food eaten
+  // again since is listed higher up, under its more recent day, and ticks there.
+  const byDay = fmFoodsByDay(loadMigrated(), _fmWindow);
   let html = '', lastAgo = -1;
   recent.forEach(x => {
-    if (x.ago !== lastAgo) { html += `<div class="fm-day-head">${esc(fmDayLabel(x.ago))}</div>`; lastAgo = x.ago; }
+    if (x.ago !== lastAgo) {
+      const all = byDay[x.ago] || [];
+      const on = all.length > 0 && all.every(f => sel.has(normFood(f)));
+      const label = fmDayLabel(x.ago).toLowerCase();
+      const extra = all.length - recent.filter(r => r.ago === x.ago).length;
+      const tip = `Mark every food you ate ${label} (${all.length})`
+        + (extra > 0 ? ` - ${extra} of them ${extra === 1 ? 'is' : 'are'} listed higher up, under a more recent day` : '');
+      html += `<div class="fm-day-head">${esc(fmDayLabel(x.ago))}
+        <button type="button" class="fm-day-all${on ? ' on' : ''}" data-ago="${x.ago}"
+          onclick="fmToggleDay(+this.dataset.ago)" aria-pressed="${on ? 'true' : 'false'}"
+          title="${escAttr(tip)}">${on ? '✓' : '＋'} all ${all.length}</button></div>`;
+      lastAgo = x.ago;
+    }
     html += row(x.food, chipFor(x.food));
   });
   el.innerHTML = html;
+}
+// One tap = every food eaten that day. Already-picked foods are left alone, so
+// blaming two overlapping days never toggles a shared food back off. Tapping a
+// fully-picked day clears exactly that day's foods again.
+function fmToggleDay(ago) {
+  const foods = (fmFoodsByDay(loadMigrated(), ago + 1)[ago] || []).filter(f => fmKnownMatch(f));
+  if (!foods.length) { toast('Nothing logged that day'); return; }
+  const picked = new Set(_fmPick.map(f => normFood(f)));
+  if (foods.every(f => picked.has(normFood(f)))) {
+    const drop = new Set(foods.map(f => normFood(f)));
+    _fmPick = _fmPick.filter(f => !drop.has(normFood(f)));
+  } else {
+    foods.forEach(f => {
+      const k = normFood(f);
+      if (!picked.has(k)) { _fmPick.push(f); picked.add(k); }
+    });
+  }
+  renderFmPickChips();
+  renderFmPickList();
 }
 function fmTogglePick(food) {
   const k = normFood(food);
@@ -19241,17 +19335,30 @@ function fmAddMark() {
   const foods = [...new Set(_fmPick.map(f => fmKnownMatch(f)).filter(Boolean))];
   if (!foods.length) { toast('Pick at least one logged food first'); return; }
   const marks = loadFaceMap();
-  foods.forEach(f => regions.forEach(reg =>
-    marks.unshift({ id: uid(), region: reg, food: f, sev: _fmSev, date: today() })));
-  saveFaceMap(marks);
+  const plan = fmNewMarks(marks, foods, regions, _fmSev, today());
+  const addedFoods = new Set(plan.add.map(m => m.food));
+  if (plan.add.length) {
+    plan.add.forEach(m => marks.unshift({ id: uid(), region: m.region, food: m.food, sev: m.sev, date: m.date }));
+    saveFaceMap(marks);
+  }
   _fmPick = [];
   if (inp) inp.value = '';
   renderFaceModal();
   renderFaceMap();
-  const nf = foods.length, nr = regions.length;
-  toast(nr === 1
-    ? (nf === 1 ? `${foods[0]} marked ✓` : `${nf} foods marked ✓`)
-    : `${nf} food${nf === 1 ? '' : 's'} × ${nr} spots marked ✓`);
+  if (!addedFoods.size) {
+    toast(plan.skipped === 1 ? 'Already marked here today — nothing to add'
+      : `All ${plan.skipped} already marked here today — nothing to add`);
+    return;
+  }
+  const nf = addedFoods.size, nr = regions.length;
+  const tail = plan.skipped ? ` · ${plan.skipped} already marked today` : '';
+  // "N foods x M spots" only holds when nothing was skipped; once a pair drops
+  // out, the product overstates what was written, so report the marks instead.
+  toast((nr === 1
+    ? (nf === 1 ? `${[...addedFoods][0]} marked ✓` : `${nf} foods marked ✓`)
+    : plan.skipped
+      ? `${plan.add.length} mark${plan.add.length === 1 ? '' : 's'} added ✓`
+      : `${nf} food${nf === 1 ? '' : 's'} × ${nr} spots marked ✓`) + tail);
 }
 function fmDeleteMark(id) {
   const marks = loadFaceMap();
@@ -20860,6 +20967,60 @@ function runSelfTest() {
   });
   t('face map: suspects-here excludes orphan (unlogged) foods', () =>
     fmSuspectsHere(FX.faceMap, ['chin']).length === 0 ? true : 'orphan Zeoli leaked into suspects-here');
+
+  // v92: blame a whole day, and never stamp one food twice for one log.
+  t('blame-day: lists every food eaten on that day, A-Z', () =>
+    eq((fmFoodsByDay(FX.entries, 5)[1] || []).join(','), 'Banana,TestChili'));
+  t('blame-day: a day with one food still lists it', () =>
+    eq((fmFoodsByDay(FX.entries, 6)[5] || []).join(','), 'Banana'));
+  t('blame-day: a day with nothing logged is absent', () =>
+    fmFoodsByDay(FX.entries, 8)[6] === undefined ? true : 'D6 should have no foods');
+  t('blame-day: unlike the browse list, a repeat food appears under EVERY day', () => {
+    const by = fmFoodsByDay(FX.entries, 4);
+    const everyDay = [0, 1, 2, 3].every(a => (by[a] || []).indexOf('Banana') >= 0);
+    // the browse list shows Banana once, under D0 only - that is the difference
+    const browseOnce = fmRecentFoods(FX.entries, 4).filter(x => x.food === 'Banana').length;
+    return everyDay && browseOnce === 1
+      ? true : 'expected Banana on all 4 days but once in the browse list, got ' + browseOnce;
+  });
+  t('blame-day: the window is exclusive of its far edge', () =>
+    fmFoodsByDay(FX.entries, 5)[5] === undefined ? true : 'D5 must fall outside a 5-day window');
+  t('dedupe: three overlapping days stamp a shared food once', () => {
+    const by = fmFoodsByDay(FX.entries, 4);
+    const picked = [...new Set([].concat(by[1], by[2], by[3]))];  // what blaming D1+D2+D3 selects
+    const r = fmNewMarks([], picked, ['cheek_l'], 2, today());
+    const banana = r.add.filter(m => m.food === 'Banana').length;
+    return banana === 1 && r.add.length === 2 && r.skipped === 0
+      ? true : 'expected 1 Banana of 2 marks, got ' + JSON.stringify(r.add);
+  });
+  t('dedupe: a food already marked at that spot TODAY is skipped', () => {
+    const prior = [{ id: 'x', region: 'cheek_l', food: 'Banana', sev: 1, date: today() }];
+    const r = fmNewMarks(prior, ['Banana', 'Oats'], ['cheek_l'], 3, today());
+    return r.skipped === 1 && r.add.length === 1 && r.add[0].food === 'Oats'
+      ? true : 'expected Banana skipped, got ' + JSON.stringify(r);
+  });
+  t('dedupe: the same food on an EARLIER day is marked again (repeats are signal)', () => {
+    const prior = [{ id: 'x', region: 'cheek_l', food: 'Banana', sev: 1, date: D(1) }];
+    const r = fmNewMarks(prior, ['Banana'], ['cheek_l'], 3, today());
+    return r.add.length === 1 && r.skipped === 0
+      ? true : 'a repeat on a later day must still be marked';
+  });
+  t('dedupe: it is per SPOT, so a second spot still gets its own mark', () => {
+    const prior = [{ id: 'x', region: 'cheek_l', food: 'Banana', sev: 1, date: today() }];
+    const r = fmNewMarks(prior, ['Banana'], ['cheek_l', 'chin'], 2, today());
+    return r.add.length === 1 && r.add[0].region === 'chin' && r.skipped === 1
+      ? true : 'expected only the chin mark, got ' + JSON.stringify(r.add);
+  });
+  t('dedupe: case variants of one food collapse to a single mark', () => {
+    const r = fmNewMarks([], ['Banana', 'banana', 'BANANA'], ['cheek_l'], 2, today());
+    return r.add.length === 1 && r.skipped === 2
+      ? true : 'expected 1 mark and 2 skips, got ' + JSON.stringify(r);
+  });
+  t('dedupe: marks it plans carry the spot, food, severity and date', () => {
+    const r = fmNewMarks([], ['Oats'], ['chin'], 3, D(0));
+    const m = r.add[0];
+    return eq([m.region, m.food, m.sev, m.date].join('|'), ['chin', 'Oats', 3, D(0)].join('|'));
+  });
 
   // ── food profile ──
   t('food profile: basics count logs, days and dates', () => {
