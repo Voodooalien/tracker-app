@@ -13564,6 +13564,41 @@ function fmtDayShort(dateStr) {
   return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
 }
 
+// ── Diet changes between two weeks (v93) ──
+// The test used to be yes/no: "was it eaten at all last week?" So a single try
+// late in the previous week made a food that was then taken daily read as "no
+// change", and it never reached Added. Now a food logged on at most
+// WEEKLY_REINTRO_PREV_MAX_DAYS days last week and on WEEKLY_REINTRO_MIN_DAYS or
+// more days this week is a change as well: re-introduced, badged NEW.
+// Counted in DAYS, not logs: two doses on one day are still one try.
+// 2 days is enough: coming back for a second day after a one-off try is
+// already a return. The note prints both counts, so a light return reads as one.
+const WEEKLY_REINTRO_PREV_MAX_DAYS = 1;
+const WEEKLY_REINTRO_MIN_DAYS = 2;
+// PURE — self-tested. cur/prev are the two weeks' entries. Case-insensitive:
+// "Oat milk" and "oat milk" used to show as one Added plus one Removed.
+function weeklyDietChanges(cur, prev) {
+  const byName = list => {
+    const m = new Map();   // normFood key -> { name: first spelling seen, days }
+    list.forEach(e => {
+      const k = normFood(e.food);
+      if (!m.has(k)) m.set(k, { name: e.food, days: new Set() });
+      m.get(k).days.add(e.date);
+    });
+    return m;
+  };
+  const curM = byName(cur), prevM = byName(prev);
+  const reintro = {};
+  curM.forEach((c, k) => {
+    const p = prevM.get(k);
+    if (p && p.days.size <= WEEKLY_REINTRO_PREV_MAX_DAYS && c.days.size >= WEEKLY_REINTRO_MIN_DAYS)
+      reintro[c.name] = { prevDays: p.days.size, curDays: c.days.size };
+  });
+  const added = [...curM].filter(([k, c]) => !prevM.has(k) || reintro[c.name]).map(([, c]) => c.name);
+  const dropped = [...prevM].filter(([k]) => !curM.has(k)).map(([, p]) => p.name);
+  return { added, dropped, reintro };
+}
+
 function computeWeekly(offset) {
   const curTo = addDays(today(), -offset * 7);
   const curFrom = addDays(curTo, -6);
@@ -13599,12 +13634,7 @@ function computeWeekly(offset) {
   const entries = loadMigrated();
   const cur = entries.filter(e => inRange(e.date, curFrom, curTo));
   const prev = entries.filter(e => inRange(e.date, prevFrom, prevTo));
-  // case-insensitive compare — "Oat milk"→"oat milk" used to show as one
-  // Added plus one Removed
-  const curFoodMap = new Map(); cur.forEach(e => { if (!curFoodMap.has(normFood(e.food))) curFoodMap.set(normFood(e.food), e.food); });
-  const prevFoodMap = new Map(); prev.forEach(e => { if (!prevFoodMap.has(normFood(e.food))) prevFoodMap.set(normFood(e.food), e.food); });
-  const added = [...curFoodMap.keys()].filter(k => !prevFoodMap.has(k)).map(k => curFoodMap.get(k));
-  const dropped = [...prevFoodMap.keys()].filter(k => !curFoodMap.has(k)).map(k => prevFoodMap.get(k));
+  const { added, dropped, reintro } = weeklyDietChanges(cur, prev);
 
   let scored = 0, pending = 0;
   cur.forEach(e => WINDOWS.forEach(w => {
@@ -13670,7 +13700,7 @@ function computeWeekly(offset) {
     best: dayAvgs[0] || null, worst: dayAvgs[dayAvgs.length - 1] || null,
     mealsCur: cur.length, mealsPrev: prev.length,
     scoredPct: (scored + pending) ? Math.round(scored / (scored + pending) * 100) : null,
-    checkinDays, added, dropped, suspects: suspects.slice(0, 6)
+    checkinDays, added, dropped, reintro, suspects: suspects.slice(0, 6)
   };
 }
 
@@ -13732,7 +13762,8 @@ function foodFamilyMatch(a, b) {
 //   • track record    — across ALL history, how often a day-of-or-day-after
 //                       eating it was a bad day, vs your baseline (needs 3+
 //                       exposure days with known outcomes, else it can't score)
-//   • novelty         — first-ever exposure, or a reintroduction after a gap
+//   • novelty         — first-ever exposure, only one earlier try (v94), or a
+//                       reintroduction after a gap
 //   • context         — the existing Verdict + how close to the day it was
 // "Bad day" = the chosen check-in symptom scored ≤ 2 (or any symptom, in
 // 'any' mode). Capped at 97 — circumstantial evidence is never proof.
@@ -13803,6 +13834,21 @@ function computeDetective(dateStr, symKey, lookback) {
     }
     return null;
   };
+  // v94: distinct days BEFORE the span on which this name or a close variant
+  // was logged, stopping at 2 — novelty only needs "one" vs "more than one".
+  // Close variants count too, so a new portion of a food eaten on other days
+  // is never mistaken for a single try.
+  const daysBefore = food => {
+    const myPx = pxOf(food);
+    const days = new Set();
+    for (const e of entries) {
+      if (e.date >= from) continue;
+      if (e.food !== food && !foodFamilyMatch(myPx, pxOf(e.food))) continue;
+      days.add(e.date);
+      if (days.size > 1) break;
+    }
+    return [...days];
+  };
   const suspects = Object.values(cand).map(c => {
     const factors = [];
     let score = 0;
@@ -13838,7 +13884,16 @@ function computeDetective(dateStr, symKey, lookback) {
     const firstEver = dates[0], lastEver = dates[dates.length - 1];
     const brandNew = firstEver >= from;
     const kin = brandNew ? kinBefore(c.food) : null;
+    // v94: this exact name tried on ONE day before the span, then back in it,
+    // is new too — the same idea as the Weekly "re-introduced" badge: one try
+    // does not make a food familiar. No wait for a second day here, unlike the
+    // Weekly list: this counts the WHOLE history before the span, which is
+    // already strict, and the first day back is when a reaction says most.
+    // A different NAME stays a "new variant" below (the wrap precedent).
+    const tries = brandNew ? null : daysBefore(c.food);
+    const oneTry = !!tries && tries.length === 1;
     if (brandNew && !kin) { factors.push({ label: 'first time ever eaten, right in this span', pts: 18, kind: 'novel' }); score += 18; }
+    else if (oneTry) { factors.push({ label: `only one earlier try (${fmtDayShort(tries[0])}) — counts as new`, pts: 18, kind: 'novel' }); score += 18; }
     else if (brandNew) { factors.push({ label: `new variant — similar logged before (${kin.length > 30 ? kin.slice(0, 29) + '…' : kin})`, pts: 8, kind: 'novel' }); score += 8; }
     else {
       const firstHit = c.hits.map(h => h.date).sort()[0];
@@ -13865,8 +13920,9 @@ function computeDetective(dateStr, symKey, lookback) {
     // the smoking gun: tried for the first time AND it visibly reacted —
     // worth more than the sum of its parts. A mere name variant of a known
     // food does NOT qualify (the never-tried-before story is false for it).
-    if (brandNew && !kin && c.directNeg > 0) {
-      factors.push({ label: 'smoking gun: first-ever try AND it visibly reacted', pts: 12, kind: 'direct' });
+    // v94: one earlier try qualifies, with a label that says so.
+    if (((brandNew && !kin) || oneTry) && c.directNeg > 0) {
+      factors.push({ label: oneTry ? 'smoking gun: barely tried before AND it visibly reacted' : 'smoking gun: first-ever try AND it visibly reacted', pts: 12, kind: 'direct' });
       score += 12;
     }
 
@@ -13874,7 +13930,7 @@ function computeDetective(dateStr, symKey, lookback) {
     const info = { first: firstEver, last: lastEver, count: dates.length };
     return { food: c.food, score, factors, hits: c.hits, directNeg: c.directNeg, lift, liftN,
              firstDaysAgo: dayGap(firstEver, today()), lastDaysAgo: dayGap(lastEver, today()),
-             exposures: info.count, brandNew, verdict: v ? v.verdict : null, minLag: c.minLag };
+             exposures: info.count, brandNew, oneTry, verdict: v ? v.verdict : null, minLag: c.minLag };
   }).sort((a, b) => b.score - a.score);
 
   const dayScores = {};
@@ -14504,8 +14560,14 @@ function renderWeekly() {
           const info = foodExposureInfo(f);
           if (!info) return '';
           const isNew = isAdded && info.first >= W.curFrom;
+          // v93: a re-introduced food gets NEW too. It was logged last week, so
+          // the first-exposure test alone would never badge it.
+          const re = isAdded ? W.reintro[f] : null;
+          const reTip = re ? `Logged on ${re.prevDays} day${re.prevDays === 1 ? '' : 's'} last week, then on ${re.curDays} days this week — a one-off try that became regular, so it counts as newly introduced` : '';
+          const badge = isNew ? ' — <b style="color:var(--pos);">NEW</b>'
+            : re ? ` — <b style="color:var(--pos);">NEW</b> <span title="${escAttr(reTip)}" style="cursor:help;">↺ re-introduced ${re.prevDays}→${re.curDays} days</span>` : '';
           const tip = `1st exposure ${ago(info.firstDaysAgo)} · last ${ago(info.lastDaysAgo)} · ${info.count}×`;
-          return `<span style="font-size:11px; color:var(--muted); font-weight:600;">${isNew ? ' — <b style="color:var(--pos);">NEW</b>' : ''}<span class="seg-arrow" title="${escAttr(tip)}" style="cursor:help;">➜</span>${exposureRecapHTML(f)}</span>`;
+          return `<span style="font-size:11px; color:var(--muted); font-weight:600;">${badge}<span class="seg-arrow" title="${escAttr(tip)}" style="cursor:help;">➜</span>${exposureRecapHTML(f)}</span>`;
         };
         return `
       ${W.added.length ? `
@@ -19914,6 +19976,33 @@ function runSelfTest() {
   t('weekly: exactly one suspect', () => eq(W.suspects.length, 1));
   t('weekly: added foods spot TestChili', () => eq(W.added.includes('TestChili'), true));
   t('weekly: dropped foods spot the wrap', () => eq(W.dropped.includes('TestChili wrap'), true));
+  t('weekly: fixtures have no re-introduced food', () => eq(JSON.stringify(W.reintro), '{}'));
+  // v93: one try last week + 2 or more days this week = re-introduced. Invented
+  // names; weeklyDietChanges is PURE, so these never touch the shared fixtures.
+  {
+    const rx = (food, n) => ({ food, date: addDays(today(), -n) });
+    const dc = weeklyDietChanges([
+      rx('Zorbleen', 0), rx('zorbleen', 1), rx('Zorbleen', 2),   // 3 days (a case variant is one food)
+      rx('Plindor', 0), rx('Plindor', 1), rx('Plindor', 2),
+      rx('Vextor', 1), rx('Vextor', 3), rx('Vextor', 5),
+      rx('Quimbel', 0), rx('Quimbel', 1),                        // 2 days: enough
+      rx('Drelvin', 2), rx('Drelvin', 2), rx('Drelvin', 2),      // 3 logs, ONE day
+      rx('Krumwel', 0),                                          // first-ever
+    ], [
+      rx('Zorbleen', 8),
+      rx('Plindor', 8), rx('Plindor', 9),                        // a regular: 2 days
+      rx('Vextor', 8), rx('Vextor', 8),                          // 2 doses, ONE day
+      rx('Quimbel', 9), rx('Drelvin', 10), rx('Morsk', 11),
+    ]);
+    t('weekly: one try last week + 3 days this week is Added', () => eq(dc.added.includes('Zorbleen'), true));
+    t('weekly: a re-introduced food carries its day counts', () => eq(JSON.stringify(dc.reintro.Zorbleen), '{"prevDays":1,"curDays":3}'));
+    t('weekly: two doses on ONE day last week are still one try', () => eq(!!dc.reintro.Vextor, true));
+    t('weekly: a food eaten on 2 days last week is no change', () => eq(dc.added.includes('Plindor'), false));
+    t('weekly: one try last week + 2 days this week is Added', () => eq(dc.added.includes('Quimbel') && !!dc.reintro.Quimbel, true));
+    t('weekly: 3 logs on ONE day this week count as one day', () => eq(dc.added.includes('Drelvin'), false));
+    t('weekly: a first-ever food is Added, not re-introduced', () => eq(dc.added.includes('Krumwel') && !dc.reintro.Krumwel, true));
+    t('weekly: a food gone this week is still Removed', () => eq(dc.dropped.join(','), 'Morsk'));
+  }
   t('weeklyDelta up', () => eq(weeklyDelta(3.75, 2.667).cls, 'up'));
   t('weeklyDelta down', () => eq(weeklyDelta(2, 3).cls, 'down'));
   t('weeklyDelta steady inside ±0.1', () => eq(weeklyDelta(3.04, 3).cls, 'flat'));
@@ -19998,6 +20087,32 @@ function runSelfTest() {
     eq(DET.suspects[0].factors.some(f => f.label.indexOf('smoking gun') === 0), false));
   t('detective: Banana floors at 2 (counter-evidence)', () => eq(DET.suspects[1].food + ':' + DET.suspects[1].score, 'Banana:2'));
   t('detective: the case day has check-in scores', () => eq(DET.hasCheckin, true));
+  // v94: the same NAME tried on one earlier day, then back in the span, counts
+  // as new (+18) and can earn the smoking gun; two earlier days, or a variant
+  // eaten on another day, cannot. Invented names on a swapped-in log, so the
+  // shared fixtures and the hand-computed 85 above stay exactly as they are.
+  {
+    const E1 = (id, n, food, w) => migrate({ id, date: D(n), food, logTime: '12:00', mealType: 'lunch', notes: '', windows: w || {} });
+    const keep = loadMigrated;
+    let det = null;
+    try {
+      loadMigrated = () => [
+        E1('s9', 9, 'Sprindle'), E1('s3', 3, 'Sprindle', { w1: false }), E1('s2', 2, 'Sprindle'),
+        E1('g9', 9, 'Grivet'), E1('g10', 10, 'Grivet'), E1('g3', 3, 'Grivet'),
+        E1('p9', 9, 'Plomb 10g'), E1('p10', 10, 'Plomb 20g'), E1('p3', 3, 'Plomb 10g'),
+      ];
+      det = computeDetective(D(2), 'c_overall');
+    } finally { loadMigrated = keep; }
+    const sOf = f => (det && det.suspects.find(s => s.food === f)) || { factors: [] };
+    const has = (f, start) => sOf(f).factors.some(x => x.label.indexOf(start) === 0);
+    t('detective: one earlier try of the same name counts as new', () => eq(has('Sprindle', 'only one earlier try'), true));
+    t('detective: that one-try novelty is worth the same +18 as first-ever', () =>
+      eq((sOf('Sprindle').factors.find(x => x.kind === 'novel') || {}).pts, 18));
+    t('detective: one earlier try + a marked reaction = smoking gun', () => eq(has('Sprindle', 'smoking gun: barely tried'), true));
+    t('detective: two earlier days are not one try', () => eq(has('Grivet', 'only one earlier try'), false));
+    t('detective: a variant eaten on another day blocks the credit', () => eq(has('Plomb 10g', 'only one earlier try'), false));
+    t('detective: the swapped-in log was restored', () => eq(loadMigrated === keep, true));
+  }
   t('exposure info: Oats first 9d ago, last today, 2×', () => {
     const x = foodExposureInfo('Oats');
     return eq(x.firstDaysAgo + '|' + x.lastDaysAgo + '|' + x.count, '9|0|2');
