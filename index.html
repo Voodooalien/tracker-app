@@ -3157,6 +3157,43 @@ body.dark.visual-theme-obsidian #toast {
 }
 .fm-clear-sel:hover { border-color:var(--neg); color:var(--neg); }
 
+/* ── v95: the day's face map on Vitals ─────────────────────────────────────
+   Colour here means SEVERITY ON ONE DAY, not all-time heat: a spot lights up
+   only if it was marked on the day picked in Vitals, in the worst severity
+   marked there that day. Fixed colours, not theme tokens, because they ARE the
+   legend: yellow = mild, dark orange = moderate, red = severe. */
+:root { --dfm-mild:#FACC15; --dfm-mild-edge:#B98A04; --dfm-mod:#E8590C; --dfm-sev:#DC2626; }
+.dfm-card { padding:14px 14px 12px; }
+.dfm-svg { max-width:230px; }
+/* its own gradient id: see fmDefsSVG() */
+.dfm-svg .fm-head path, .dfm-svg .fm-head ellipse { fill:url(#dfmSkin); }
+.dfm-svg .fm-zone { fill-opacity:0; }
+.dfm-svg .dfm-s1 .fm-zone { fill:var(--dfm-mild); fill-opacity:.75; stroke:var(--dfm-mild-edge); stroke-width:1.6; stroke-opacity:1; }
+.dfm-svg .dfm-s2 .fm-zone { fill:var(--dfm-mod); fill-opacity:.75; stroke:var(--dfm-mod); stroke-width:1.6; stroke-opacity:1; }
+.dfm-svg .dfm-s3 .fm-zone { fill:var(--dfm-sev); fill-opacity:.8; stroke:var(--dfm-sev); stroke-width:1.6; stroke-opacity:1; }
+/* a tapped spot keeps its colour and gets the full map's navy ring */
+.dfm-svg .fm-region.fm-sel .fm-zone { stroke:var(--navy); stroke-width:3; stroke-opacity:1; }
+.dfm-areas { display:flex; flex-wrap:wrap; gap:6px; justify-content:center; max-width:340px; margin:0 auto; }
+.dfm-area {
+  display:inline-flex; align-items:center; gap:6px; padding:6px 11px 6px 7px;
+  border:1.5px solid var(--border); border-radius:99px; background:var(--card);
+  font-family:inherit; font-size:12.5px; font-weight:700; color:var(--text); cursor:pointer;
+}
+.dfm-area:hover { border-color:var(--navy); }
+.dfm-area .fm-body-box { width:16px; height:16px; flex:0 0 16px; font-size:11px; border-radius:4px; }
+.dfm-area.dfm-s1 { border-color:var(--dfm-mild-edge); background:rgba(250,204,21,.25); }
+.dfm-area.dfm-s2 { border-color:var(--dfm-mod); background:rgba(232,89,12,.2); }
+.dfm-area.dfm-s3 { border-color:var(--dfm-sev); background:rgba(220,38,38,.2); }
+.dfm-area.sel { border-color:var(--navy); box-shadow:0 0 0 1.5px var(--navy); }
+.dfm-area.sel .fm-body-box { background:var(--navy); border-color:var(--navy); }
+.dfm-legend { display:flex; gap:14px; justify-content:center; flex-wrap:wrap; font-size:11px; font-weight:700; color:var(--muted); margin-top:10px; }
+.dfm-legend i { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:5px; vertical-align:-1px; }
+/* the day a log from Vitals is saved to, shown in the picker head */
+.fm-day-pill {
+  display:inline-block; padding:1px 8px; border-radius:99px; background:var(--navy); color:#fff;
+  font-size:11px; font-weight:800; white-space:nowrap;
+}
+
 /* ── Log-modal fast pick: suspects-here + this-week window (v62, resized v91) ─ */
 .fm-suspects-here { margin:0 0 2px; }
 .fm-suspects-here:empty { display:none; }
@@ -4506,7 +4543,7 @@ try {
   </div>
 
   <div style="margin-left: auto; display: flex; align-items: center; gap: 4px;">
-    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v90</span>
+    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v95</span>
   </div>
 
   <div id="nav-more-tray" style="display:none; flex-basis:100%; flex-wrap:wrap; gap:4px; padding-top:6px; margin-top:4px; border-top:1px dashed rgba(255,255,255,0.18);">
@@ -5005,6 +5042,7 @@ html body select.status-badge-select.status-toxic {
 <main>
   <p class="section-title">Daily Check-In</p>
   <div id="checkin-wrap"></div>
+  <div id="dayface-wrap"></div>
   <div id="trends-wrap"></div>
 </main>
 </div>
@@ -10625,6 +10663,9 @@ function renderCheckin() {
   // frame lets the CSS transition animate it up to today's completion.
   requestAnimationFrame(() => requestAnimationFrame(updateTodayHero));
   scheduleDigestStrip();   // v83: fills in one turn later, off the paint path
+  // v95: the day's face map (under Past Vitals) follows this same date. It is an
+  // extra card, so a fault in it must never take the check-in screen down.
+  try { renderDayFaceMap(); } catch (e) { console.warn('day face map:', e); }
 }
 
 // ─── Archives ─────────────────────────────────────────────────────────────────
@@ -18578,6 +18619,7 @@ const FM_BODY_REGIONS = [
   { key:'body_back',    label:'Back' },
   { key:'body_butt',    label:'Butt / glutes' },
   { key:'body_general', label:'General / all over' },
+  { key:'body_chronic', label:'Chronics' },          // v95
 ];
 FM_BODY_REGIONS.forEach(r => FACE_REGIONS.push({ key:r.key, view:'body', label:r.label, cx:0, cy:0, rx:0, ry:0, rot:0 }));
 const FM_REGION_BY_KEY = {};
@@ -18693,17 +18735,27 @@ let _fmRemap = ''; // orphan food name whose inline "repoint to a logged food" p
 let _fmPick = []; // foods selected in the region modal, waiting to be marked together
 let _fmWindow = 7; // log-modal "foods eaten in the last N days" window (7 / 14 / all); reset on open
 let _fmMarksOpen = false; // "Already logged here" disclosure — closed on open so the food list is the first thing you see
+// v95: the day the log modal saves to. '' = today, resolved at commit time, so a
+// modal left open past midnight still means "today". fmOpenLog() sets it on
+// every open; only the Vitals day map passes a real (past) date.
+let _fmLogDate = '';
+function fmLogDate() { return _fmLogDate || today(); }
 // _fmSel = the spots (face regions + body areas) the user has tapped to select;
 // tapping toggles membership, then one "Log" opens the picker and marks them all.
 
 // ── SVG builders ─────────────────────────────────────────────────────────────
-function fmDefsSVG() {
+// v95: `idp` prefixes the ids, because the Vitals day map draws a second face.
+// Two elements sharing id="fmSkin" are invalid, and url(#fmSkin) would pick
+// whichever comes first in the page: the Face Map tab's copy, in a pane that is
+// hidden (or not built yet).
+function fmDefsSVG(idp) {
+  const p = idp || 'fm';
   return `<defs>
-    <radialGradient id="fmSkin" cx="50%" cy="36%" r="75%">
+    <radialGradient id="${p}Skin" cx="50%" cy="36%" r="75%">
       <stop offset="0%" style="stop-color:var(--card);"/>
       <stop offset="100%" style="stop-color:var(--bg);"/>
     </radialGradient>
-    <filter id="fmGlow" x="-40%" y="-40%" width="180%" height="180%">
+    <filter id="${p}Glow" x="-40%" y="-40%" width="180%" height="180%">
       <feGaussianBlur stdDeviation="2.2"/>
       <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
     </filter>
@@ -19058,13 +19110,17 @@ function fmFilterItems(q) {
   return out;
 }
 
-// Foods eaten within the last `days` days (rolling from today), one row per
-// food carrying its most-recent day, sorted most-recent-first then A→Z. Pure —
-// pinned by the self-test. This is the log modal's fast path: the likely
-// culprit of a fresh reaction sits at the top instead of buried in the A→Z
-// catalog. `days` ≥ 3650 means "all foods" (handled by the caller, not here).
-function fmRecentFoods(entries, days) {
-  const t = parseYMD(today());
+// Foods eaten within the last `days` days (rolling back from `anchor`, default
+// today), one row per food carrying its most-recent day, sorted
+// most-recent-first then A→Z. Pure — pinned by the self-test. This is the log
+// modal's fast path: the likely culprit of a fresh reaction sits at the top
+// instead of buried in the A→Z catalog. `days` ≥ 3650 means "all foods"
+// (handled by the caller, not here).
+// v95: `anchor` is the day being logged. Putting a reaction on a past day from
+// Vitals counts back from THAT day and leaves out anything eaten after it — a
+// food eaten later cannot have caused it.
+function fmRecentFoods(entries, days, anchor) {
+  const t = parseYMD(anchor || today());
   const per = {};
   (entries || []).forEach(e => {
     if (!e || !e.food || !e.date) return;
@@ -19085,8 +19141,8 @@ function fmRecentFoods(entries, days) {
 // ate a staple yesterday AND three days ago, "blame everything from three days
 // ago" must still reach it - otherwise the food you eat most often, the very one
 // most likely to be the culprit, is the one that quietly escapes.
-function fmFoodsByDay(entries, days) {
-  const t = parseYMD(today());
+function fmFoodsByDay(entries, days, anchor) {
+  const t = parseYMD(anchor || today()); // v95: counts back from the day being logged, like fmRecentFoods
   const per = {};
   (entries || []).forEach(e => {
     if (!e || !e.food || !e.date) return;
@@ -19126,7 +19182,15 @@ function fmNewMarks(marks, foods, regions, sev, dateStr) {
 }
 // Human day header for the recent list. Within the widest window (14d) a plain
 // "N days ago" reads fine; Today/Yesterday get names.
-function fmDayLabel(ago) {
+// v95: when logging onto a past day, headers count back from THAT day and carry
+// the date, so "Today" can never be mistaken for the day being logged.
+function fmDayLabel(ago, anchor) {
+  if (anchor && anchor !== today()) {
+    const d = fmt(addDays(anchor, -Math.max(0, ago)));
+    if (ago <= 0) return 'That day · ' + d;
+    if (ago === 1) return 'Day before · ' + d;
+    return ago + ' days before · ' + d;
+  }
   if (ago <= 0) return 'Today';
   if (ago === 1) return 'Yesterday';
   return ago + ' days ago';
@@ -19158,8 +19222,12 @@ function fmToggleSel(key) {
 }
 function fmClearSel() { _fmSel = []; renderFaceMap(); }
 // Open the food picker for the whole current selection.
-function fmOpenLog() {
+// v95: `logDate` is the day the marks are saved to; only the Vitals day map
+// passes one. Every open sets it, so a past date can never leak into a later
+// log from the Face Map tab.
+function fmOpenLog(logDate) {
   if (!_fmSel.length) return;
+  _fmLogDate = typeof logDate === 'string' ? logDate : '';
   _fmPick = [];
   _fmWindow = 7; // always open on "this week" (the chosen default)
   _fmMarksOpen = false;
@@ -19174,8 +19242,11 @@ function fmOpenLog() {
 }
 function closeFaceModal() {
   _fmSel = [];
+  _dfmSel = [];     // v95: a log started from the Vitals day map is finished too
+  _fmLogDate = '';
   document.getElementById('fm-modal-bg').classList.remove('open');
   renderFaceMap();
+  renderDayFaceMap();
 }
 function renderFaceModal() {
   const keys = _fmSel.filter(k => FM_REGION_BY_KEY[k]);
@@ -19188,12 +19259,17 @@ function renderFaceModal() {
   const vw = FM_VIEWS.find(v => v.key === r0.view);
   const viewTxt = vw ? vw.label.replace('◀ ', '').replace(' ▶', '') + ' view' : 'Other area';
   const subLead = multi ? labels.join(' · ') : viewTxt;
-  document.getElementById('fm-modal-sub').innerHTML = marks.length
+  // v95: a log for a past day (opened from Vitals) says so first, in a pill —
+  // the marks are saved to that day, not today.
+  const logDay = fmLogDate();
+  const dayPill = logDay !== today()
+    ? `<span class="fm-day-pill" title="These marks are saved to this day">📅 ${esc(fmt(logDay))}</span> ` : '';
+  document.getElementById('fm-modal-sub').innerHTML = dayPill + (marks.length
     ? `${esc(subLead)} · <button type="button" class="fm-sub-marks${_fmMarksOpen ? ' open' : ''}"
          onclick="fmToggleMarks()" aria-expanded="${_fmMarksOpen ? 'true' : 'false'}"
          title="Show the foods already marked ${multi ? 'on these spots' : 'here'}"
          >${marks.length} already marked<span class="fm-mt-caret">▼</span></button>`
-    : `${esc(subLead)} · nothing marked here yet`;
+    : `${esc(subLead)} · nothing marked here yet`);
   const mtag = m => {
     const n = m.sev === 1 || m.sev === 3 ? m.sev : 2;
     const tip = `${FM_SEVS[n - 1].label} · ${fmt(m.date)}${multi ? ' · ' + FM_REGION_BY_KEY[m.region].label : ''}`;
@@ -19249,6 +19325,7 @@ function renderFmPickList() {
   const inp = document.getElementById('fm-add-input');
   const q = String(inp && inp.value || '').trim();
   const searching = q.length > 0;
+  const anchor = fmLogDate(); // v95: the day being logged — the recent lists count back from it
   const sel = new Set(_fmPick.map(f => normFood(f)));
   const here = new Set(loadFaceMap().filter(m => m && _fmSel.includes(m.region)).map(m => normFood(m.food || '')));
   const chipFor = f => here.has(normFood(f)) ? '✓ marked here' : '';
@@ -19288,7 +19365,7 @@ function renderFmPickList() {
   if (searching) {
     const qq = normFood(q);
     const order = {};
-    fmRecentFoods(loadMigrated(), 3650).forEach((x, i) => { order[normFood(x.food)] = i; });
+    fmRecentFoods(loadMigrated(), 3650, anchor).forEach((x, i) => { order[normFood(x.food)] = i; });
     const items = fmCatalogFoods()
       .filter(f => normFood(f).includes(qq))
       .sort((a, b) => {
@@ -19312,25 +19389,26 @@ function renderFmPickList() {
   }
 
   // 3c. This-week / 2-weeks mode — recent foods, grouped by day (most recent first).
-  const recent = fmRecentFoods(loadMigrated(), _fmWindow);
+  const recent = fmRecentFoods(loadMigrated(), _fmWindow, anchor);
   if (!recent.length) {
-    el.innerHTML = `<div class="fm-pick-none">Nothing logged in the last ${_fmWindow} days. Try “All foods”, or search above.</div>`;
+    const span = anchor === today() ? `in the last ${_fmWindow} days` : `in the ${_fmWindow} days up to ${fmt(anchor)}`;
+    el.innerHTML = `<div class="fm-pick-none">Nothing logged ${span}. Try “All foods”, or search above.</div>`;
     return;
   }
   // Each day header carries a one-tap "blame this whole day". Its count is the
   // day's REAL total, which can exceed the rows printed under it - a food eaten
   // again since is listed higher up, under its more recent day, and ticks there.
-  const byDay = fmFoodsByDay(loadMigrated(), _fmWindow);
+  const byDay = fmFoodsByDay(loadMigrated(), _fmWindow, anchor);
   let html = '', lastAgo = -1;
   recent.forEach(x => {
     if (x.ago !== lastAgo) {
       const all = byDay[x.ago] || [];
       const on = all.length > 0 && all.every(f => sel.has(normFood(f)));
-      const label = fmDayLabel(x.ago).toLowerCase();
+      const label = anchor === today() ? fmDayLabel(x.ago).toLowerCase() : 'on ' + fmt(addDays(anchor, -x.ago));
       const extra = all.length - recent.filter(r => r.ago === x.ago).length;
       const tip = `Mark every food you ate ${label} (${all.length})`
         + (extra > 0 ? ` - ${extra} of them ${extra === 1 ? 'is' : 'are'} listed higher up, under a more recent day` : '');
-      html += `<div class="fm-day-head">${esc(fmDayLabel(x.ago))}
+      html += `<div class="fm-day-head">${esc(fmDayLabel(x.ago, anchor))}
         <button type="button" class="fm-day-all${on ? ' on' : ''}" data-ago="${x.ago}"
           onclick="fmToggleDay(+this.dataset.ago)" aria-pressed="${on ? 'true' : 'false'}"
           title="${escAttr(tip)}">${on ? '✓' : '＋'} all ${all.length}</button></div>`;
@@ -19344,7 +19422,7 @@ function renderFmPickList() {
 // blaming two overlapping days never toggles a shared food back off. Tapping a
 // fully-picked day clears exactly that day's foods again.
 function fmToggleDay(ago) {
-  const foods = (fmFoodsByDay(loadMigrated(), ago + 1)[ago] || []).filter(f => fmKnownMatch(f));
+  const foods = (fmFoodsByDay(loadMigrated(), ago + 1, fmLogDate())[ago] || []).filter(f => fmKnownMatch(f));
   if (!foods.length) { toast('Nothing logged that day'); return; }
   const picked = new Set(_fmPick.map(f => normFood(f)));
   if (foods.every(f => picked.has(normFood(f)))) {
@@ -19397,7 +19475,8 @@ function fmAddMark() {
   const foods = [...new Set(_fmPick.map(f => fmKnownMatch(f)).filter(Boolean))];
   if (!foods.length) { toast('Pick at least one logged food first'); return; }
   const marks = loadFaceMap();
-  const plan = fmNewMarks(marks, foods, regions, _fmSev, today());
+  const day = fmLogDate(); // v95: today, or the past day picked in Vitals
+  const plan = fmNewMarks(marks, foods, regions, _fmSev, day);
   const addedFoods = new Set(plan.add.map(m => m.food));
   if (plan.add.length) {
     plan.add.forEach(m => marks.unshift({ id: uid(), region: m.region, food: m.food, sev: m.sev, date: m.date }));
@@ -19407,20 +19486,23 @@ function fmAddMark() {
   if (inp) inp.value = '';
   renderFaceModal();
   renderFaceMap();
+  renderDayFaceMap();
+  const onDay = day === today() ? 'today' : 'on ' + fmt(day);
+  const forDay = day === today() ? '' : ' for ' + fmt(day);
   if (!addedFoods.size) {
-    toast(plan.skipped === 1 ? 'Already marked here today — nothing to add'
-      : `All ${plan.skipped} already marked here today — nothing to add`);
+    toast(plan.skipped === 1 ? `Already marked here ${onDay} — nothing to add`
+      : `All ${plan.skipped} already marked here ${onDay} — nothing to add`);
     return;
   }
   const nf = addedFoods.size, nr = regions.length;
-  const tail = plan.skipped ? ` · ${plan.skipped} already marked today` : '';
+  const tail = plan.skipped ? ` · ${plan.skipped} already marked ${onDay}` : '';
   // "N foods x M spots" only holds when nothing was skipped; once a pair drops
   // out, the product overstates what was written, so report the marks instead.
   toast((nr === 1
-    ? (nf === 1 ? `${[...addedFoods][0]} marked ✓` : `${nf} foods marked ✓`)
+    ? (nf === 1 ? `${[...addedFoods][0]} marked${forDay} ✓` : `${nf} foods marked${forDay} ✓`)
     : plan.skipped
-      ? `${plan.add.length} mark${plan.add.length === 1 ? '' : 's'} added ✓`
-      : `${nf} food${nf === 1 ? '' : 's'} × ${nr} spots marked ✓`) + tail);
+      ? `${plan.add.length} mark${plan.add.length === 1 ? '' : 's'} added${forDay} ✓`
+      : `${nf} food${nf === 1 ? '' : 's'} × ${nr} spots marked${forDay} ✓`) + tail);
 }
 function fmDeleteMark(id) {
   const marks = loadFaceMap();
@@ -19430,10 +19512,144 @@ function fmDeleteMark(id) {
   saveFaceMap(marks);
   renderFaceModal();
   renderFaceMap();
+  renderDayFaceMap();
   toast(`Removed ${gone.food} ✓`);
 }
 document.getElementById('fm-modal-bg').addEventListener('click', function (e) { if (e.target === this) closeFaceModal(); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && document.getElementById('fm-modal-bg').classList.contains('open')) closeFaceModal(); });
+
+// ═══ Day face map on Vitals (v95) ════════════════════════════════════════════
+// The face map for ONE day: the day picked at the top of Vitals. A spot lights
+// up only if it was marked on that day, in the worst severity marked there
+// (mild yellow, moderate dark orange, severe red); every other spot stays a
+// plain dot. Selecting spots and pressing Log opens the Face Map's own picker
+// dated to that day, so a reaction noticed late lands on the day it happened.
+let _dfmDate = '', _dfmView = '', _dfmSel = [], _dfmAnim = '';
+// _dfmView '' = open on the side where that day's marks are (fmDayBestView).
+
+// That day's marks per spot: worst severity, mark count, foods. PURE.
+function fmDaySpots(marks, dateStr) {
+  const out = {};
+  (marks || []).forEach(m => {
+    if (!m || m.date !== dateStr || !FM_REGION_BY_KEY[m.region]) return;
+    const sev = m.sev === 1 || m.sev === 3 ? m.sev : 2; // same rule as fmRegionStats
+    const s = out[m.region] || (out[m.region] = { sev: 0, count: 0, foods: [] });
+    s.count++;
+    if (sev > s.sev) s.sev = sev;
+    if (m.food && s.foods.indexOf(m.food) < 0) s.foods.push(m.food);
+  });
+  return out;
+}
+// The side to open on: most spots marked that day wins; Front on a tie, and
+// when nothing (or only an Other area) was marked. PURE.
+function fmDayBestView(spots) {
+  let best = 'front', bestN = 0;
+  ['front', 'left', 'right'].forEach(v => {
+    const n = FACE_REGIONS.filter(r => r.view === v && spots[r.key]).length;
+    if (n > bestN) { best = v; bestN = n; }
+  });
+  return best;
+}
+function fmDaySpotTip(label, s) {
+  return label + (s ? ' — ' + FM_SEVS[s.sev - 1].label + ': ' + s.foods.join(', ') : '');
+}
+// One side's tappable spots. Only a spot in `spots` (that day's marks) gets a
+// colour class; every other spot is drawn as the plain dotted zone. PURE.
+function fmDayRegionsSVG(spots, view, sel) {
+  return FACE_REGIONS.filter(r => r.view === view).map(r => {
+    const s = spots[r.key];
+    const tf = r.rot ? ` transform="rotate(${r.rot} ${r.cx} ${r.cy})"` : '';
+    return `<g class="fm-region${s ? ' dfm-s' + s.sev : ''}${(sel || []).includes(r.key) ? ' fm-sel' : ''}" data-region="${r.key}"
+      onclick="dfmToggle(this.dataset.region)">
+      <title>${esc(fmDaySpotTip(r.label, s))}</title>
+      <ellipse class="fm-zone" cx="${r.cx}" cy="${r.cy}" rx="${r.rx}" ry="${r.ry}"${tf}/>
+      ${s ? '' : `<circle class="fm-dotmark" cx="${r.cx}" cy="${r.cy}" r="3"/>`}
+    </g>`;
+  }).join('');
+}
+// The Other-areas chips for that day, same colour rule as the face. PURE.
+function fmDayAreasHTML(spots, sel) {
+  return FM_BODY_REGIONS.map(b => {
+    const s = spots[b.key], on = (sel || []).includes(b.key);
+    return `<button type="button" class="dfm-area${s ? ' dfm-s' + s.sev : ''}${on ? ' sel' : ''}" data-region="${b.key}"
+      onclick="dfmToggle(this.dataset.region)" title="${escAttr(fmDaySpotTip(b.label, s))}" aria-pressed="${on ? 'true' : 'false'}">
+      <span class="fm-body-box">${on ? '✓' : ''}</span>${esc(b.label)}</button>`;
+  }).join('');
+}
+
+function renderDayFaceMap() {
+  const host = document.getElementById('dayface-wrap');
+  if (!host) return;
+  const d = _checkinDate || today();
+  if (d !== _dfmDate) { _dfmDate = d; _dfmView = ''; _dfmSel = []; } // a new day starts clean
+  const spots = fmDaySpots(loadFaceMap(), d);
+  const view = _dfmView || fmDayBestView(spots);
+  const isToday = d === today();
+  const nMarked = Object.keys(spots).length, n = _dfmSel.length;
+  const tabs = FM_VIEWS.map(v => {
+    const c = FACE_REGIONS.filter(r => r.view === v.key && spots[r.key]).length;
+    return `<button class="fm-view-btn${v.key === view ? ' active' : ''}" onclick="dfmSetView('${v.key}')">${v.label}${c ? `<span class="fm-vbadge">${c}</span>` : ''}</button>`;
+  }).join('');
+  const which = isToday ? 'today' : 'this day';
+  const status = n ? `${n} spot${n === 1 ? '' : 's'} selected — tap “Log” to add foods`
+    : nMarked ? `${nMarked} spot${nMarked === 1 ? '' : 's'} marked ${which} · tap spots to add more`
+    : `Nothing marked ${which} · tap spots to log a reaction`;
+  const actionBar = n ? `<div class="fm-actionbar">
+      <button class="fm-log-btn" onclick="dfmOpenLog()">📝 Log ${n} spot${n === 1 ? '' : 's'}${isToday ? '' : ' for ' + esc(fmt(d))}</button>
+      <button class="fm-clear-sel" onclick="dfmClearSel()">Clear</button>
+    </div>` : '';
+  host.innerHTML = `
+    <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-top:28px; margin-bottom:12px;">
+      <p class="section-title" style="margin:0;">Face Map · ${esc(isToday ? 'Today' : fmt(d))}</p>
+      <button class="tf-btn" onclick="dfmOpenFull()" title="Open the full Face Map">Full Face Map →</button>
+    </div>
+    <div class="card dfm-card">
+      <div class="fm-views">${tabs}</div>
+      <div class="fm-stage">
+        <svg class="fm-svg dfm-svg ${_dfmAnim}" viewBox="0 0 300 380" xmlns="http://www.w3.org/2000/svg">
+          ${fmDefsSVG('dfm')}${fmHeadSVG(view)}${fmDayRegionsSVG(spots, view, _dfmSel)}
+        </svg>
+      </div>
+      <div class="fm-hovername">${status}</div>
+      <div class="fm-body-h" style="text-align:center; margin-top:12px;">🧍 Other areas</div>
+      <div class="dfm-areas">${fmDayAreasHTML(spots, _dfmSel)}</div>
+      <div class="dfm-legend">
+        <span><i style="background:var(--dfm-mild);"></i>Mild</span>
+        <span><i style="background:var(--dfm-mod);"></i>Moderate</span>
+        <span><i style="background:var(--dfm-sev);"></i>Severe</span>
+      </div>
+      ${actionBar}
+    </div>`;
+  _dfmAnim = '';
+}
+function dfmToggle(key) {
+  if (!FM_REGION_BY_KEY[key]) return;
+  const i = _dfmSel.indexOf(key);
+  if (i >= 0) _dfmSel.splice(i, 1); else _dfmSel.push(key);
+  renderDayFaceMap();
+}
+function dfmClearSel() { _dfmSel = []; renderDayFaceMap(); }
+function dfmCurrentView() { return _dfmView || fmDayBestView(fmDaySpots(loadFaceMap(), _dfmDate)); }
+function dfmSetView(v) {
+  const order = ['left', 'front', 'right'];
+  const from = order.indexOf(dfmCurrentView()), to = order.indexOf(v);
+  _dfmAnim = to > from ? 'fm-in-r' : to < from ? 'fm-in-l' : '';
+  _dfmView = v;
+  renderDayFaceMap();
+}
+// Hand the selection to the Face Map's own picker, dated to the Vitals day.
+// Today goes in as '' so it keeps meaning "today" across midnight.
+function dfmOpenLog() {
+  if (!_dfmSel.length) return;
+  _fmSel = _dfmSel.slice();
+  fmOpenLog(_dfmDate && _dfmDate !== today() ? _dfmDate : '');
+}
+// The full map opens on the side you were looking at.
+function dfmOpenFull() {
+  _fmView = dfmCurrentView();
+  showTab('facemap');
+  window.scrollTo(0, 0);
+}
 
 // ═══ Food Profile (v61) ══════════════════════════════════════════════════════
 // One dossier per food: everything the app knows about a single product in one
@@ -21019,7 +21235,7 @@ function runSelfTest() {
     return bad ? 'unknown region: ' + bad.region : true;
   });
   t('face map: body areas are registered regions', () =>
-    ['body_back', 'body_butt', 'body_general'].every(k => FM_REGION_BY_KEY[k] && FM_REGION_BY_KEY[k].view === 'body')
+    ['body_back', 'body_butt', 'body_general', 'body_chronic'].every(k => FM_REGION_BY_KEY[k] && FM_REGION_BY_KEY[k].view === 'body')
       ? true : 'a body reaction area is missing from the registry');
   t('face map: nose-top + neck-lymph exist on both sides', () =>
     ['l_nose_top', 'r_nose_top', 'l_neck_lymph', 'r_neck_lymph'].every(k => FM_REGION_BY_KEY[k])
@@ -21039,7 +21255,7 @@ function runSelfTest() {
     const shipped = ['hairline','forehead_ul','forehead_ur','forehead_ll','forehead_lr','forehead_c',
       'temple_l','temple_r','glabella','eye_l','eye_r','nose','sinus_l','sinus_r','cheek_l','cheek_r',
       'mustache','mouth','jaw_l','jaw_r','jaw_end_l','jaw_end_r','chin','neck',
-      'body_back','body_butt','body_general'];
+      'body_back','body_butt','body_general','body_chronic'];
     const gone = shipped.filter(k => !FM_REGION_BY_KEY[k]);
     return gone.length ? 'these keys vanished, orphaning stored marks: ' + gone.join(', ') : true;
   });
@@ -21136,6 +21352,77 @@ function runSelfTest() {
     const m = r.add[0];
     return eq([m.region, m.food, m.sev, m.date].join('|'), ['chin', 'Oats', 3, D(0)].join('|'));
   });
+
+  // v95: the day's face map on Vitals, and putting a reaction on a past day.
+  t('day map: only marks from that exact day are counted', () => {
+    const s = fmDaySpots(FX.faceMap, D(1));
+    return eq(Object.keys(s).sort().join(',') + '|' + s.cheek_l.count, 'cheek_l,l_jaw|1');
+  });
+  t('day map: the worst severity marked on a spot that day wins', () => {
+    const s = fmDaySpots([
+      { id: 'a', region: 'chin', food: 'Oats', sev: 1, date: D(0) },
+      { id: 'b', region: 'chin', food: 'Banana', sev: 3, date: D(0) },
+      { id: 'c', region: 'chin', food: 'Oats', sev: 2, date: D(0) },
+      { id: 'd', region: 'chin', food: 'Oats', sev: 3, date: D(1) },
+    ], D(0));
+    return eq([s.chin.sev, s.chin.count, s.chin.foods.join(',')].join('|'), '3|3|Oats,Banana');
+  });
+  t('day map: an odd severity reads as moderate, an unknown spot is dropped', () => {
+    const s = fmDaySpots([
+      { id: 'a', region: 'chin', food: 'Oats', sev: 7, date: D(0) },
+      { id: 'b', region: 'not_a_region', food: 'Oats', sev: 3, date: D(0) },
+    ], D(0));
+    return eq(Object.keys(s).join(',') + '|' + s.chin.sev, 'chin|2');
+  });
+  t("day map: lights up only that day's spots, in that day's severity", () => {
+    // D2 holds a mild cheek_l and a moderate chin. cheek_l also has a severe
+    // mark on D1 and a moderate one on D3: neither may colour D2.
+    const lit = (d, view) => (fmDayRegionsSVG(fmDaySpots(FX.faceMap, d), view, []).match(/dfm-s[123]/g) || []).join(',');
+    return eq([lit(D(2), 'front'), lit(D(2), 'left'), lit(D(5), 'front')].join('|'), 'dfm-s1,dfm-s2||');
+  });
+  t('day map: a tapped spot is ringed whether or not it was marked', () => {
+    const h = fmDayRegionsSVG({}, 'front', ['chin']);
+    return (h.match(/fm-sel/g) || []).length === 1 && h.indexOf('dfm-s') < 0
+      ? true : 'expected one ringed, uncoloured spot';
+  });
+  t('day map: Other areas follow the same rule, Chronics included', () => {
+    const h = fmDayAreasHTML(fmDaySpots([{ id: 'a', region: 'body_chronic', food: 'Oats', sev: 1, date: D(0) }], D(0)), []);
+    const lit = h.match(/dfm-s[123]/g) || [];
+    return lit.length === 1 && lit[0] === 'dfm-s1' && h.indexOf('Chronics') >= 0 ? true : 'got ' + JSON.stringify(lit);
+  });
+  t('day map: opens on the side with the most spots that day, Front on a tie', () => {
+    const left2 = fmDaySpots([
+      { id: 'a', region: 'l_jaw', food: 'Oats', sev: 2, date: D(0) },
+      { id: 'b', region: 'l_ear', food: 'Oats', sev: 2, date: D(0) },
+      { id: 'c', region: 'chin', food: 'Oats', sev: 2, date: D(0) },
+    ], D(0));
+    const bodyOnly = fmDaySpots([{ id: 'a', region: 'body_back', food: 'Oats', sev: 2, date: D(0) }], D(0));
+    return eq([fmDayBestView(left2), fmDayBestView(fmDaySpots(FX.faceMap, D(1))), fmDayBestView(bodyOnly), fmDayBestView({})].join(','),
+      'left,front,front,front');
+  });
+  t('past-day log: the recent list counts back from that day and skips later foods', () =>
+    // anchored on D5: TestChili (D1-D4) was eaten AFTER that day, so it cannot be the cause
+    eq(fmRecentFoods(FX.entries, 7, D(5)).map(x => x.food + '@' + x.ago).join(','), 'Banana@0,TestChili wrap@2,Oats@4'));
+  t('past-day log: blame-a-day counts back from that day too', () => {
+    const by = fmFoodsByDay(FX.entries, 3, D(2));
+    return eq(Object.keys(by).sort().join(',') + '|' + (by[0] || []).join('+'), '0,1,2|Banana+TestChili');
+  });
+  t('past-day log: with no anchor the lists still count back from today', () =>
+    eq(JSON.stringify(fmRecentFoods(FX.entries, 7)), JSON.stringify(fmRecentFoods(FX.entries, 7, today()))));
+  t('past-day log: day headers name the date instead of Today', () =>
+    eq([fmDayLabel(0, D(3)), fmDayLabel(2, D(3)), fmDayLabel(1), fmDayLabel(0, today())].join('|'),
+      ['That day · ' + fmt(D(3)), '2 days before · ' + fmt(D(5)), 'Yesterday', 'Today'].join('|')));
+  t('past-day log: a food already marked at that spot on THAT day is skipped', () => {
+    const prior = [{ id: 'x', region: 'cheek_l', food: 'Banana', sev: 1, date: D(3) }];
+    const same = fmNewMarks(prior, ['Banana'], ['cheek_l'], 2, D(3));
+    const next = fmNewMarks(prior, ['Banana'], ['cheek_l'], 2, D(2));
+    return same.skipped === 1 && !same.add.length && next.add.length === 1 && next.add[0].date === D(2)
+      ? true : 'got ' + JSON.stringify([same, next]);
+  });
+  t('face map: Chronics is an Other area on both maps', () =>
+    FM_REGION_BY_KEY.body_chronic && FM_REGION_BY_KEY.body_chronic.view === 'body'
+      && FM_REGION_BY_KEY.body_chronic.label === 'Chronics' && FM_BODY_REGIONS.some(b => b.key === 'body_chronic')
+      ? true : 'body_chronic missing or mislabelled');
 
   // ── food profile ──
   t('food profile: basics count logs, days and dates', () => {
