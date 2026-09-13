@@ -4543,7 +4543,7 @@ try {
   </div>
 
   <div style="margin-left: auto; display: flex; align-items: center; gap: 4px;">
-    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v95</span>
+    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v96</span>
   </div>
 
   <div id="nav-more-tray" style="display:none; flex-basis:100%; flex-wrap:wrap; gap:4px; padding-top:6px; margin-top:4px; border-top:1px dashed rgba(255,255,255,0.18);">
@@ -18589,6 +18589,10 @@ const FM_FRONT_REGIONS = [
 // One profile, defined facing image-left; the right view mirrors it in code.
 const FM_PROFILE_REGIONS = [
   { k:'hairline',    lbl:'hairline (side)',        cx:196, cy:92,  rx:34, ry:24 },
+  // v96: the hairline seen from the side — a thin strip from the top of the head
+  // down to the temple. Listed after the older spot so it takes the taps where
+  // the two overlap; the temple, drawn later, keeps its whole zone.
+  { k:'hairline_edge', lbl:'hairline',             cx:170, cy:99,  rx:12, ry:63, rot:-4 },
   { k:'forehead_uf', lbl:'upper front forehead',   cx:99,  cy:92,  rx:16, ry:13 },
   { k:'forehead_ub', lbl:'upper back forehead',    cx:133, cy:92,  rx:16, ry:13 },
   { k:'forehead_lf', lbl:'lower front forehead',   cx:99,  cy:121, rx:16, ry:13 },
@@ -21240,6 +21244,26 @@ function runSelfTest() {
   t('face map: nose-top + neck-lymph exist on both sides', () =>
     ['l_nose_top', 'r_nose_top', 'l_neck_lymph', 'r_neck_lymph'].every(k => FM_REGION_BY_KEY[k])
       ? true : 'a new profile region is missing from a side');
+  // v96: the side hairline strip overlaps the older "hairline (side)" spot and
+  // the temple. The zone drawn last takes the tap, so pin that neither hairline
+  // spot has its own dot covered by a zone drawn after it.
+  t('face map: both side hairline spots keep their dot tappable', () => {
+    const inside = (r, x, y) => { // r is an ellipse turned by SVG rotate(rot cx cy)
+      const a = -(r.rot || 0) * Math.PI / 180, dx = x - r.cx, dy = y - r.cy;
+      const u = dx * Math.cos(a) - dy * Math.sin(a), v = dx * Math.sin(a) + dy * Math.cos(a);
+      return (u / r.rx) * (u / r.rx) + (v / r.ry) * (v / r.ry) <= 1;
+    };
+    const bad = [];
+    ['left', 'right'].forEach(view => {
+      const regs = FACE_REGIONS.filter(r => r.view === view); // array order = draw order
+      regs.forEach((r, i) => {
+        if (r.key.indexOf('hairline') < 0) return;
+        const over = regs.slice(i + 1).find(o => inside(o, r.cx, r.cy));
+        if (over) bad.push(r.key + ' is under ' + over.key);
+      });
+    });
+    return bad.length ? bad.join('; ') : true;
+  });
   const FMS = fmRegionStats(FX.faceMap, '');
   // v88: the two regions that were missing, plus a rename guard. Region keys are
   // PERSISTED - every stored mark references one - so renaming a key orphans
@@ -21255,7 +21279,7 @@ function runSelfTest() {
     const shipped = ['hairline','forehead_ul','forehead_ur','forehead_ll','forehead_lr','forehead_c',
       'temple_l','temple_r','glabella','eye_l','eye_r','nose','sinus_l','sinus_r','cheek_l','cheek_r',
       'mustache','mouth','jaw_l','jaw_r','jaw_end_l','jaw_end_r','chin','neck',
-      'body_back','body_butt','body_general','body_chronic'];
+      'body_back','body_butt','body_general','body_chronic','l_hairline_edge','r_hairline_edge'];
     const gone = shipped.filter(k => !FM_REGION_BY_KEY[k]);
     return gone.length ? 'these keys vanished, orphaning stored marks: ' + gone.join(', ') : true;
   });
