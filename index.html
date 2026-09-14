@@ -4543,7 +4543,7 @@ try {
   </div>
 
   <div style="margin-left: auto; display: flex; align-items: center; gap: 4px;">
-    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v96</span>
+    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v97</span>
   </div>
 
   <div id="nav-more-tray" style="display:none; flex-basis:100%; flex-wrap:wrap; gap:4px; padding-top:6px; margin-top:4px; border-top:1px dashed rgba(255,255,255,0.18);">
@@ -18606,6 +18606,8 @@ const FM_PROFILE_REGIONS = [
   { k:'behind_ear',  lbl:'behind ear',             cx:224, cy:197, rx:13, ry:21 },
   { k:'cheek',       lbl:'cheek (side)',           cx:122, cy:222, rx:24, ry:22 },
   { k:'jaw',         lbl:'jawline (side)',         cx:139, cy:250, rx:29, ry:11, rot:-16 },
+  // v97: the back corner of the jaw, where the jawline turns up toward the ear.
+  { k:'jaw_back',    lbl:'rear jaw',               cx:164, cy:226, rx:9,  ry:14, rot:34 },
   { k:'neck_lymph',  lbl:'upper neck lymph (side)',cx:181, cy:247, rx:11, ry:16 },
   { k:'neck_top',    lbl:'upper neck (below jaw)', cx:160, cy:272, rx:24, ry:12, rot:-10 },
   { k:'neck',        lbl:'neck (side)',            cx:174, cy:312, rx:33, ry:23 },
@@ -21261,6 +21263,27 @@ function runSelfTest() {
         const over = regs.slice(i + 1).find(o => inside(o, r.cx, r.cy));
         if (over) bad.push(r.key + ' is under ' + over.key);
       });
+    });
+    return bad.length ? bad.join('; ') : true;
+  });
+  // v97: the rear jaw sits in the gap between cheek, jawline, front-of-ear and
+  // neck lymph. Pin that it exists on both sides and that no dot on either side
+  // (its own or a neighbour's) ends up covered by the zone drawn after it.
+  t('face map: rear jaw exists on both sides and covers no dot', () => {
+    const inside = (r, x, y) => {
+      const a = -(r.rot || 0) * Math.PI / 180, dx = x - r.cx, dy = y - r.cy;
+      const u = dx * Math.cos(a) - dy * Math.sin(a), v = dx * Math.sin(a) + dy * Math.cos(a);
+      return (u / r.rx) * (u / r.rx) + (v / r.ry) * (v / r.ry) <= 1;
+    };
+    const bad = [];
+    [['left', 'l_jaw_back'], ['right', 'r_jaw_back']].forEach(([view, key]) => {
+      const regs = FACE_REGIONS.filter(r => r.view === view);
+      const rj = regs.find(r => r.key === key);
+      if (!rj) { bad.push(key + ' missing'); return; }
+      regs.forEach(o => { if (o !== rj && inside(rj, o.cx, o.cy)) bad.push(key + ' covers ' + o.key); });
+      const i = regs.indexOf(rj);
+      const over = regs.slice(i + 1).find(o => inside(o, rj.cx, rj.cy));
+      if (over) bad.push(key + ' is under ' + over.key);
     });
     return bad.length ? bad.join('; ') : true;
   });
