@@ -193,6 +193,19 @@
   .ac-meal-flag.snack     { background: #FFF8E1; color: #F57F17; border-color: #FFE8A3; }
   .ac-meal-flag.dinner    { background: #EDE7F6; color: #4527A0; border-color: #D7C9F1; }
   .ac-notes { font-size: 11px; color: var(--muted); margin-top: 3px; }
+  /* v98: foods labelled Banned / B.List / Toxic — red edge + their label pill */
+  .ac-item.ac-avoid { box-shadow: inset 4px 0 0 #EF4444; }
+  .ac-avoid-pill {
+    display:inline-flex; align-items:center; height: 18px; padding: 0 7px;
+    border-radius: 10px; font-size: 10px; font-weight: 800; line-height: 1; white-space: nowrap;
+  }
+  .log-avoid-warn {
+    margin-top: 10px; padding: 8px 12px; border-radius: 8px;
+    background: rgba(10,10,10,0.55); border: 1.5px solid #EF4444; color: #fff;
+    font-size: 12.5px; font-weight: 600;
+  }
+  .log-avoid-line { display:flex; align-items:center; flex-wrap:wrap; gap:6px; }
+  .log-avoid-line + .log-avoid-line { margin-top: 5px; }
   body.dark .ac-meal-flag { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.10); color: var(--text); }
   body.dark .ac-meal-flag.breakfast { background: rgba(230,81,0,0.20); color: #FFB480; border-color: rgba(230,81,0,0.25); }
   body.dark .ac-meal-flag.lunch     { background: rgba(46,125,50,0.20); color: #9AD9A0; border-color: rgba(46,125,50,0.25); }
@@ -4543,7 +4556,7 @@ try {
   </div>
 
   <div style="margin-left: auto; display: flex; align-items: center; gap: 4px;">
-    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v97</span>
+    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v98</span>
   </div>
 
   <div id="nav-more-tray" style="display:none; flex-basis:100%; flex-wrap:wrap; gap:4px; padding-top:6px; margin-top:4px; border-top:1px dashed rgba(255,255,255,0.18);">
@@ -4799,8 +4812,9 @@ html body select.status-badge-select.status-toxic {
       <button class="btn-primary" onclick="addEntry()" style="margin:0; padding:0 20px; font-size:13px; font-weight:700; border-radius:8px; box-shadow:0 4px 14px rgba(0, 0, 0, 0.22); background:#fff; color:#18507f; flex-shrink:0; transition:all 0.2s; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center;" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 18px rgba(0, 0, 0, 0.3)';" onmouseout="this.style.transform='none'; this.style.boxShadow='0 4px 14px rgba(0, 0, 0, 0.22)';">
         ＋ Add Entry
       </button>
-      
+
   </div>
+  <div id="log-avoid-warn" class="log-avoid-warn" style="display:none;"></div>
 
   </div>
   <div id="bundle-section"></div>
@@ -7902,6 +7916,7 @@ function addEntry() {
   if (_logSolo) { _logSolo = false; setSoloBtnStyle(document.getElementById('log-solo-btn'), false); }
   if (_logAge) { _logAge = ''; const sel = document.getElementById('log-age-sel'); if (sel) sel.value = ''; }
   document.getElementById('inp-food').value = '';
+  refreshFoodAvoidWarning();
   document.getElementById('inp-date').value = today();
   const n = new Date();
   document.getElementById('inp-time').value = `${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}`;
@@ -9200,6 +9215,58 @@ function ciWrite(map, food, value) {
   for (const k in map) if (k !== food && normFood(k) === t) delete map[k];
   if (value === undefined) delete map[food];
   else map[food] = value;
+}
+
+// ─── Avoid-label warning on the food box (v98) ───────────────────────────────
+// Only the three "don't eat this" labels warn. Suspect and Limit stay quiet:
+// those foods are still being judged, and a warning on every one would teach
+// the eye to skip the red.
+const AVOID_WARN_RE = /banned|b\.?\s*list|blacklist|toxic/i;
+// PURE. Built once per keystroke so each dropdown row is a Map lookup.
+// A label on a bare name — no portion, count or [brand], which is also how a
+// pooled Summary row is named — covers that name's portion sizes. A label on
+// one portion covers only that portion, and a different prep is a different
+// food. Any label on the exact name wins, so a portion you marked Safe stays
+// quiet under a bare-name Banned.
+function avoidLabelIndex(statusMap) {
+  const exact = new Map(), bare = new Map();
+  Object.keys(statusMap || {}).forEach(k => {
+    const lbl = statusMap[k];
+    if (typeof lbl !== 'string' || !lbl) return;
+    exact.set(normFood(k), lbl);
+    if (!AVOID_WARN_RE.test(lbl)) return;
+    const base = poolKeyOf(k);
+    const plain = k.replace(/[^\x00-\x7F]/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
+    if (base && plain === base) bare.set(base, lbl);
+  });
+  return { exact, bare };
+}
+function avoidLabelOf(idx, food) {
+  if (!idx || !food) return null;
+  const own = idx.exact.get(normFood(food));
+  if (own) return AVOID_WARN_RE.test(own) ? own : null;
+  return idx.bare.get(poolKeyOf(food)) || null;
+}
+// PURE. Every ;-separated name in the box that carries an avoid label, once each.
+function avoidWarningsFor(idx, raw) {
+  const out = [], seen = new Set();
+  String(raw || '').split(';').forEach(part => {
+    const food = part.trim(), t = normFood(food);
+    if (!t || seen.has(t)) return;
+    const label = avoidLabelOf(idx, food);
+    if (label) { seen.add(t); out.push({ food, label }); }
+  });
+  return out;
+}
+function avoidLabelCls(lbl) {
+  return LEARNED_STATUS_CLS[lbl] || (/toxic/i.test(lbl) ? 'status-toxic' : /banned/i.test(lbl) ? 'status-banned' : 'status-blacklist');
+}
+function refreshFoodAvoidWarning() {
+  const inp = document.getElementById('inp-food'), box = document.getElementById('log-avoid-warn');
+  if (!inp || !box) return;
+  const hits = avoidWarningsFor(avoidLabelIndex(loadFoodStatus()), inp.value);
+  box.innerHTML = hits.map(h => `<div class="log-avoid-line">⚠️ You labelled <b>${esc(h.food)}</b> <span class="ac-avoid-pill ${avoidLabelCls(h.label)}">${esc(h.label)}</span></div>`).join('');
+  box.style.display = hits.length ? '' : 'none';
 }
 
 function changeFoodStatus(food, newStatus) {
@@ -12469,6 +12536,7 @@ function logBundle(id) {
   save(entries);
   saveLastMealType(mealType);
   document.getElementById('inp-food').value = '';
+  refreshFoodAvoidWarning();
   toast(`Logged ${bundle.items.length} items from "${bundle.name}" ✓`);
   render();
 }
@@ -18475,15 +18543,17 @@ function parseCSVLine(line) {
     const all = Array.from(seen.values());
     return q ? all.filter(f => f.food.toLowerCase().includes(q.toLowerCase())) : all;
   }
-  function mealFlagsHTML(meals) {
-    if (!meals || !meals.length) return '';
+  function mealFlagsHTML(meals, avoid) {
+    const pill = avoid ? `<span class="ac-avoid-pill ${avoidLabelCls(avoid)}" title="You labelled this food ${escAttr(avoid)}">${esc(avoid)}</span>` : '';
+    if (!pill && (!meals || !meals.length)) return '';
     const labels = { breakfast:'BF', lunch:'LU', snack:'SN', dinner:'DI' };
-    return `<div class="ac-meals">${meals.map(m => `<span class="ac-meal-flag ${escAttr(m)}" title="Already logged today for ${escAttr(m)}">${esc(labels[m] || m.slice(0,2).toUpperCase())}</span>`).join('')}</div>`;
+    return `<div class="ac-meals">${pill}${(meals || []).map(m => `<span class="ac-meal-flag ${escAttr(m)}" title="Already logged today for ${escAttr(m)}">${esc(labels[m] || m.slice(0,2).toUpperCase())}</span>`).join('')}</div>`;
   }
   function openDrop(items) {
     acItems = items; hiIdx = -1;
     if (!items.length) { closeDrop(); return; }
-    drop.innerHTML = items.map((f,i) => `<div class="ac-item" data-idx="${i}"><div class="ac-head"><div class="ac-food">${esc(f.food)}</div>${mealFlagsHTML(f.mealsToday)}</div>${f.notes?`<div class="ac-notes">${esc(f.notes)}</div>`:''}</div>`).join('');
+    const avIdx = avoidLabelIndex(loadFoodStatus());
+    drop.innerHTML = items.map((f,i) => { const av = avoidLabelOf(avIdx, f.food); return `<div class="ac-item${av ? ' ac-avoid' : ''}" data-idx="${i}"><div class="ac-head"><div class="ac-food">${esc(f.food)}</div>${mealFlagsHTML(f.mealsToday, av)}</div>${f.notes?`<div class="ac-notes">${esc(f.notes)}</div>`:''}</div>`; }).join('');
     drop.classList.add('open');
     drop.querySelectorAll('.ac-item').forEach(el => el.addEventListener('mousedown', e => { e.preventDefault(); selectItem(+el.dataset.idx); }));
   }
@@ -18499,6 +18569,7 @@ function parseCSVLine(line) {
     const parts = inp.value.split(';');
     parts[parts.length - 1] = (parts.length > 1 ? ' ' : '') + f.food;
     inp.value = parts.join(';');
+    refreshFoodAvoidWarning();
     closeDrop(); inp.focus();
   }
   function highlight(idx) {
@@ -18506,8 +18577,8 @@ function parseCSVLine(line) {
     if (idx >= 0 && idx < acItems.length) { drop.querySelectorAll('.ac-item')[idx].classList.add('highlighted'); drop.querySelectorAll('.ac-item')[idx].scrollIntoView({block:'nearest'}); }
     hiIdx = idx;
   }
-  inp.addEventListener('input',  () => openDrop(getUniqueFoods(fragQuery())));
-  inp.addEventListener('focus',  () => openDrop(getUniqueFoods(fragQuery())));
+  inp.addEventListener('input',  () => { openDrop(getUniqueFoods(fragQuery())); refreshFoodAvoidWarning(); });
+  inp.addEventListener('focus',  () => { openDrop(getUniqueFoods(fragQuery())); refreshFoodAvoidWarning(); });
   inp.addEventListener('keydown', e => {
     if (e.key==='Enter')      { hiIdx>=0&&acItems.length ? selectItem(hiIdx) : (closeDrop(), addEntry()); }
     else if (e.key==='ArrowDown')  { e.preventDefault(); if (!drop.classList.contains('open')) openDrop(getUniqueFoods(fragQuery())); highlight(Math.min(hiIdx+1,acItems.length-1)); }
@@ -21228,6 +21299,29 @@ function runSelfTest() {
     }
     const r = naturalGaps(E, CI).find(x => x.food === 'Staple X');
     return (r && r.delta >= 1.5 && r.gapN === 9) ? true : JSON.stringify(r || 'none');
+  });
+
+  // ── avoid-label warning (v98) ──
+  t('avoid label: exact name matches across case and icon', () =>
+    eq(avoidLabelOf(avoidLabelIndex({ '🍓 Quenberry 40g': '☠️ Toxic' }), 'quenberry 40G'), '☠️ Toxic'));
+  t('avoid label: Suspect and Limit do not warn', () => {
+    const idx = avoidLabelIndex({ 'Plimfruit': '🚩 Suspect', 'Zelmo root': '⚠️ Limit' });
+    return eq([avoidLabelOf(idx, 'Plimfruit'), avoidLabelOf(idx, 'Zelmo root')].join('|'), '|');
+  });
+  t('avoid label: a bare-name label covers portions and brands, not a prep', () => {
+    const idx = avoidLabelIndex({ '🍓 Quenberry': '⛔ Banned' });
+    return eq([avoidLabelOf(idx, 'Quenberry 80-120g'), avoidLabelOf(idx, 'Quenberry x2 [Farmco]'), avoidLabelOf(idx, 'Quenberry roasted')].join('|'),
+      '⛔ Banned|⛔ Banned|');
+  });
+  t('avoid label: a one-portion label stays on that portion', () =>
+    eq(avoidLabelOf(avoidLabelIndex({ 'Quenberry 40g': '🩻 B.List' }), 'Quenberry 90g'), null));
+  t('avoid label: an exact Safe beats a bare-name Banned', () => {
+    const idx = avoidLabelIndex({ 'Quenberry': '⛔ Banned', 'Quenberry 40g': '✅ Safe' });
+    return eq([avoidLabelOf(idx, 'Quenberry 40g'), avoidLabelOf(idx, 'Quenberry 90g')].join('|'), '|⛔ Banned');
+  });
+  t('avoid label: multi-add warns once per flagged name', () => {
+    const w = avoidWarningsFor(avoidLabelIndex({ 'Quenberry': '🩻 B.List' }), 'plimfruit; Quenberry 90g ; quenberry 90g;;');
+    return eq(JSON.stringify(w), JSON.stringify([{ food: 'Quenberry 90g', label: '🩻 B.List' }]));
   });
 
   // ── face map ──
