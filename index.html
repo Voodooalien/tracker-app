@@ -256,7 +256,9 @@
   .lv-row { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--border); }
   .lv-row:last-child { border-bottom: 0; }
   .lv-main { flex: 1 1 auto; min-width: 0; border: 0; background: transparent; color: var(--text); font-family: inherit; text-align: left; padding: 4px 2px; cursor: pointer; }
-  .lv-food { display: block; font-size: 13.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* Wraps rather than truncates: the portion size at the end of a name ("51-99g")
+     is the part that distinguishes two logs of the same food. */
+  .lv-food { display: block; font-size: 13.5px; font-weight: 600; line-height: 1.35; overflow-wrap: anywhere; }
   .lv-meta { display: block; font-size: 10.5px; color: var(--muted); margin-top: 2px; }
   .lv-cells { display: flex; gap: 5px; flex-shrink: 0; }
   .lv-cell {
@@ -268,7 +270,10 @@
   .lv-cell.neg { background: #9E1B32; border-color: #9E1B32; color: #fff; }
   .lv-cell.due { background: #FFF6E0; border: 2px solid #C98A05; color: #8A6000; }
   body.dark .lv-cell.due { background: rgba(201,138,5,0.18); color: #FFD27A; }
-  .lv-actions { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 10px 10px; background: var(--bg); border-bottom: 1px solid var(--border); }
+  .lv-actions { display: flex; flex-direction: column; gap: 8px; padding: 8px 10px 12px; background: var(--bg); border-bottom: 1px solid var(--border); }
+  .lv-action-btns { display: flex; flex-wrap: wrap; gap: 6px; }
+  .lv-symptoms { border-top: 1px dashed var(--border); padding-top: 8px; }
+  .lv-sym-count { background: var(--bg); border: 1px solid var(--border); color: var(--muted); }
   .lv-pill { font-size: 9px; font-weight: 800; border-radius: 999px; padding: 2px 6px; margin-left: 6px; white-space: nowrap; }
   .lv-matrix-head { display: flex; align-items: center; gap: 5px; padding: 4px 10px 6px; }
   .lv-matrix-head .lv-spacer { flex: 1 1 auto; }
@@ -4631,7 +4636,7 @@ try {
   </div>
 
   <div style="margin-left: auto; display: flex; align-items: center; gap: 4px;">
-    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v101</span>
+    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v102</span>
   </div>
 
   <div id="nav-more-tray" style="display:none; flex-basis:100%; flex-wrap:wrap; gap:4px; padding-top:6px; margin-top:4px; border-top:1px dashed rgba(255,255,255,0.18);">
@@ -16798,13 +16803,17 @@ function showSymInput(btn) {
 // edit, undo and the celebration all behave identically whichever one is on.
 const LOG_VIEWS = [
   { key: 'classic', label: 'Classic', hint: 'The cards you know — one card per item' },
-  { key: 'dense',   label: 'Dense',   hint: 'One row per item, four window cells — about four times as many items per screen' },
-  { key: 'matrix',  label: 'Matrix',  hint: 'Items down, windows across — fill the day in like a form' }
+  { key: 'dense',   label: 'Dense',   hint: 'One row per item under a window header — tap the name for symptoms, Edit, Again and Summary' }
 ];
 function isValidLogView(k) { return LOG_VIEWS.some(v => v.key === k); }
+// v102: Matrix was Dense with a header row and no expand panel. Dense now has
+// the header, so the two had no daylight between them — 'matrix' lands on Dense
+// rather than leaving a device that chose it stuck on a view that is gone.
+function normalizeLogView(k) { return k === 'matrix' ? 'dense' : (isValidLogView(k) ? k : 'classic'); }
 let _logView = 'classic';
-try { const _lv = localStorage.getItem('fst_log_view'); if (isValidLogView(_lv)) _logView = _lv; } catch (e) {}
+try { _logView = normalizeLogView(localStorage.getItem('fst_log_view')); } catch (e) {}
 function setLogView(key) {
+  key = normalizeLogView(key);
   if (!isValidLogView(key)) return;
   _logView = key;
   try { localStorage.setItem('fst_log_view', key); } catch (e) {}
@@ -16848,46 +16857,41 @@ function lvLabelPill(avIdx, food) {
   const lbl = avoidLabelOf(avIdx, food);
   return lbl ? `<span class="lv-pill ${avoidLabelCls(lbl)}">${esc(lbl)}</span>` : '';
 }
+// v102: the expand panel carries the per-item SYMPTOM buttons, not just the four
+// actions. v101 dropped them, which silently removed per-item symptom marking
+// from the compact view — symptomsHTML() is the same markup and the same
+// markSymptom() cycling Classic uses, so the two views cannot drift apart.
 function lvActionsHTML(e) {
   return `<div class="lv-actions">
-    <button class="edit-btn" onclick="deleteEntry('${e.id}')">❌ Remove</button>
-    <button class="edit-btn" onclick="openEditModal('${e.id}')">✏️ Edit</button>
-    <button class="edit-btn" onclick="relogEntryNow('${e.id}')">🔁 Again</button>
-    <button class="edit-btn" onclick="jumpToSummaryRow(${escAttr(JSON.stringify(e.food))})">📋 Summary</button>
+    <div class="lv-action-btns">
+      <button class="edit-btn" onclick="deleteEntry('${e.id}')">❌ Remove</button>
+      <button class="edit-btn" onclick="openEditModal('${e.id}')">✏️ Edit</button>
+      <button class="edit-btn" onclick="relogEntryNow('${e.id}')">🔁 Again</button>
+      <button class="edit-btn" onclick="jumpToSummaryRow(${escAttr(JSON.stringify(e.food))})">📋 Summary</button>
+    </div>
+    <div class="lv-symptoms">${symptomsHTML(e)}</div>
   </div>`;
 }
 function denseListHTML(mealOrder, groups, mealLabels, suspectFoods) {
   const avIdx = avoidLabelIndex(loadFoodStatus());
-  return mealOrder.filter(m => groups[m].length).map(mealKey => `
-    <div class="lv-group">
-      <div class="lv-group-head">${mealLabels[mealKey]} · ${groups[mealKey].length}</div>
-      <div class="lv-card">${groups[mealKey].map(e => {
-        const ago = hoursAgoLabel(e.date, e.logTime);
-        const meta = [e.date !== today() ? '📅 ' + fmt(e.date) : '', e.logTime ? '🕐 ' + e.logTime : '', ago].filter(Boolean).join(' · ');
-        return `<div class="lv-row">
-          <button type="button" class="lv-main" aria-expanded="${_denseOpenId === e.id}" onclick="toggleDenseActions('${e.id}')">
-            <span class="lv-food">${suspectFoods.has(e.food) ? '⚠️ ' : ''}${esc(e.food)}${lvLabelPill(avIdx, e.food)}</span>
-            <span class="lv-meta">${esc(meta)}</span>
-          </button>
-          <div class="lv-cells">${WINDOWS.map(w => lvCellHTML(e, w)).join('')}</div>
-        </div>${_denseOpenId === e.id ? lvActionsHTML(e) : ''}`;
-      }).join('')}</div>
-    </div>`).join('');
-}
-function matrixListHTML(mealOrder, groups, mealLabels, suspectFoods) {
-  const avIdx = avoidLabelIndex(loadFoodStatus());
+  // The window header: without it the four cells are unlabelled guesswork.
   const head = `<div class="lv-matrix-head"><span class="lv-spacer"></span>${WINDOWS.map(w => `<span class="lv-wlabel">${esc(w.label.replace(/\s*h$/, '').replace(/\s/g, ''))}</span>`).join('')}</div>`;
   return head + mealOrder.filter(m => groups[m].length).map(mealKey => `
     <div class="lv-group">
       <div class="lv-group-head">${mealLabels[mealKey]} · ${groups[mealKey].length}</div>
-      <div class="lv-card">${groups[mealKey].map(e => `
-        <div class="lv-row">
-          <button type="button" class="lv-main" onclick="jumpToSummaryRow(${escAttr(JSON.stringify(e.food))})" title="Open this food in 📋 Summary">
-            <span class="lv-food">${suspectFoods.has(e.food) ? '⚠️ ' : ''}${esc(e.food)}${lvLabelPill(avIdx, e.food)}</span>
-            <span class="lv-meta">${esc(e.logTime || '')}</span>
+      <div class="lv-card">${groups[mealKey].map(e => {
+        const ago = hoursAgoLabel(e.date, e.logTime);
+        const nSym = e.symptoms ? Object.keys(e.symptoms).filter(k => e.symptoms[k]).length : 0;
+        const meta = [e.date !== today() ? '📅 ' + fmt(e.date) : '', e.logTime ? '🕐 ' + e.logTime : '', ago].filter(Boolean).join(' · ');
+        const open = _denseOpenId === e.id;
+        return `<div class="lv-row">
+          <button type="button" class="lv-main" aria-expanded="${open}" title="Symptoms, Edit, Again, Summary" onclick="toggleDenseActions('${e.id}')">
+            <span class="lv-food">${suspectFoods.has(e.food) ? '⚠️ ' : ''}${esc(e.food)}${lvLabelPill(avIdx, e.food)}${nSym ? `<span class="lv-pill lv-sym-count">🏷️ ${nSym}</span>` : ''}</span>
+            <span class="lv-meta">${open ? '▴ ' : '▾ '}${esc(meta)}</span>
           </button>
           <div class="lv-cells">${WINDOWS.map(w => lvCellHTML(e, w)).join('')}</div>
-        </div>`).join('')}</div>
+        </div>${open ? lvActionsHTML(e) : ''}`;
+      }).join('')}</div>
     </div>`).join('');
 }
 // The "✓ All due" button has lived in the toolbar since v68 and is easy to miss.
@@ -16945,7 +16949,7 @@ function renderPending() {
 
   const suspectFoods = getSuspectFoods();
   if (_logView !== 'classic') {
-    container.innerHTML = (_logView === 'dense' ? denseListHTML : matrixListHTML)(mealOrder, groups, mealLabels, suspectFoods);
+    container.innerHTML = denseListHTML(mealOrder, groups, mealLabels, suspectFoods);
     return;
   }
   let html = '';
@@ -21596,10 +21600,13 @@ function runSelfTest() {
   t('log views: the cell cycles unmarked → ✓ → ✕ → unmarked', () =>
     eq([nextWindowState(undefined), nextWindowState(null), nextWindowState(true), nextWindowState(false)].map(String).join('|'),
       'true|true|false|null'));
-  t('log views: only the three known view keys are accepted', () =>
-    eq([isValidLogView('classic'), isValidLogView('dense'), isValidLogView('matrix'), isValidLogView('timeline'), isValidLogView('')].join('|'),
-      'true|true|true|false|false'));
-  t('log views: classic stays the default', () => eq(LOG_VIEWS[0].key, 'classic'));
+  t('log views: only the known view keys are accepted', () =>
+    eq([isValidLogView('classic'), isValidLogView('dense'), isValidLogView('timeline'), isValidLogView('')].join('|'),
+      'true|true|false|false'));
+  t('log views: classic stays the default, junk falls back to it', () =>
+    eq([LOG_VIEWS[0].key, normalizeLogView('timeline'), normalizeLogView(null)].join('|'), 'classic|classic|classic'));
+  t('log views: a device left on the folded-in Matrix lands on Dense', () =>
+    eq(normalizeLogView('matrix'), 'dense'));
 
   // ── avoid-label warning (v98) ──
   t('avoid label: exact name matches across case and icon', () =>
