@@ -223,6 +223,9 @@
   .ac-foot button { border-radius: 8px; font-size: 12px; font-weight: 800; padding: 7px 12px; cursor: pointer; border: 1px solid var(--border); }
   .ac-foot-clear { background: var(--bg); color: var(--muted); }
   .ac-foot-log { background: #18507f; color: #fff; border-color: #18507f; }
+  /* v100: the row you were sent to, so it is obvious which one the jump meant */
+  @keyframes sumRowJump { 0%, 100% { background: transparent; } 30% { background: rgba(250,204,21,0.40); } }
+  .summary-table tr.row-jump td { animation: sumRowJump 1.1s ease-in-out 2; }
   body.dark .ac-meal-flag { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.10); color: var(--text); }
   body.dark .ac-meal-flag.breakfast { background: rgba(230,81,0,0.20); color: #FFB480; border-color: rgba(230,81,0,0.25); }
   body.dark .ac-meal-flag.lunch     { background: rgba(46,125,50,0.20); color: #9AD9A0; border-color: rgba(46,125,50,0.25); }
@@ -4573,7 +4576,7 @@ try {
   </div>
 
   <div style="margin-left: auto; display: flex; align-items: center; gap: 4px;">
-    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v99</span>
+    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v100</span>
   </div>
 
   <div id="nav-more-tray" style="display:none; flex-basis:100%; flex-wrap:wrap; gap:4px; padding-top:6px; margin-top:4px; border-top:1px dashed rgba(255,255,255,0.18);">
@@ -16790,6 +16793,7 @@ return `
             <button class="edit-btn" onclick="deleteEntry('${e.id}')">❌ Remove</button>
             <button class="edit-btn" onclick="openEditModal('${e.id}')">✏️ Edit</button>
             <button class="edit-btn" onclick="relogEntryNow('${e.id}')" title="Log this food again, right now">🔁 Again</button>
+            <button class="edit-btn" onclick="jumpToSummaryRow(${escAttr(JSON.stringify(e.food))})" title="Open this food's row in 📋 Summary — its label, notes and reaction history">📋 Summary</button>
           </div>
 
           <div style="flex:1 1 360px; display:flex; flex-direction:column; align-items:center; padding:0 12px; min-width:0;">
@@ -16856,6 +16860,7 @@ function renderHistory() {
             <button class="edit-btn" onclick="deleteEntry('${e.id}')">❌ Remove</button>
             <button class="edit-btn" onclick="openEditModal('${e.id}')">✏️ Edit</button>
             <button class="edit-btn" onclick="relogEntryNow('${e.id}')" title="Log this food again, right now">🔁 Again</button>
+            <button class="edit-btn" onclick="jumpToSummaryRow(${escAttr(JSON.stringify(e.food))})" title="Open this food's row in 📋 Summary — its label, notes and reaction history">📋 Summary</button>
           </div>
 
           <div style="flex:1 1 360px; display:flex; flex-direction:column; align-items:center; padding:0 12px; min-width:0;">
@@ -17743,7 +17748,7 @@ function renderSummary() {
       : '';
     const foodCell = `<td class="food-name" title="${escAttr(_pg ? food + ' — pooled from: ' + _pg.names.join(', ') : food)}"><div class="food-cell-wrap"><span>${esc(food)}${_pg ? ` <span style="font-weight:600;font-size:11px;color:var(--muted);">🔗${_pg.names.length}</span>` : ''}</span><span class="food-submeta">${statLabel(logs, 'log', 'logs')} • ${formatRatedLabel(scoredWindows)}</span>${spark}</div></td>`;
     const confCell = `<td><span class="confidence-badge ${conf.cls}">${conf.label}</span></td>`;
-    return `<tr>${foodCell}${winCells}${confCell}<td class="summary-symptoms-cell">${symCell}</td>${notesCell}</tr>`;
+    return `<tr data-food="${escAttr(food)}">${foodCell}${winCells}${confCell}<td class="summary-symptoms-cell">${symCell}</td>${notesCell}</tr>`;
   });
   // v83: ANSWER-FIRST. This table was the overwhelming majority of the Summary
   // tab's height — dozens of phone screens on its own — because it prints every
@@ -17775,6 +17780,43 @@ function renderSummary() {
       <button class="tf-btn" onclick="showAllSummaryRows()">Show all ${rowArr.length} foods &nbsp;·&nbsp; ${rowArr.length - _summaryTableShown} more</button>
       <div style="font-size:10.5px; color:var(--muted); margin-top:6px;">Sorted worst-first, so these are the calmest ${rowArr.length - _summaryTableShown}.</div>
     </div>` : ''}`;
+}
+// v100: 📋 Summary on a logged item lands on that food's row here — the row
+// where its label, notes and reaction history live. The table is filtered by
+// knobs the tab remembers, so a row can legitimately be missing; relax ONE knob
+// at a time, only while the row is still not found, and say which moved. A
+// silent change to his filters would be worse than not jumping.
+function findSummaryRow(name) {
+  const rows = Array.from(document.querySelectorAll('#summary-table-wrap tbody tr'));
+  // The search below also matches a pooled row by its member names, so an exact
+  // hit is preferred but the first match is the right row for a pooled food.
+  return rows.find(r => normFood(r.dataset.food || '') === normFood(name)) || rows[0] || null;
+}
+function jumpToSummaryRow(food) {
+  const name = String(food || '').trim();
+  if (!name) return;
+  _summarySearch = name.toLowerCase();
+  showTab('summary');
+  const moved = [];
+  let row = findSummaryRow(name);
+  if (!row && _summaryMinLogs > 1) { _summaryMinLogs = 1; moved.push('minimum logs → 1'); renderSummary(); row = findSummaryRow(name); }
+  if (!row && _summaryFoodsOnly) { _summaryFoodsOnly = false; moved.push('🍽️ Foods only → off'); renderSummary(); row = findSummaryRow(name); }
+  if (!row && _summaryRange !== 'all') { _summaryRange = 'all'; moved.push('range → All Time'); renderSummary(); row = findSummaryRow(name); }
+  if (!row) { toast(`No Summary row for “${name}” yet`); return; }
+  // The Summary finishes drawing in deferred work — the insight cards above the
+  // table are inserted on a timer, which both replaces this <tr> and pushes it
+  // down the page. Scrolling once, now, lands on the pre-insert position. So do
+  // it again once that settles, re-finding the row each time.
+  const land = () => {
+    const el = findSummaryRow(name);
+    if (!el) return;
+    el.scrollIntoView({ block: 'center' });
+    el.classList.add('row-jump');
+    setTimeout(() => el.classList.remove('row-jump'), 2600);
+  };
+  land();
+  setTimeout(land, 350);
+  if (moved.length) toast('Widened the Summary filters: ' + moved.join(', '));
 }
 // v83: how many rows of the main Summary table are unrolled by default.
 let _summaryTableShown = 30;
