@@ -206,6 +206,23 @@
   }
   .log-avoid-line { display:flex; align-items:center; flex-wrap:wrap; gap:6px; }
   .log-avoid-line + .log-avoid-line { margin-top: 5px; }
+  /* v99: the food list is a multi-pick list — tap to tick, tap again to untick,
+     and the footer logs everything held. The list scrolls, the footer does not. */
+  #ac-dropdown.open { display: flex; flex-direction: column; }
+  #ac-dropdown .ac-list { flex: 1 1 auto; overflow-y: auto; }
+  .ac-item.ac-picked { background: rgba(37,99,235,0.10); }
+  body.dark .ac-item.ac-picked { background: rgba(96,165,250,0.16); }
+  .ac-tick { color: #047857; font-weight: 900; margin-right: 6px; }
+  body.dark .ac-tick { color: #4ADE80; }
+  .ac-empty { padding: 12px 14px; font-size: 12px; color: var(--muted); }
+  .ac-foot {
+    display: flex; align-items: center; gap: 8px; flex-shrink: 0;
+    padding: 8px 10px; border-top: 1px solid var(--border); background: var(--card);
+  }
+  .ac-foot-count { flex: 1; font-size: 12px; font-weight: 800; color: var(--text); }
+  .ac-foot button { border-radius: 8px; font-size: 12px; font-weight: 800; padding: 7px 12px; cursor: pointer; border: 1px solid var(--border); }
+  .ac-foot-clear { background: var(--bg); color: var(--muted); }
+  .ac-foot-log { background: #18507f; color: #fff; border-color: #18507f; }
   body.dark .ac-meal-flag { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.10); color: var(--text); }
   body.dark .ac-meal-flag.breakfast { background: rgba(230,81,0,0.20); color: #FFB480; border-color: rgba(230,81,0,0.25); }
   body.dark .ac-meal-flag.lunch     { background: rgba(46,125,50,0.20); color: #9AD9A0; border-color: rgba(46,125,50,0.25); }
@@ -4556,7 +4573,7 @@ try {
   </div>
 
   <div style="margin-left: auto; display: flex; align-items: center; gap: 4px;">
-    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v98</span>
+    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v99</span>
   </div>
 
   <div id="nav-more-tray" style="display:none; flex-basis:100%; flex-wrap:wrap; gap:4px; padding-top:6px; margin-top:4px; border-top:1px dashed rgba(255,255,255,0.18);">
@@ -4805,7 +4822,7 @@ html body select.status-badge-select.status-toxic {
         <div class="autocomplete-wrap" style="width:100%; height:100%; position:relative; overflow:visible;">
           <input type="text" id="inp-food" class="elegant-log-input" placeholder="Type a food, meal, or event… use ; to log several" autocomplete="off" style="border-radius:8px; font-size:14px; font-weight:600; padding:10px 14px; text-align:left; box-shadow:inset 0 2px 6px rgba(0,0,0,0.02); width:100%; height:100%; box-sizing:border-box;">
           
-          <div class="autocomplete-dropdown" id="ac-dropdown" style="position:absolute; top:calc(100% + 4px); left:0; right:0; z-index:999999; background:var(--card); border:1px solid var(--border); border-radius:8px; box-shadow:0 12px 32px rgba(0,0,0,0.15); max-height:250px; overflow-y:auto; text-align:left;"></div>
+          <div class="autocomplete-dropdown" id="ac-dropdown" style="position:absolute; top:calc(100% + 4px); left:0; right:0; z-index:999999; background:var(--card); border:1px solid var(--border); border-radius:8px; box-shadow:0 12px 32px rgba(0,0,0,0.15); max-height:min(60vh, 560px); overflow:hidden; text-align:left;"></div>
         </div>
       </div>
 
@@ -18506,42 +18523,66 @@ function parseCSVLine(line) {
 }
 
 // ─── Autocomplete ─────────────────────────────────────────────────────────────
+// PURE (v99): one row per food name, the one you ate most recently first, so the
+// list you see on a plain tap is your current rotation instead of the order the
+// entries happen to sit in. Back-dated logs count by their own date, not by when
+// they were typed. Retired names from the dictionary have no last-eaten date and
+// sort to the bottom.
+function foodsByRecency(entries, dictionary) {
+  const seen = new Map();
+  (entries || []).forEach(e => {
+    const k = String(e.food || '').toLowerCase();
+    if (!k) return;
+    const stamp = (e.date || '') + ' ' + (e.logTime || '');
+    const rec = seen.get(k);
+    if (!rec) seen.set(k, { food: e.food, notes: e.notes || '', last: stamp });
+    else if (stamp > rec.last) rec.last = stamp;
+  });
+  const rows = Array.from(seen.values()).sort((a, b) => (a.last < b.last ? 1 : a.last > b.last ? -1 : a.food.localeCompare(b.food)));
+  (dictionary || []).forEach(name => {
+    const k = String(name).toLowerCase();
+    if (k && !seen.has(k)) { seen.set(k, true); rows.push({ food: String(name), notes: '', last: '' }); }
+  });
+  return rows;
+}
+// PURE (v99): tick / untick one name in the ;-separated box text. Ticking a row
+// found by typing consumes what was typed, so the fragment that filtered the
+// list does not survive as a second entry.
+function pickToggleParts(raw, food, query) {
+  const parts = String(raw || '').split(';').map(s => s.trim()).filter(Boolean);
+  const i = parts.findIndex(p => normFood(p) === normFood(food));
+  if (i >= 0) { parts.splice(i, 1); return parts; }
+  if (query && parts.length && normFood(parts[parts.length - 1]) === normFood(query)) parts.pop();
+  parts.push(food);
+  return parts;
+}
 (function() {
   const inp = document.getElementById('inp-food');
   const drop = document.getElementById('ac-dropdown');
   let hiIdx = -1, acItems = [];
 
   function getUniqueFoods(q) {
-    const seen = new Map();
     const selectedDate = document.getElementById('inp-date').value || today();
     const todayMeals = new Map();
-    loadMigrated().forEach(e => {
+    const entries = loadMigrated();
+    entries.forEach(e => {
       if (e.date === selectedDate) {
         const k = e.food.toLowerCase();
         if (!todayMeals.has(k)) todayMeals.set(k, new Set());
         if (e.mealType) todayMeals.get(k).add(e.mealType);
       }
     });
-    loadMigrated().forEach(e => {
-      const k = e.food.toLowerCase();
-      if (!seen.has(k)) {
-        seen.set(k, {
-          food:e.food,
-          notes:e.notes||'',
-          mealsToday: Array.from(todayMeals.get(k) || [])
-        });
-      }
-    });
     // Fresh Start parks retired food names here (a plain name list — the old
     // year-2000 "ghost entries" crashed renders and polluted analytics).
-    try {
-      JSON.parse(localStorage.getItem('fst_food_dictionary') || '[]').forEach(name => {
-        const k = String(name).toLowerCase();
-        if (k && !seen.has(k)) seen.set(k, { food: String(name), notes: '', mealsToday: [] });
-      });
-    } catch (e) {}
-    const all = Array.from(seen.values());
+    let dict = [];
+    try { dict = JSON.parse(localStorage.getItem('fst_food_dictionary') || '[]'); } catch (e) {}
+    const all = foodsByRecency(entries, dict).map(f => ({ ...f, mealsToday: Array.from(todayMeals.get(f.food.toLowerCase()) || []) }));
     return q ? all.filter(f => f.food.toLowerCase().includes(q.toLowerCase())) : all;
+  }
+  // The box text IS the selection — nothing is held in a second place, so typing
+  // or editing the box by hand can never disagree with the ticks.
+  function pickedSet() {
+    return new Set(inp.value.split(';').map(s => normFood(s.trim())).filter(Boolean));
   }
   function mealFlagsHTML(meals, avoid) {
     const pill = avoid ? `<span class="ac-avoid-pill ${avoidLabelCls(avoid)}" title="You labelled this food ${escAttr(avoid)}">${esc(avoid)}</span>` : '';
@@ -18549,13 +18590,34 @@ function parseCSVLine(line) {
     const labels = { breakfast:'BF', lunch:'LU', snack:'SN', dinner:'DI' };
     return `<div class="ac-meals">${pill}${(meals || []).map(m => `<span class="ac-meal-flag ${escAttr(m)}" title="Already logged today for ${escAttr(m)}">${esc(labels[m] || m.slice(0,2).toUpperCase())}</span>`).join('')}</div>`;
   }
-  function openDrop(items) {
+  function openDrop(items, keepScroll) {
     acItems = items; hiIdx = -1;
-    if (!items.length) { closeDrop(); return; }
+    const picked = pickedSet();
+    if (!items.length && !picked.size) { closeDrop(); return; }
+    const top = keepScroll ? (drop.querySelector('.ac-list') || {}).scrollTop || 0 : 0;
     const avIdx = avoidLabelIndex(loadFoodStatus());
-    drop.innerHTML = items.map((f,i) => { const av = avoidLabelOf(avIdx, f.food); return `<div class="ac-item${av ? ' ac-avoid' : ''}" data-idx="${i}"><div class="ac-head"><div class="ac-food">${esc(f.food)}</div>${mealFlagsHTML(f.mealsToday, av)}</div>${f.notes?`<div class="ac-notes">${esc(f.notes)}</div>`:''}</div>`; }).join('');
+    const rows = items.map((f,i) => {
+      const av = avoidLabelOf(avIdx, f.food);
+      const on = picked.has(normFood(f.food));
+      return `<div class="ac-item${av ? ' ac-avoid' : ''}${on ? ' ac-picked' : ''}" data-idx="${i}"><div class="ac-head"><div class="ac-food">${on ? '<span class="ac-tick">✓</span>' : ''}${esc(f.food)}</div>${mealFlagsHTML(f.mealsToday, av)}</div>${f.notes?`<div class="ac-notes">${esc(f.notes)}</div>`:''}</div>`;
+    }).join('') || '<div class="ac-empty">No match — the names you ticked are still in the box.</div>';
+    // v99: the footer is the whole point of ticking — it says how many are held
+    // and logs them without reaching back up to + Add Entry.
+    const foot = picked.size ? `<div class="ac-foot">
+        <span class="ac-foot-count">${picked.size} selected</span>
+        <button type="button" class="ac-foot-clear" data-act="clear">Clear</button>
+        <button type="button" class="ac-foot-log" data-act="log">＋ Log ${picked.size}</button>
+      </div>` : '';
+    drop.innerHTML = `<div class="ac-list">${rows}</div>${foot}`;
     drop.classList.add('open');
+    const list = drop.querySelector('.ac-list');
+    if (list && top) list.scrollTop = top;
     drop.querySelectorAll('.ac-item').forEach(el => el.addEventListener('mousedown', e => { e.preventDefault(); selectItem(+el.dataset.idx); }));
+    drop.querySelectorAll('.ac-foot button').forEach(el => el.addEventListener('mousedown', e => {
+      e.preventDefault();
+      if (el.dataset.act === 'clear') { applyParts([]); openDrop(getUniqueFoods(fragQuery())); inp.focus(); }
+      else { closeDrop(); addEntry(); }
+    }));
   }
   function closeDrop() { drop.classList.remove('open'); acItems=[]; hiIdx=-1; }
   // Multi-add support: suggestions match only the fragment after the last ';'
@@ -18564,13 +18626,20 @@ function parseCSVLine(line) {
     const parts = inp.value.split(';');
     return parts[parts.length - 1].trim();
   }
+  // A ticked list always ends in "; " so the next thing typed starts a new name
+  // and the full list (empty query) is what you see while picking.
+  function applyParts(parts) {
+    inp.value = parts.length ? parts.join('; ') + '; ' : '';
+    refreshFoodAvoidWarning();
+  }
+  // v99: tapping a row ticks it, tapping it again unticks it. The list stays
+  // open so several items go in on one trip; ＋ Add Entry (or the footer) logs
+  // them all to the meal chosen above, as one meal.
   function selectItem(idx) {
     const f = acItems[idx]; if (!f) return;
-    const parts = inp.value.split(';');
-    parts[parts.length - 1] = (parts.length > 1 ? ' ' : '') + f.food;
-    inp.value = parts.join(';');
-    refreshFoodAvoidWarning();
-    closeDrop(); inp.focus();
+    applyParts(pickToggleParts(inp.value, f.food, fragQuery()));
+    openDrop(getUniqueFoods(fragQuery()), true);
+    inp.focus();
   }
   function highlight(idx) {
     drop.querySelectorAll('.ac-item').forEach(el => el.classList.remove('highlighted'));
@@ -21323,6 +21392,31 @@ function runSelfTest() {
     const w = avoidWarningsFor(avoidLabelIndex({ 'Quenberry': '🩻 B.List' }), 'plimfruit; Quenberry 90g ; quenberry 90g;;');
     return eq(JSON.stringify(w), JSON.stringify([{ food: 'Quenberry 90g', label: '🩻 B.List' }]));
   });
+
+  // ── food box list & multi-pick (v99) ──
+  t('food list: most recently eaten first, back-dated logs by their own date', () => {
+    const E = [
+      { food: 'Quenberry', date: D(9), logTime: '08:00' },   // typed first, eaten long ago
+      { food: 'Plimroot', date: D(1), logTime: '19:00' },
+      { food: 'Zelmo sprig', date: D(1), logTime: '07:30' },
+      { food: 'Quenberry', date: D(0), logTime: '12:00' }    // same food, eaten today
+    ];
+    return eq(foodsByRecency(E, []).map(f => f.food).join('|'), 'Quenberry|Plimroot|Zelmo sprig');
+  });
+  t('food list: retired dictionary names sit at the bottom, once each', () => {
+    const E = [{ food: 'Plimroot', date: D(2), logTime: '10:00' }];
+    return eq(foodsByRecency(E, ['Grainrice', 'plimroot', 'Grainrice']).map(f => f.food).join('|'), 'Plimroot|Grainrice');
+  });
+  t('multi-pick: ticking adds, ticking again removes', () => {
+    const one = pickToggleParts('', 'Plimroot', '');
+    const two = pickToggleParts(one.join('; ') + '; ', 'Zelmo sprig', '');
+    const off = pickToggleParts(two.join('; ') + '; ', 'plimroot', '');
+    return eq([one.join('|'), two.join('|'), off.join('|')].join(' / '), 'Plimroot / Plimroot|Zelmo sprig / Zelmo sprig');
+  });
+  t('multi-pick: ticking a row you typed does not leave the typed text behind', () =>
+    eq(pickToggleParts('Plimroot; quenb', 'Quenberry mini', 'quenb').join('|'), 'Plimroot|Quenberry mini'));
+  t('multi-pick: a name already in the box is not added twice', () =>
+    eq(pickToggleParts('Plimroot; Zelmo sprig; ', 'Plimroot', '').join('|'), 'Zelmo sprig'));
 
   // ── face map ──
   t('face map: every region key is unique', () => {
