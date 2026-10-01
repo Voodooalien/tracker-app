@@ -279,6 +279,50 @@
   .lv-choice-btn { border: 1px solid var(--border); border-radius: 9px; background: var(--card); color: var(--text); font-family: inherit; font-size: 12.5px; font-weight: 700; padding: 9px 12px; cursor: pointer; }
   .lv-choice-btn.pos { background: #167A4F; border-color: #167A4F; color: #fff; }
   .lv-choice-btn.neg { background: #9E1B32; border-color: #9E1B32; color: #fff; }
+  /* v106: Two-pane (desktop) — the list keeps its width, the pane is fixed. */
+  .sp-wrap { display: flex; gap: 18px; align-items: flex-start; }
+  .sp-left { flex: 1 1 auto; min-width: 0; }
+  .sp-right { width: 340px; flex-shrink: 0; position: sticky; top: 12px; background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 16px; }
+  .lv-row.lv-picked { background: rgba(37,99,235,0.10); }
+  body.dark .lv-row.lv-picked { background: rgba(96,165,250,0.16); }
+  .sp-empty { font-size: 12.5px; color: var(--muted); line-height: 1.6; }
+  .sp-head { display: flex; flex-direction: column; gap: 10px; }
+  .sp-name { font-size: 16px; font-weight: 800; overflow-wrap: anywhere; }
+  .sp-stats { display: flex; gap: 14px; margin: 14px 0 10px; }
+  .sp-stat b { display: block; font-size: 19px; font-weight: 800; }
+  .sp-stat b.bad { color: #9E1B32; }
+  body.dark .sp-stat b.bad { color: #FF8FA3; }
+  .sp-stat span { font-size: 10.5px; color: var(--muted); }
+  .sp-worst { font-size: 12px; color: var(--muted); line-height: 1.5; }
+  .sp-block { margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--border); }
+  .sp-label { font-size: 10px; font-weight: 800; letter-spacing: .08em; color: var(--muted); margin-bottom: 6px; }
+  .sp-spark { height: 22px; }
+  .sp-spark i { width: 7px; }
+  .sp-note { font-size: 12.5px; line-height: 1.55; max-height: 120px; overflow-y: auto; }
+  .sp-fine { font-size: 10.5px; color: var(--muted); }
+  .sp-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
+  /* v105: the Queue — one due mark at a time, big targets, nothing else on screen. */
+  .q-card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 18px 16px; display: flex; flex-direction: column; gap: 12px; }
+  .q-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .q-win-pill { font-size: 10.5px; font-weight: 800; letter-spacing: .06em; color: #8A6000; background: #FFF6E0; border: 1px solid #EBD39A; border-radius: 999px; padding: 4px 10px; }
+  body.dark .q-win-pill { background: rgba(201,138,5,0.18); color: #FFD27A; }
+  .q-eaten { font-size: 11.5px; color: var(--muted); }
+  .q-food { font-size: 22px; font-weight: 800; line-height: 1.25; }
+  .q-ask { font-size: 13px; color: var(--muted); }
+  .q-bulk { font-size: 11.5px; font-weight: 700; color: #8A6000; background: #FFF6E0; border: 1px solid #EBD39A; border-radius: 8px; padding: 7px 10px; }
+  body.dark .q-bulk { background: rgba(201,138,5,0.18); color: #FFD27A; }
+  .q-answer { display: flex; gap: 10px; }
+  .q-btn { flex: 1 1 0; min-height: 68px; border: 0; border-radius: 13px; font-family: inherit; font-size: 15px; font-weight: 800; cursor: pointer; color: #fff; }
+  .q-btn.pos { background: #167A4F; }
+  .q-btn.neg { background: #9E1B32; }
+  .q-minor { display: flex; flex-wrap: wrap; gap: 6px; }
+  .q-symptoms { border-top: 1px dashed var(--border); padding-top: 10px; }
+  .q-rest { font-size: 11.5px; color: var(--muted); margin: 12px 2px 8px; }
+  .q-next-row { display: flex; align-items: center; gap: 10px; padding: 11px 12px; border-bottom: 1px solid var(--border); }
+  .q-next-row:last-child { border-bottom: 0; }
+  .q-next-n { width: 24px; height: 24px; flex-shrink: 0; border-radius: 7px; background: var(--bg); color: var(--muted); font-size: 11px; font-weight: 800; display: flex; align-items: center; justify-content: center; }
+  .q-next-food { flex: 1 1 auto; min-width: 0; font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
+  .q-next-win { font-size: 11px; color: var(--muted); flex-shrink: 0; }
   /* Sub-groups inside a meal: one line of grazing, one heading. */
   .lv-sub { font-size: 10.5px; font-weight: 800; color: var(--muted); padding: 7px 10px 5px; background: var(--bg); border-bottom: 1px solid var(--border); }
   .meal-subsection { font-size: 11px; font-weight: 800; color: var(--muted); letter-spacing: .06em; margin: 10px 0 4px; padding-left: 2px; }
@@ -4646,7 +4690,7 @@ try {
   </div>
 
   <div style="margin-left: auto; display: flex; align-items: center; gap: 4px;">
-    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v104</span>
+    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v106</span>
   </div>
 
   <div id="nav-more-tray" style="display:none; flex-basis:100%; flex-wrap:wrap; gap:4px; padding-top:6px; margin-top:4px; border-top:1px dashed rgba(255,255,255,0.18);">
@@ -16820,8 +16864,19 @@ function showSymInput(btn) {
 // edit, undo and the celebration all behave identically whichever one is on.
 const LOG_VIEWS = [
   { key: 'classic', label: 'Classic', hint: 'The cards you know — one card per item' },
-  { key: 'dense',   label: 'Dense',   hint: 'One row per item under a window header — tap the name for symptoms, Edit, Again and Summary' }
+  { key: 'dense',   label: 'Dense',   hint: 'One row per item under a window header — tap the name for symptoms, Edit, Again and Summary' },
+  { key: 'queue',   label: 'Queue',   hint: 'Only what is due, one mark at a time, oldest first — for clearing an evening in one pass' },
+  { key: 'split',   label: 'Two-pane', hint: 'Desktop only: the list on the left, the selected food\'s label, history and note on the right', minWidth: 1000 }
 ];
+// A view can need room. Below its width the switcher hides it and the renderer
+// falls back to Dense, so a phone never lands on a layout it cannot draw.
+function logViewFits(v, width) {
+  return !v.minWidth || (typeof width === 'number' ? width : 1200) >= v.minWidth;
+}
+function effectiveLogView(view, width) {
+  const v = LOG_VIEWS.find(x => x.key === view);
+  return (v && logViewFits(v, width)) ? view : (v ? 'dense' : 'classic');
+}
 function isValidLogView(k) { return LOG_VIEWS.some(v => v.key === k); }
 // v102: Matrix was Dense with a header row and no expand panel. Dense now has
 // the header, so the two had no daylight between them — 'matrix' lands on Dense
@@ -16841,8 +16896,9 @@ function setLogView(key) {
 function renderLogViewSwitch() {
   const host = document.getElementById('log-view-switch');
   if (!host) return;
-  host.innerHTML = LOG_VIEWS.map(v =>
-    `<button type="button" class="${v.key === _logView ? 'active' : ''}" title="${escAttr(v.hint)}" onclick="setLogView('${v.key}')">${esc(v.label)}</button>`).join('');
+  const w = window.innerWidth;
+  host.innerHTML = LOG_VIEWS.filter(v => logViewFits(v, w)).map(v =>
+    `<button type="button" class="${v.key === effectiveLogView(_logView, w) ? 'active' : ''}" title="${escAttr(v.hint)}" onclick="setLogView('${v.key}')">${esc(v.label)}</button>`).join('');
 }
 // PURE: one compact cell cycles unmarked → ✓ → ✕ → unmarked.
 function nextWindowState(v) { return (v === null || v === undefined) ? true : v === true ? false : null; }
@@ -16875,6 +16931,20 @@ function splitIntoOccasions(entries, gapMin) {
     prev = s;
   });
   return out;
+}
+// PURE (v106): which occasions deserve a heading. Pending items can span days,
+// and a day that holds exactly one occasion needs no heading — the row already
+// carries its date. Only a day that really was split gets headings, which is the
+// case the whole feature exists for (an afternoon snack and an evening one).
+function occasionsNeedingHeadings(occ) {
+  const byDate = {};
+  (occ || []).forEach((items, i) => {
+    const d = (items[0] && items[0].date) || '';
+    (byDate[d] = byDate[d] || []).push(i);
+  });
+  const need = new Set();
+  Object.keys(byDate).forEach(d => { if (byDate[d].length > 1) byDate[d].forEach(i => need.add(i)); });
+  return need;
 }
 // PURE: "13:02 – 13:50" for a spread of times, "22:36" when they share one.
 function occasionLabel(items) {
@@ -16960,21 +17030,195 @@ function denseListHTML(mealOrder, groups, mealLabels, suspectFoods) {
   return head + mealOrder.filter(m => groups[m].length).map(mealKey => `
     <div class="lv-group">
       <div class="lv-group-head">${mealLabels[mealKey]} · ${groups[mealKey].length}</div>
-      <div class="lv-card">${(occ => occ.map(items => `${occ.length > 1 ? `<div class="lv-sub">🕐 ${esc(occasionLabel(items))} · ${items.length}</div>` : ''}${items.map(e => {
+      <div class="lv-card">${(occ => { const need = occasionsNeedingHeadings(occ); return occ.map((items, oi) => `${need.has(oi) ? `<div class="lv-sub">🕐 ${esc(occasionLabel(items))} · ${items.length}</div>` : ''}${items.map(e => {
         const ago = hoursAgoLabel(e.date, e.logTime);
         const nSym = e.symptoms ? Object.keys(e.symptoms).filter(k => e.symptoms[k]).length : 0;
         const meta = [e.date !== today() ? '📅 ' + fmt(e.date) : '', e.logTime ? '🕐 ' + e.logTime : '', ago].filter(Boolean).join(' · ');
-        const open = _denseOpenId === e.id;
-        return `<div class="lv-row">
-          <button type="button" class="lv-main" aria-expanded="${open}" title="Symptoms, Edit, Again, Summary" onclick="toggleDenseActions('${e.id}')">
+        // In Two-pane the row drives the right pane instead of expanding — the
+        // panel's four actions live there, so an expander would duplicate them.
+        const inSplit = _viewNow === 'split';
+        const open = !inSplit && _denseOpenId === e.id;
+        const picked = inSplit && normFood(_splitFood || '') === normFood(e.food);
+        return `<div class="lv-row${picked ? ' lv-picked' : ''}">
+          <button type="button" class="lv-main" aria-expanded="${open}" title="${inSplit ? 'Show this food on the right' : 'Symptoms, Edit, Again, Summary'}"
+            onclick="${inSplit ? `splitSelect(${escAttr(JSON.stringify(e.food))})` : `toggleDenseActions('${e.id}')`}">
             <span class="lv-food">${suspectFoods.has(e.food) ? '⚠️ ' : ''}${esc(e.food)}${lvLabelPill(avIdx, e.food)}${nSym ? `<span class="lv-pill lv-sym-count">🏷️ ${nSym}</span>` : ''}</span>
-            <span class="lv-meta">${open ? '▴ ' : '▾ '}${esc(meta)}</span>
+            <span class="lv-meta">${inSplit ? '' : (open ? '▴ ' : '▾ ')}${esc(meta)}</span>
           </button>
           <div class="lv-cells">${WINDOWS.map(w => lvCellHTML(e, w)).join('')}</div>
         </div>${cellChoiceHTML(e)}${open ? lvActionsHTML(e) : ''}`;
-      }).join('')}`).join(''))(splitIntoOccasions(groups[mealKey]))}</div>
+      }).join('')}`).join(''); })(splitIntoOccasions(groups[mealKey]))}</div>
     </div>`).join('');
 }
+// ─── v106: the Two-pane view (desktop) ───────────────────────────────────────
+// The list keeps the Dense rows; the right pane answers "what do I already know
+// about this food?" without leaving the Logs tab. Everything it shows is read
+// from the same store the Summary reads, and its label select writes through
+// changeFoodStatus(), so the two screens cannot disagree.
+let _splitFood = null;
+let _viewNow = 'classic';   // the view actually drawn last render (after the width fallback)
+function splitSelect(food) { _splitFood = String(food || ''); renderPending(); }
+// PURE: the numbers the right pane prints. Windows are the evidence unit, the
+// same as everywhere else — a log with no marked window counts as no evidence.
+function foodPaneStats(entries, food) {
+  const key = normFood(food);
+  const mine = (entries || []).filter(e => normFood(e.food) === key);
+  let pos = 0, neg = 0;
+  const win = {};
+  WINDOWS.forEach(w => { win[w.key] = { p: 0, n: 0 }; });
+  mine.forEach(e => WINDOWS.forEach(w => {
+    const v = e.windows ? e.windows[w.key] : undefined;
+    if (v === true) { pos++; win[w.key].p++; }
+    else if (v === false) { neg++; win[w.key].n++; }
+  }));
+  const rated = pos + neg;
+  let worst = null;
+  WINDOWS.forEach(w => {
+    const t = win[w.key].p + win[w.key].n;
+    if (t < 2) return;
+    const rate = win[w.key].n / t;
+    if (!worst || rate > worst.rate) worst = { key: w.key, label: w.label, rate, total: t };
+  });
+  const days = new Set(mine.map(e => e.date)).size;
+  return { logs: mine.length, days, rated, neg, negRate: rated ? neg / rated : null, worst, entries: mine };
+}
+// PURE: one bar per serving, oldest → newest, capped at the last 14.
+function foodPaneSpark(mine) {
+  return sortEntriesNewest(mine || []).slice(0, 14).reverse().map(e => {
+    const vals = WINDOWS.map(w => (e.windows ? e.windows[w.key] : undefined));
+    if (vals.some(v => v === false)) return 'neg';
+    if (vals.some(v => v === true)) return 'pos';
+    return 'pending';
+  });
+}
+function splitPaneHTML() {
+  if (!_splitFood) {
+    return `<div class="sp-empty">Pick an item on the left to see its label, its history and its note.</div>`;
+  }
+  const entries = loadMigrated();
+  const st = foodPaneStats(entries, _splitFood);
+  if (!st.logs) return `<div class="sp-empty">Nothing logged under that name any more.</div>`;
+  const status = ciLookup(loadFoodStatus(), _splitFood) || 'N/A';
+  const noteHit = resolveFoodNote(_splitFood, loadFoodNotes(), loadFoodNotesItem());
+  const spark = foodPaneSpark(st.entries).map(o => `<i class="fs-${o}"></i>`).join('');
+  const pct = st.negRate === null ? '—' : Math.round(st.negRate * 100) + '%';
+  return `
+    <div class="sp-head">
+      <div class="sp-name">${esc(_splitFood)}</div>
+      <select class="status-badge-select ${LEARNED_STATUS_CLS[status] || 'status-na'}" title="Set this food's label — the same one the Summary shows"
+        onchange="changeFoodStatus(${escAttr(JSON.stringify(_splitFood))}, this.value)">
+        ${LEARNED_STATUS_OPTS.map(o => `<option value="${escAttr(o)}" ${o === status ? 'selected' : ''}>${esc(o)}</option>`).join('')}
+      </select>
+    </div>
+    <div class="sp-stats">
+      <div class="sp-stat"><b>${st.logs}</b><span>logs</span></div>
+      <div class="sp-stat"><b>${st.days}</b><span>days</span></div>
+      <div class="sp-stat"><b>${st.rated}</b><span>rated</span></div>
+      <div class="sp-stat"><b class="${st.negRate !== null && st.negRate >= 0.5 ? 'bad' : ''}">${pct}</b><span>reacted</span></div>
+    </div>
+    ${st.worst ? `<div class="sp-worst">Worst window: <b>${esc(st.worst.label)}</b> — ${Math.round(st.worst.rate * 100)}% of ${st.worst.total} marks</div>` : `<div class="sp-worst">Not enough marked windows yet to name a worst one.</div>`}
+    <div class="sp-block">
+      <div class="sp-label">LAST ${Math.min(14, st.logs)} SERVINGS</div>
+      <div class="food-spark sp-spark">${spark}</div>
+      <div class="sp-fine">oldest → newest · tall = reacted</div>
+    </div>
+    <div class="sp-block">
+      <div class="sp-label">NOTE${noteHit && noteHit.scope === 'item' ? ' · all serving sizes' : ''}</div>
+      <div class="sp-note">${noteHit && noteHit.text ? esc(noteHit.text) : '<span class="sp-fine">No note yet.</span>'}</div>
+    </div>
+    <div class="sp-actions">
+      <button class="edit-btn" onclick="openNotesModal(${escAttr(JSON.stringify(_splitFood))})">📝 ${noteHit && noteHit.text ? 'Edit note' : 'Add note'}</button>
+      <button class="edit-btn" onclick="jumpToSummaryRow(${escAttr(JSON.stringify(_splitFood))})">📋 Open in Summary</button>
+      <button class="edit-btn" onclick="startExperiment(${escAttr(JSON.stringify(_splitFood))})">🧪 Test it</button>
+    </div>`;
+}
+function splitListHTML(mealOrder, groups, mealLabels, suspectFoods) {
+  return `<div class="sp-wrap">
+    <div class="sp-left">${denseListHTML(mealOrder, groups, mealLabels, suspectFoods)}</div>
+    <div class="sp-right">${splitPaneHTML()}</div>
+  </div>`;
+}
+
+// ─── v105: the Queue view ────────────────────────────────────────────────────
+// Only what is due, one mark at a time, oldest first — the evening pass. It owns
+// no data of its own: the card writes through markReaction() like every other
+// view, so a mark made here obeys Bulk Edit, Undo and the celebration unchanged.
+// Skipping is session-only on purpose: a skipped mark is still due tomorrow.
+let _queueSkipped = {};
+function queueKey(d) { return d.id + '|' + d.winKey; }
+// PURE: due marks oldest-eaten first, skipped ones dropped.
+function queueOrder(due, byId, skipped) {
+  return (due || [])
+    .filter(d => byId[d.id] && !(skipped || {})[queueKey(d)])
+    .map(d => ({ id: d.id, winKey: d.winKey, entry: byId[d.id] }))
+    .sort((a, b) => {
+      const as = (a.entry.date || '') + (a.entry.logTime || ''), bs = (b.entry.date || '') + (b.entry.logTime || '');
+      if (as !== bs) return as.localeCompare(bs);
+      return WINDOWS.findIndex(w => w.key === a.winKey) - WINDOWS.findIndex(w => w.key === b.winKey);
+    });
+}
+function queueSkip(id, winKey) { _queueSkipped[id + '|' + winKey] = true; renderPending(); }
+function queueResetSkips() { _queueSkipped = {}; renderPending(); }
+// "between 18:10 and 21:10" — the window's own span, counted from when you ate.
+function windowClockRange(entry, winKey) {
+  const idx = WINDOWS.findIndex(w => w.key === winKey);
+  if (idx < 0 || !entry.logTime) return '';
+  const startH = idx === 0 ? 0 : WIN_GLOW_AT[WINDOWS[idx - 1].key];
+  const endH = WIN_GLOW_AT[winKey];
+  const parts = String(entry.logTime).split(':');
+  const base = (parseInt(parts[0], 10) || 0) * 60 + (parseInt(parts[1], 10) || 0);
+  const clock = mins => `${String(Math.floor((mins % 1440) / 60)).padStart(2, '0')}:${String(mins % 60).padStart(2, '0')}`;
+  return `${clock(base + startH * 60)} – ${clock(base + endH * 60)}`;
+}
+function queueListHTML() {
+  const entries = loadMigrated();
+  const byId = {};
+  entries.forEach(e => { byId[e.id] = e; });
+  const items = queueOrder(listDuePending(), byId, _queueSkipped);
+  const skipped = Object.keys(_queueSkipped).length;
+  if (!items.length) {
+    return `<div class="card"><div class="empty"><span>✅</span>${skipped
+      ? `Nothing left in the queue — ${skipped} skipped. <button class="edit-btn" onclick="queueResetSkips()">Bring the skipped back</button>`
+      : 'Nothing due right now. Windows appear here as they elapse.'}</div></div>`;
+  }
+  const cur = items[0];
+  const e = cur.entry;
+  const w = WINDOWS.find(x => x.key === cur.winKey);
+  const avIdx = avoidLabelIndex(loadFoodStatus());
+  const range = windowClockRange(e, cur.winKey);
+  const bulkNote = _bulkMode
+    ? `<div class="q-bulk">Bulk edit is on — this answers for all ${bulkOccasionTargets(entries, e).length} item(s) of that occasion.</div>` : '';
+  const next = items.slice(1, 4).map((it, i) => `
+    <div class="q-next-row">
+      <span class="q-next-n">${i + 2}</span>
+      <span class="q-next-food">${esc(it.entry.food)}</span>
+      <span class="q-next-win">${esc((WINDOWS.find(x => x.key === it.winKey) || {}).label || '')}</span>
+    </div>`).join('');
+  return `
+    <div class="q-card">
+      <div class="q-top">
+        <span class="q-win-pill">${esc(w ? w.label : '')} window</span>
+        <span class="q-eaten">ate ${esc(e.logTime || '')}${e.date !== today() ? ' · ' + esc(fmt(e.date)) : ''} · ${esc(e.mealType || 'other')}</span>
+      </div>
+      <div class="q-food">${esc(e.food)}${lvLabelPill(avIdx, e.food)}</div>
+      <div class="q-ask">Any reaction${range ? ` in ${esc(range)}` : ''}?</div>
+      ${bulkNote}
+      <div class="q-answer">
+        <button type="button" class="q-btn pos" onclick="markReaction('${e.id}','${cur.winKey}',true)">✓ Clear</button>
+        <button type="button" class="q-btn neg" onclick="markReaction('${e.id}','${cur.winKey}',false)">✕ Reacted</button>
+      </div>
+      <div class="q-minor">
+        <button type="button" class="edit-btn" onclick="queueSkip('${e.id}','${cur.winKey}')">Skip</button>
+        <button type="button" class="edit-btn" onclick="toggleSymptoms('${e.id}')">🏷️ Symptoms</button>
+        <button type="button" class="edit-btn" onclick="openEditModal('${e.id}')">✏️ Edit</button>
+        <button type="button" class="edit-btn" onclick="jumpToSummaryRow(${escAttr(JSON.stringify(e.food))})">📋 Summary</button>
+      </div>
+      ${_symptomsExpanded[e.id] ? `<div class="q-symptoms">${symptomsHTML(e)}</div>` : ''}
+    </div>
+    <div class="q-rest">${items.length - 1 > 0 ? `${items.length - 1} more waiting` : 'last one'}${skipped ? ` · ${skipped} skipped · <button class="edit-btn" onclick="queueResetSkips()">bring back</button>` : ''}</div>
+    ${next ? `<div class="lv-card">${next}</div>` : ''}`;
+}
+
 // The "✓ All due" button has lived in the toolbar since v68 and is easy to miss.
 // Promoted to a card above the list, it is the fastest path through an evening;
 // the toolbar button hides so there is only ever one of it.
@@ -17028,8 +17272,15 @@ function renderPending() {
     groups[key].push(e);
   });
 
+  const view = effectiveLogView(_logView, window.innerWidth);
+  _viewNow = view;
+  if (view === 'queue') { container.innerHTML = queueListHTML(); return; }
   const suspectFoods = getSuspectFoods();
-  if (_logView !== 'classic') {
+  if (view === 'split') {
+    container.innerHTML = splitListHTML(mealOrder, groups, mealLabels, suspectFoods);
+    return;
+  }
+  if (view === 'dense') {
     container.innerHTML = denseListHTML(mealOrder, groups, mealLabels, suspectFoods);
     return;
   }
@@ -17048,7 +17299,8 @@ function renderPending() {
     // v103: same occasion split as the Dense view — a snack group spanning the
     // afternoon and the evening is not one sitting. Silent on a one-sitting meal.
     const _occ = splitIntoOccasions(group);
-    html += _occ.map(items => (_occ.length > 1 ? `<div class="meal-subsection">🕐 ${esc(occasionLabel(items))} · ${items.length}</div>` : '') + items.map(e => {
+    const _occNeed = occasionsNeedingHeadings(_occ);
+    html += _occ.map((items, _oi) => (_occNeed.has(_oi) ? `<div class="meal-subsection">🕐 ${esc(occasionLabel(items))} · ${items.length}</div>` : '') + items.map(e => {
       const agoTag = hoursAgoLabel(e.date, e.logTime);
       const suspectTag = suspectFoods.has(e.food) ? `<span class="suspect-flag" style="margin:0;" title="${(s => s ? `${s.neg} of ${s.total} rated windows reacted (50%+) — all-time history` : '')(suspectFoods.get(e.food))}">⚠️</span>` : '';
       
@@ -21706,6 +21958,44 @@ function runSelfTest() {
                { id: 'b', date: D(1), logTime: '13:00', food: 'X', windows: {}, symptoms: {} }];
     return eq(splitIntoOccasions(E).length, 2);
   });
+  t('two-pane: a narrow window falls back to Dense, a wide one keeps it', () =>
+    eq([effectiveLogView('split', 700), effectiveLogView('split', 1400), effectiveLogView('queue', 700)].join('|'), 'dense|split|queue'));
+  t('two-pane: the stats count windows, not logs, and name the worst window', () => {
+    const E = [
+      { id: 'p1', date: D(3), logTime: '12:00', food: 'Panefood', windows: { w1: true, w2: false, w3: false }, symptoms: {} },
+      { id: 'p2', date: D(2), logTime: '12:00', food: 'panefood', windows: { w1: true, w2: false }, symptoms: {} },
+      { id: 'p3', date: D(2), logTime: '18:00', food: 'Other', windows: { w1: false }, symptoms: {} }
+    ];
+    const s = foodPaneStats(E, 'Panefood');
+    return eq([s.logs, s.days, s.rated, s.neg, s.worst.key, Math.round(s.negRate * 100)].join('|'), '2|2|5|3|w2|60');
+  });
+  t('two-pane: the spark reads one bar per serving, oldest first', () => {
+    const E = [
+      { id: 's1', date: D(2), logTime: '12:00', food: 'Panefood', windows: { w1: true }, symptoms: {} },
+      { id: 's2', date: D(1), logTime: '12:00', food: 'Panefood', windows: { w1: false }, symptoms: {} },
+      { id: 's3', date: D(0), logTime: '12:00', food: 'Panefood', windows: {}, symptoms: {} }
+    ];
+    return eq(foodPaneSpark(E).join('|'), 'pos|neg|pending');
+  });
+  t('queue: oldest eaten first, then window order within one item', () => {
+    const byId = {
+      a: { id: 'a', date: D(0), logTime: '19:40', food: 'Late' },
+      b: { id: 'b', date: D(1), logTime: '08:00', food: 'Yesterday' },
+      c: { id: 'c', date: D(0), logTime: '07:20', food: 'Morning' }
+    };
+    const due = [{ id: 'a', winKey: 'w1' }, { id: 'c', winKey: 'w2' }, { id: 'c', winKey: 'w1' }, { id: 'b', winKey: 'w3' }];
+    return eq(queueOrder(due, byId, {}).map(x => x.entry.food + ':' + x.winKey).join('|'),
+      'Yesterday:w3|Morning:w1|Morning:w2|Late:w1');
+  });
+  t('queue: a skipped mark leaves the queue but nothing else does', () => {
+    const byId = { a: { id: 'a', date: D(0), logTime: '09:00', food: 'A' } };
+    const due = [{ id: 'a', winKey: 'w1' }, { id: 'a', winKey: 'w2' }];
+    return eq(queueOrder(due, byId, { 'a|w1': true }).map(x => x.winKey).join('|'), 'w2');
+  });
+  t('queue: the window question reads real clock times from the log time', () =>
+    eq(windowClockRange({ logTime: '13:10' }, 'w2'), '17:10 – 21:10'));
+  t('queue: a window that crosses midnight still reads a clock time', () =>
+    eq(windowClockRange({ logTime: '22:00' }, 'w3'), '06:00 – 11:00'));
   t('bulk: a tap reaches its own occasion, not the rest of the day’s snacks', () => {
     const E = ['22:36', '16:39', '16:38', '13:50', '13:24', '13:02'].map((tm, i) =>
       ({ id: 'b' + i, date: D(0), logTime: tm, mealType: 'snack', food: 'Snackfood ' + i, windows: {}, symptoms: {} }));
@@ -21721,6 +22011,13 @@ function runSelfTest() {
     const E = ['19:42', '19:40', '19:40'].map((tm, i) =>
       ({ id: 'd' + i, date: D(0), logTime: tm, mealType: 'dinner', food: 'Dinnerfood ' + i, windows: {}, symptoms: {} }));
     return eq(bulkOccasionTargets(E, E[1]).length, 3);
+  });
+  t('occasions: headings appear only on a day that really split', () => {
+    const day = (dateN, times) => times.map((tm, i) => ({ id: dateN + '_' + i, date: D(dateN), logTime: tm, mealType: 'snack', food: 'F' + i, windows: {}, symptoms: {} }));
+    // today split in two; yesterday one sitting — only today's two get headings
+    const occ = splitIntoOccasions([...day(0, ['20:00', '13:00']), ...day(1, ['13:00'])]);
+    const need = occasionsNeedingHeadings(occ);
+    return eq([occ.length, need.has(0), need.has(1), need.has(2)].join('|'), '3|true|true|false');
   });
   t('occasions: the heading reads a range, or one time when they share it', () =>
     eq([occasionLabel([{ logTime: '13:02' }, { logTime: '13:50' }]), occasionLabel([{ logTime: '22:36' }])].join('|'), '13:02 – 13:50|22:36'));
