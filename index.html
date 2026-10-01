@@ -226,6 +226,61 @@
   /* v100: the row you were sent to, so it is obvious which one the jump meant */
   @keyframes sumRowJump { 0%, 100% { background: transparent; } 30% { background: rgba(250,204,21,0.40); } }
   .summary-table tr.row-jump td { animation: sumRowJump 1.1s ease-in-out 2; }
+
+  /* ── v101: Logs list views (Classic / Dense / Matrix) ───────────────────── */
+  .log-view-switch { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--border); border-radius: 999px; background: var(--bg); }
+  .log-view-switch button {
+    border: 0; border-radius: 999px; background: transparent; color: var(--muted);
+    font-family: inherit; font-size: 11.5px; font-weight: 800; padding: 6px 12px; cursor: pointer;
+  }
+  .log-view-switch button.active { background: var(--card); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,0.12); }
+
+  /* The sweep card: "✓ All due" promoted out of the toolbar, where it was easy
+     to miss — it is the fastest way through an evening's marks. */
+  .sweep-card {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    margin: 14px 0 10px; padding: 12px 14px; border-radius: 12px;
+    background: var(--card); border: 1px solid var(--border); border-left: 5px solid #C98A05;
+  }
+  .sweep-text { flex: 1 1 200px; min-width: 0; }
+  .sweep-title { font-size: 14px; font-weight: 800; }
+  .sweep-sub { font-size: 11.5px; color: var(--muted); margin-top: 3px; line-height: 1.45; }
+  .sweep-btn {
+    border: 0; border-radius: 10px; background: #167A4F; color: #fff;
+    font-family: inherit; font-size: 13px; font-weight: 800; padding: 11px 16px; cursor: pointer;
+  }
+
+  .lv-group { margin-bottom: 14px; }
+  .lv-group-head { font-size: 11px; font-weight: 800; letter-spacing: .1em; color: var(--muted); padding: 0 2px 6px; }
+  .lv-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+  .lv-row { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+  .lv-row:last-child { border-bottom: 0; }
+  .lv-main { flex: 1 1 auto; min-width: 0; border: 0; background: transparent; color: var(--text); font-family: inherit; text-align: left; padding: 4px 2px; cursor: pointer; }
+  .lv-food { display: block; font-size: 13.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .lv-meta { display: block; font-size: 10.5px; color: var(--muted); margin-top: 2px; }
+  .lv-cells { display: flex; gap: 5px; flex-shrink: 0; }
+  .lv-cell {
+    width: 36px; height: 36px; border-radius: 9px; cursor: pointer;
+    font-family: inherit; font-size: 14px; font-weight: 800; border: 1px solid var(--border);
+    background: var(--bg); color: var(--muted);
+  }
+  .lv-cell.pos { background: #167A4F; border-color: #167A4F; color: #fff; }
+  .lv-cell.neg { background: #9E1B32; border-color: #9E1B32; color: #fff; }
+  .lv-cell.due { background: #FFF6E0; border: 2px solid #C98A05; color: #8A6000; }
+  body.dark .lv-cell.due { background: rgba(201,138,5,0.18); color: #FFD27A; }
+  .lv-actions { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 10px 10px; background: var(--bg); border-bottom: 1px solid var(--border); }
+  .lv-pill { font-size: 9px; font-weight: 800; border-radius: 999px; padding: 2px 6px; margin-left: 6px; white-space: nowrap; }
+  .lv-matrix-head { display: flex; align-items: center; gap: 5px; padding: 4px 10px 6px; }
+  .lv-matrix-head .lv-spacer { flex: 1 1 auto; }
+  .lv-matrix-head span.lv-wlabel { width: 36px; flex-shrink: 0; text-align: center; font-size: 9.5px; font-weight: 800; color: var(--muted); }
+  /* Thumbs, not mouse pointers: the cells grow on a phone, where this view is
+     meant to be used, and the name column gives up the width. */
+  @media (max-width: 480px) {
+    .lv-cells { gap: 4px; }
+    .lv-cell { width: 42px; height: 42px; font-size: 15px; }
+    .lv-matrix-head span.lv-wlabel { width: 42px; }
+    .lv-row { padding: 8px 8px; gap: 6px; }
+  }
   body.dark .ac-meal-flag { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.10); color: var(--text); }
   body.dark .ac-meal-flag.breakfast { background: rgba(230,81,0,0.20); color: #FFB480; border-color: rgba(230,81,0,0.25); }
   body.dark .ac-meal-flag.lunch     { background: rgba(46,125,50,0.20); color: #9AD9A0; border-color: rgba(46,125,50,0.25); }
@@ -4576,7 +4631,7 @@ try {
   </div>
 
   <div style="margin-left: auto; display: flex; align-items: center; gap: 4px;">
-    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v100</span>
+    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v101</span>
   </div>
 
   <div id="nav-more-tray" style="display:none; flex-basis:100%; flex-wrap:wrap; gap:4px; padding-top:6px; margin-top:4px; border-top:1px dashed rgba(255,255,255,0.18);">
@@ -4851,11 +4906,13 @@ html body select.status-badge-select.status-toxic {
       </div>
     </div>
     <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+      <div id="log-view-switch" class="log-view-switch"></div>
       <button id="all-due-btn" class="bulk-mode-btn" onclick="markAllDuePositive()" style="display:none;" title="Mark every fully-elapsed pending window as ✓ (no reaction) — then tap ✕ on the exceptions. Undo available.">✓ All due</button>
       <button id="bulk-mode-btn" class="bulk-mode-btn" onclick="toggleBulkMode()">Bulk Edit: Off</button>
     </div>
   </div>
   <div id="pending-bulk-hint"></div>
+  <div id="pending-sweep"></div>
   <div id="pending-list"></div>
 </main>
 </div>
@@ -16734,16 +16791,135 @@ function showSymInput(btn) {
 
 
 // ─── Render Pending ───────────────────────────────────────────────────────────
+// ─── v101: three ways to draw the Logs list ──────────────────────────────────
+// Classic is the default and stays untouched; Dense and Matrix are opt-in and
+// device-local, like the theme — the phone and the desktop keep their own. Every
+// view writes through the SAME markReaction()/markAllDuePositive(), so bulk
+// edit, undo and the celebration all behave identically whichever one is on.
+const LOG_VIEWS = [
+  { key: 'classic', label: 'Classic', hint: 'The cards you know — one card per item' },
+  { key: 'dense',   label: 'Dense',   hint: 'One row per item, four window cells — about four times as many items per screen' },
+  { key: 'matrix',  label: 'Matrix',  hint: 'Items down, windows across — fill the day in like a form' }
+];
+function isValidLogView(k) { return LOG_VIEWS.some(v => v.key === k); }
+let _logView = 'classic';
+try { const _lv = localStorage.getItem('fst_log_view'); if (isValidLogView(_lv)) _logView = _lv; } catch (e) {}
+function setLogView(key) {
+  if (!isValidLogView(key)) return;
+  _logView = key;
+  try { localStorage.setItem('fst_log_view', key); } catch (e) {}
+  _denseOpenId = null;
+  renderLogViewSwitch();
+  renderPending();
+}
+function renderLogViewSwitch() {
+  const host = document.getElementById('log-view-switch');
+  if (!host) return;
+  host.innerHTML = LOG_VIEWS.map(v =>
+    `<button type="button" class="${v.key === _logView ? 'active' : ''}" title="${escAttr(v.hint)}" onclick="setLogView('${v.key}')">${esc(v.label)}</button>`).join('');
+}
+// PURE: one compact cell cycles unmarked → ✓ → ✕ → unmarked.
+function nextWindowState(v) { return (v === null || v === undefined) ? true : v === true ? false : null; }
+function cycleWindow(id, winKey) {
+  const e = loadMigrated().find(x => x.id === id);
+  if (!e) return;
+  // markReaction() clears a window when told to set the value it already holds,
+  // so ✕ → unmarked is "mark ✕ again", not a third value.
+  const want = nextWindowState(e.windows[winKey]);
+  markReaction(id, winKey, want === null ? false : want);
+}
+let _denseOpenId = null;
+function toggleDenseActions(id) {
+  _denseOpenId = (_denseOpenId === id) ? null : id;
+  renderPending();
+}
+function lvCellHTML(e, w) {
+  const v = e.windows[w.key];
+  const unmarked = v === null || v === undefined;
+  const due = unmarked && isWindowDue(e, w.key);
+  const cls = v === true ? 'pos' : v === false ? 'neg' : due ? 'due' : '';
+  const glyph = v === true ? '✓' : v === false ? '✕' : due ? '?' : '·';
+  const state = v === true ? 'no reaction' : v === false ? 'reacted' : due ? 'due now' : 'not due yet';
+  return `<button type="button" class="lv-cell ${cls}" onclick="cycleWindow('${e.id}','${w.key}')"
+    title="${escAttr(w.label + ' — ' + state + '. Tap cycles ✓ → ✕ → clear')}"
+    aria-label="${escAttr(esc(e.food) + ', ' + w.label + ': ' + state)}">${glyph}</button>`;
+}
+function lvLabelPill(avIdx, food) {
+  const lbl = avoidLabelOf(avIdx, food);
+  return lbl ? `<span class="lv-pill ${avoidLabelCls(lbl)}">${esc(lbl)}</span>` : '';
+}
+function lvActionsHTML(e) {
+  return `<div class="lv-actions">
+    <button class="edit-btn" onclick="deleteEntry('${e.id}')">❌ Remove</button>
+    <button class="edit-btn" onclick="openEditModal('${e.id}')">✏️ Edit</button>
+    <button class="edit-btn" onclick="relogEntryNow('${e.id}')">🔁 Again</button>
+    <button class="edit-btn" onclick="jumpToSummaryRow(${escAttr(JSON.stringify(e.food))})">📋 Summary</button>
+  </div>`;
+}
+function denseListHTML(mealOrder, groups, mealLabels, suspectFoods) {
+  const avIdx = avoidLabelIndex(loadFoodStatus());
+  return mealOrder.filter(m => groups[m].length).map(mealKey => `
+    <div class="lv-group">
+      <div class="lv-group-head">${mealLabels[mealKey]} · ${groups[mealKey].length}</div>
+      <div class="lv-card">${groups[mealKey].map(e => {
+        const ago = hoursAgoLabel(e.date, e.logTime);
+        const meta = [e.date !== today() ? '📅 ' + fmt(e.date) : '', e.logTime ? '🕐 ' + e.logTime : '', ago].filter(Boolean).join(' · ');
+        return `<div class="lv-row">
+          <button type="button" class="lv-main" aria-expanded="${_denseOpenId === e.id}" onclick="toggleDenseActions('${e.id}')">
+            <span class="lv-food">${suspectFoods.has(e.food) ? '⚠️ ' : ''}${esc(e.food)}${lvLabelPill(avIdx, e.food)}</span>
+            <span class="lv-meta">${esc(meta)}</span>
+          </button>
+          <div class="lv-cells">${WINDOWS.map(w => lvCellHTML(e, w)).join('')}</div>
+        </div>${_denseOpenId === e.id ? lvActionsHTML(e) : ''}`;
+      }).join('')}</div>
+    </div>`).join('');
+}
+function matrixListHTML(mealOrder, groups, mealLabels, suspectFoods) {
+  const avIdx = avoidLabelIndex(loadFoodStatus());
+  const head = `<div class="lv-matrix-head"><span class="lv-spacer"></span>${WINDOWS.map(w => `<span class="lv-wlabel">${esc(w.label.replace(/\s*h$/, '').replace(/\s/g, ''))}</span>`).join('')}</div>`;
+  return head + mealOrder.filter(m => groups[m].length).map(mealKey => `
+    <div class="lv-group">
+      <div class="lv-group-head">${mealLabels[mealKey]} · ${groups[mealKey].length}</div>
+      <div class="lv-card">${groups[mealKey].map(e => `
+        <div class="lv-row">
+          <button type="button" class="lv-main" onclick="jumpToSummaryRow(${escAttr(JSON.stringify(e.food))})" title="Open this food in 📋 Summary">
+            <span class="lv-food">${suspectFoods.has(e.food) ? '⚠️ ' : ''}${esc(e.food)}${lvLabelPill(avIdx, e.food)}</span>
+            <span class="lv-meta">${esc(e.logTime || '')}</span>
+          </button>
+          <div class="lv-cells">${WINDOWS.map(w => lvCellHTML(e, w)).join('')}</div>
+        </div>`).join('')}</div>
+    </div>`).join('');
+}
+// The "✓ All due" button has lived in the toolbar since v68 and is easy to miss.
+// Promoted to a card above the list, it is the fastest path through an evening;
+// the toolbar button hides so there is only ever one of it.
+function renderSweepCard() {
+  const host = document.getElementById('pending-sweep');
+  const dueBtn = document.getElementById('all-due-btn');
+  if (!host) return;
+  const due = listDuePending().length;
+  host.innerHTML = due ? `<div class="sweep-card">
+      <div class="sweep-text">
+        <div class="sweep-title">⏰ ${due} mark${due === 1 ? '' : 's'} waiting on you</div>
+        <div class="sweep-sub">Mark them all clear, then tap ✕ on the exceptions. One Undo takes the whole sweep back.</div>
+      </div>
+      <button type="button" class="sweep-btn" onclick="markAllDuePositive()">✓ All ${due} clear</button>
+    </div>` : '';
+  if (dueBtn) dueBtn.style.display = 'none';
+}
+
 function renderPending() {
   const container = document.getElementById('pending-list');
   const hint = document.getElementById('pending-bulk-hint');
   setBulkModeButton();
+  renderLogViewSwitch();
   const dueBtn = document.getElementById('all-due-btn');
   if (dueBtn) {
     const dueCount = listDuePending().length;
     dueBtn.style.display = dueCount ? '' : 'none';
     dueBtn.textContent = `✓ All due (${dueCount})`;
   }
+  renderSweepCard();
   if (!container) return;
   let entries = sortEntriesNewest(loadMigrated().filter(hasPending)); // chronological, not storage order
   if (_pendingMealFilter) entries = entries.filter(e => (e.mealType || '') === _pendingMealFilter);
@@ -16768,6 +16944,10 @@ function renderPending() {
   });
 
   const suspectFoods = getSuspectFoods();
+  if (_logView !== 'classic') {
+    container.innerHTML = (_logView === 'dense' ? denseListHTML : matrixListHTML)(mealOrder, groups, mealLabels, suspectFoods);
+    return;
+  }
   let html = '';
   let firstSection = true;
   mealOrder.forEach(mealKey => {
@@ -21411,6 +21591,15 @@ function runSelfTest() {
     const r = naturalGaps(E, CI).find(x => x.food === 'Staple X');
     return (r && r.delta >= 1.5 && r.gapN === 9) ? true : JSON.stringify(r || 'none');
   });
+
+  // ── Logs list views (v101) ──
+  t('log views: the cell cycles unmarked → ✓ → ✕ → unmarked', () =>
+    eq([nextWindowState(undefined), nextWindowState(null), nextWindowState(true), nextWindowState(false)].map(String).join('|'),
+      'true|true|false|null'));
+  t('log views: only the three known view keys are accepted', () =>
+    eq([isValidLogView('classic'), isValidLogView('dense'), isValidLogView('matrix'), isValidLogView('timeline'), isValidLogView('')].join('|'),
+      'true|true|true|false|false'));
+  t('log views: classic stays the default', () => eq(LOG_VIEWS[0].key, 'classic'));
 
   // ── avoid-label warning (v98) ──
   t('avoid label: exact name matches across case and icon', () =>
