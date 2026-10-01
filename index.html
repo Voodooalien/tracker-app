@@ -272,6 +272,16 @@
   body.dark .lv-cell.due { background: rgba(201,138,5,0.18); color: #FFD27A; }
   .lv-actions { display: flex; flex-direction: column; gap: 8px; padding: 8px 10px 12px; background: var(--bg); border-bottom: 1px solid var(--border); }
   .lv-action-btns { display: flex; flex-wrap: wrap; gap: 6px; }
+  /* v103: in Bulk Edit the cell asks instead of cycling — one tap, one value,
+     written to the whole meal. */
+  .lv-choice { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 10px 10px; background: var(--bg); border-bottom: 1px solid var(--border); }
+  .lv-choice-q { flex: 1 1 100%; font-size: 11px; font-weight: 800; color: var(--muted); }
+  .lv-choice-btn { border: 1px solid var(--border); border-radius: 9px; background: var(--card); color: var(--text); font-family: inherit; font-size: 12.5px; font-weight: 700; padding: 9px 12px; cursor: pointer; }
+  .lv-choice-btn.pos { background: #167A4F; border-color: #167A4F; color: #fff; }
+  .lv-choice-btn.neg { background: #9E1B32; border-color: #9E1B32; color: #fff; }
+  /* Sub-groups inside a meal: one line of grazing, one heading. */
+  .lv-sub { font-size: 10.5px; font-weight: 800; color: var(--muted); padding: 7px 10px 5px; background: var(--bg); border-bottom: 1px solid var(--border); }
+  .meal-subsection { font-size: 11px; font-weight: 800; color: var(--muted); letter-spacing: .06em; margin: 10px 0 4px; padding-left: 2px; }
   .lv-symptoms { border-top: 1px dashed var(--border); padding-top: 8px; }
   .lv-sym-count { background: var(--bg); border: 1px solid var(--border); color: var(--muted); }
   .lv-pill { font-size: 9px; font-weight: 800; border-radius: 999px; padding: 2px 6px; margin-left: 6px; white-space: nowrap; }
@@ -4636,7 +4646,7 @@ try {
   </div>
 
   <div style="margin-left: auto; display: flex; align-items: center; gap: 4px;">
-    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v102</span>
+    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v103</span>
   </div>
 
   <div id="nav-more-tray" style="display:none; flex-basis:100%; flex-wrap:wrap; gap:4px; padding-top:6px; margin-top:4px; border-top:1px dashed rgba(255,255,255,0.18);">
@@ -16829,13 +16839,77 @@ function renderLogViewSwitch() {
 }
 // PURE: one compact cell cycles unmarked → ✓ → ✕ → unmarked.
 function nextWindowState(v) { return (v === null || v === undefined) ? true : v === true ? false : null; }
+
+// ─── v103: occasions inside a meal ───────────────────────────────────────────
+// "Snack" is not one sitting — it collects everything eaten between meals, so a
+// day's snack group can span ten hours and read as one event it never was. Items
+// are split into occasions on a time gap: a heading appears only when a meal
+// really does hold more than one, so breakfast/lunch/dinner look unchanged.
+const MEAL_OCCASION_GAP_MIN = 90;   // tune here: minutes of quiet that start a new occasion
+function entryStampMin(e) {
+  if (!e || !e.date) return null;
+  const d = parseYMD(e.date);
+  if (!d || isNaN(d.getTime())) return null;
+  const parts = String(e.logTime || '00:00').split(':');
+  const hh = parseInt(parts[0], 10), mm = parseInt(parts[1], 10);
+  return Math.floor(d.getTime() / 60000) + (isNaN(hh) ? 0 : hh) * 60 + (isNaN(mm) ? 0 : mm);
+}
+// PURE. Entries arrive newest-first; each one joins the running occasion while it
+// is within the gap of the PREVIOUS item, so continuous grazing stays one group
+// and a quiet evening starts a new one. An entry with no usable date stands alone.
+function splitIntoOccasions(entries, gapMin) {
+  const gap = typeof gapMin === 'number' ? gapMin : MEAL_OCCASION_GAP_MIN;
+  const out = [];
+  let prev = null;
+  (entries || []).forEach(e => {
+    const s = entryStampMin(e);
+    const fresh = !out.length || s === null || prev === null || Math.abs(prev - s) > gap;
+    if (fresh) out.push([e]); else out[out.length - 1].push(e);
+    prev = s;
+  });
+  return out;
+}
+// PURE: "13:02 – 13:50" for a spread of times, "22:36" when they share one.
+function occasionLabel(items) {
+  const times = (items || []).map(e => e.logTime).filter(Boolean).sort();
+  if (!times.length) return 'no time logged';
+  const first = times[0], last = times[times.length - 1];
+  return first === last ? first : `${first} – ${last}`;
+}
 function cycleWindow(id, winKey) {
   const e = loadMigrated().find(x => x.id === id);
   if (!e) return;
+  // v103 BUG FIX. Under Bulk Edit a tap writes to every item of that meal, and
+  // bulk only fills items that are still unmarked — so the cycle's first step
+  // put ✓ on the whole meal before you could ever reach ✕, and the second tap
+  // then changed only the item you touched. One cell cannot express two
+  // intentions, so in bulk mode it asks which one you meant and writes once.
+  if (_bulkMode) { openCellChoice(id, winKey); return; }
   // markReaction() clears a window when told to set the value it already holds,
   // so ✕ → unmarked is "mark ✕ again", not a third value.
   const want = nextWindowState(e.windows[winKey]);
   markReaction(id, winKey, want === null ? false : want);
+}
+let _cellChoice = null;   // { id, winKey } — the cell currently asking, bulk mode only
+function openCellChoice(id, winKey) {
+  _cellChoice = (_cellChoice && _cellChoice.id === id && _cellChoice.winKey === winKey) ? null : { id, winKey };
+  renderPending();
+}
+function chooseCell(id, winKey, value) {
+  _cellChoice = null;
+  markReaction(id, winKey, value);
+}
+function cellChoiceHTML(e) {
+  if (!_cellChoice || _cellChoice.id !== e.id) return '';
+  const w = WINDOWS.find(x => x.key === _cellChoice.winKey);
+  if (!w) return '';
+  const marked = e.windows[w.key] === true || e.windows[w.key] === false;
+  return `<div class="lv-choice">
+    <span class="lv-choice-q">${esc(w.label)} — applies to this whole meal</span>
+    <button type="button" class="lv-choice-btn pos" onclick="chooseCell('${e.id}','${w.key}',true)">✓ No reaction</button>
+    <button type="button" class="lv-choice-btn neg" onclick="chooseCell('${e.id}','${w.key}',false)">✕ Reacted</button>
+    ${marked ? `<button type="button" class="lv-choice-btn" onclick="chooseCell('${e.id}','${w.key}',${e.windows[w.key]})">↺ Clear this item</button>` : ''}
+  </div>`;
 }
 let _denseOpenId = null;
 function toggleDenseActions(id) {
@@ -16879,7 +16953,7 @@ function denseListHTML(mealOrder, groups, mealLabels, suspectFoods) {
   return head + mealOrder.filter(m => groups[m].length).map(mealKey => `
     <div class="lv-group">
       <div class="lv-group-head">${mealLabels[mealKey]} · ${groups[mealKey].length}</div>
-      <div class="lv-card">${groups[mealKey].map(e => {
+      <div class="lv-card">${(occ => occ.map(items => `${occ.length > 1 ? `<div class="lv-sub">🕐 ${esc(occasionLabel(items))} · ${items.length}</div>` : ''}${items.map(e => {
         const ago = hoursAgoLabel(e.date, e.logTime);
         const nSym = e.symptoms ? Object.keys(e.symptoms).filter(k => e.symptoms[k]).length : 0;
         const meta = [e.date !== today() ? '📅 ' + fmt(e.date) : '', e.logTime ? '🕐 ' + e.logTime : '', ago].filter(Boolean).join(' · ');
@@ -16890,8 +16964,8 @@ function denseListHTML(mealOrder, groups, mealLabels, suspectFoods) {
             <span class="lv-meta">${open ? '▴ ' : '▾ '}${esc(meta)}</span>
           </button>
           <div class="lv-cells">${WINDOWS.map(w => lvCellHTML(e, w)).join('')}</div>
-        </div>${open ? lvActionsHTML(e) : ''}`;
-      }).join('')}</div>
+        </div>${cellChoiceHTML(e)}${open ? lvActionsHTML(e) : ''}`;
+      }).join('')}`).join(''))(splitIntoOccasions(groups[mealKey]))}</div>
     </div>`).join('');
 }
 // The "✓ All due" button has lived in the toolbar since v68 and is easy to miss.
@@ -16964,7 +17038,10 @@ function renderPending() {
       <button onclick="openMealCopy(${escAttr(JSON.stringify(mealKey))})" title="Copy today's items of this meal into another meal of today" style="text-transform:none; letter-spacing:0; font-size:11px; font-weight:700; padding:3px 9px; border-radius:6px; border:1px solid var(--border); background:var(--card); color:var(--muted); cursor:pointer;">📋 Copy to…</button>
       <button onclick="bundleFromMealToday(${escAttr(JSON.stringify(mealKey))})" title="Save today's items of this meal as a reusable bundle" style="text-transform:none; letter-spacing:0; font-size:11px; font-weight:700; padding:3px 9px; border-radius:6px; border:1px solid var(--border); background:var(--card); color:var(--muted); cursor:pointer;">🍱 Bundle</button>` : '';
     html += `<div class="meal-section-header">${mealLabels[mealKey]}${mealActs}</div>`;
-    html += group.map(e => {
+    // v103: same occasion split as the Dense view — a snack group spanning the
+    // afternoon and the evening is not one sitting. Silent on a one-sitting meal.
+    const _occ = splitIntoOccasions(group);
+    html += _occ.map(items => (_occ.length > 1 ? `<div class="meal-subsection">🕐 ${esc(occasionLabel(items))} · ${items.length}</div>` : '') + items.map(e => {
       const agoTag = hoursAgoLabel(e.date, e.logTime);
       const suspectTag = suspectFoods.has(e.food) ? `<span class="suspect-flag" style="margin:0;" title="${(s => s ? `${s.neg} of ${s.total} rated windows reacted (50%+) — all-time history` : '')(suspectFoods.get(e.food))}">⚠️</span>` : '';
       
@@ -16999,7 +17076,7 @@ return `
         </div>
 
       </div>`;
-    }).join('');
+    }).join('')).join('');
   });
   container.innerHTML = html;
 }
@@ -21607,6 +21684,23 @@ function runSelfTest() {
     eq([LOG_VIEWS[0].key, normalizeLogView('timeline'), normalizeLogView(null)].join('|'), 'classic|classic|classic'));
   t('log views: a device left on the folded-in Matrix lands on Dense', () =>
     eq(normalizeLogView('matrix'), 'dense'));
+  t('occasions: an afternoon and an evening snack are two groups, grazing is one', () => {
+    const E = ['22:36', '16:39', '16:38', '13:50', '13:24', '13:02'].map((tm, i) =>
+      ({ id: 'o' + i, date: D(0), logTime: tm, mealType: 'snack', food: 'Snackfood ' + i, windows: {}, symptoms: {} }));
+    return eq(splitIntoOccasions(E).map(g => g.length).join('|'), '1|2|3');
+  });
+  t('occasions: one sitting stays one group, so a normal meal is unchanged', () => {
+    const E = ['19:42', '19:40', '19:40'].map((tm, i) =>
+      ({ id: 'm' + i, date: D(0), logTime: tm, mealType: 'dinner', food: 'Dinnerfood ' + i, windows: {}, symptoms: {} }));
+    return eq(splitIntoOccasions(E).length, 1);
+  });
+  t('occasions: the same clock time on two days never merges', () => {
+    const E = [{ id: 'a', date: D(0), logTime: '13:00', food: 'X', windows: {}, symptoms: {} },
+               { id: 'b', date: D(1), logTime: '13:00', food: 'X', windows: {}, symptoms: {} }];
+    return eq(splitIntoOccasions(E).length, 2);
+  });
+  t('occasions: the heading reads a range, or one time when they share it', () =>
+    eq([occasionLabel([{ logTime: '13:02' }, { logTime: '13:50' }]), occasionLabel([{ logTime: '22:36' }])].join('|'), '13:02 – 13:50|22:36'));
 
   // ── avoid-label warning (v98) ──
   t('avoid label: exact name matches across case and icon', () =>
