@@ -4646,7 +4646,7 @@ try {
   </div>
 
   <div style="margin-left: auto; display: flex; align-items: center; gap: 4px;">
-    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v103</span>
+    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v104</span>
   </div>
 
   <div id="nav-more-tray" style="display:none; flex-basis:100%; flex-wrap:wrap; gap:4px; padding-top:6px; margin-top:4px; border-top:1px dashed rgba(255,255,255,0.18);">
@@ -7582,18 +7582,25 @@ function toggleBulkMode() {
   renderPending();
   toast(_bulkMode ? 'Bulk edit mode enabled ✓' : 'Bulk edit mode disabled');
 }
+// PURE (v104): the occasion a tap belongs to — same date, same meal type, and
+// within the same run of eating. A day's "Snack" can span ten hours and the list
+// already draws those as separate occasions, so a bulk tap must hit the one you
+// tapped and nothing else. Built from the SAME list the renderer groups (pending
+// items, newest-first), so what you see is what gets written; a fully-marked item
+// cannot receive a bulk write anyway, so leaving it out costs nothing.
+// Still deliberately NOT mealId: a meal logged one item at a time gets a fresh
+// mealId per add, which shrank every bulk tap to a single entry (v68 regression).
+// The time gap groups those adds the way the eating actually happened.
+function bulkOccasionTargets(entries, entry) {
+  if (!entry) return [];
+  const mealKey = entry.mealType || '';
+  const pending = sortEntriesNewest((entries || []).filter(e => hasPending(e) && e.date === entry.date && (e.mealType || '') === mealKey));
+  const occ = splitIntoOccasions(pending).find(g => g.some(e => e.id === entry.id));
+  return (occ && occ.length) ? occ : [entry];
+}
 function getBulkTargets(entries, entry) {
   if (!_bulkMode || !entry) return [entry];
-  const mealKey = entry.mealType || '';
-  // Same MEAL only: same date + same meal type. The old filter spanned every
-  // date in storage, so one tap could rewrite weeks of history — and because
-  // it also required hasPending, a fully-marked clicked entry was excluded
-  // from its own bulk action while everything else changed.
-  // Bulk group = same date + same meal type. Deliberately NOT mealId: a meal
-  // logged one item at a time gets a fresh mealId per add, so grouping by
-  // mealId shrank every bulk tap to a single entry (v68 regression, reverted).
-  const group = entries.filter(e => e.date === entry.date && (e.mealType || '') === mealKey);
-  return group.length ? group : [entry];
+  return bulkOccasionTargets(entries, entry);
 }
 
 // ─── Check-in reminder banner ────────────────────────────────────────────────
@@ -8101,7 +8108,7 @@ function markReaction(id, winKey, value) {
   targets.forEach(target => {
     const cur = target.windows[winKey];
     if (target !== entry) {
-      // Bulk fills the rest of the meal group but never overwrites a window
+      // Bulk fills the rest of the occasion but never overwrites a window
       // that was already marked, and un-toggling clears only the clicked entry.
       if (nextValue === null) return;
       if (cur !== null && cur !== undefined) return;
@@ -8113,7 +8120,7 @@ function markReaction(id, winKey, value) {
   save(entries);
   hapticTick();
   renderAfterMark();
-  if (_bulkMode && changes.length > 1) startUndo({ type: 'bulkwin', changes }, `Marked ${changes.length} entries in this meal group`);
+  if (_bulkMode && changes.length > 1) startUndo({ type: 'bulkwin', changes }, `Marked ${changes.length} entries in this occasion`);
   maybeCelebrateWindowsClear(changes.length > 0 && nextValue !== null);
 }
 
@@ -16905,7 +16912,7 @@ function cellChoiceHTML(e) {
   if (!w) return '';
   const marked = e.windows[w.key] === true || e.windows[w.key] === false;
   return `<div class="lv-choice">
-    <span class="lv-choice-q">${esc(w.label)} — applies to this whole meal</span>
+    <span class="lv-choice-q">${esc(w.label)} — applies to this occasion (${bulkOccasionTargets(loadMigrated(), e).length} item${bulkOccasionTargets(loadMigrated(), e).length === 1 ? '' : 's'})</span>
     <button type="button" class="lv-choice-btn pos" onclick="chooseCell('${e.id}','${w.key}',true)">✓ No reaction</button>
     <button type="button" class="lv-choice-btn neg" onclick="chooseCell('${e.id}','${w.key}',false)">✕ Reacted</button>
     ${marked ? `<button type="button" class="lv-choice-btn" onclick="chooseCell('${e.id}','${w.key}',${e.windows[w.key]})">↺ Clear this item</button>` : ''}
@@ -17003,7 +17010,7 @@ function renderPending() {
   if (_pendingMealFilter) entries = entries.filter(e => (e.mealType || '') === _pendingMealFilter);
   if (hint) {
     hint.innerHTML = _bulkMode
-      ? `<div class="bulk-mode-hint"><strong>Bulk edit is on.</strong> Clicking a reaction or symptom applies it to every item of that <em>same meal on the same day</em> — already-marked windows on other items are left untouched.</div>`
+      ? `<div class="bulk-mode-hint"><strong>Bulk edit is on.</strong> Clicking a reaction or symptom applies it to every item of that <em>same occasion</em> — the run of eating you tapped, not the whole day's meal. Already-marked windows on other items are left untouched.</div>`
       : '';
   }
   if (!entries.length) {
@@ -21698,6 +21705,22 @@ function runSelfTest() {
     const E = [{ id: 'a', date: D(0), logTime: '13:00', food: 'X', windows: {}, symptoms: {} },
                { id: 'b', date: D(1), logTime: '13:00', food: 'X', windows: {}, symptoms: {} }];
     return eq(splitIntoOccasions(E).length, 2);
+  });
+  t('bulk: a tap reaches its own occasion, not the rest of the day’s snacks', () => {
+    const E = ['22:36', '16:39', '16:38', '13:50', '13:24', '13:02'].map((tm, i) =>
+      ({ id: 'b' + i, date: D(0), logTime: tm, mealType: 'snack', food: 'Snackfood ' + i, windows: {}, symptoms: {} }));
+    const tapped = E.find(e => e.logTime === '13:24');
+    return eq(bulkOccasionTargets(E, tapped).map(e => e.logTime).sort().join('|'), '13:02|13:24|13:50');
+  });
+  t('bulk: the same meal type on another day is never touched', () => {
+    const E = [{ id: 'x', date: D(0), logTime: '13:00', mealType: 'snack', food: 'A', windows: {}, symptoms: {} },
+               { id: 'y', date: D(1), logTime: '13:00', mealType: 'snack', food: 'B', windows: {}, symptoms: {} }];
+    return eq(bulkOccasionTargets(E, E[0]).map(e => e.id).join('|'), 'x');
+  });
+  t('bulk: a one-sitting dinner still takes the whole sitting', () => {
+    const E = ['19:42', '19:40', '19:40'].map((tm, i) =>
+      ({ id: 'd' + i, date: D(0), logTime: tm, mealType: 'dinner', food: 'Dinnerfood ' + i, windows: {}, symptoms: {} }));
+    return eq(bulkOccasionTargets(E, E[1]).length, 3);
   });
   t('occasions: the heading reads a range, or one time when they share it', () =>
     eq([occasionLabel([{ logTime: '13:02' }, { logTime: '13:50' }]), occasionLabel([{ logTime: '22:36' }])].join('|'), '13:02 – 13:50|22:36'));
