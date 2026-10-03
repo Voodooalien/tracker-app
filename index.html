@@ -4690,7 +4690,7 @@ try {
   </div>
 
   <div style="margin-left: auto; display: flex; align-items: center; gap: 4px;">
-    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v106</span>
+    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v107</span>
   </div>
 
   <div id="nav-more-tray" style="display:none; flex-basis:100%; flex-wrap:wrap; gap:4px; padding-top:6px; margin-top:4px; border-top:1px dashed rgba(255,255,255,0.18);">
@@ -10492,6 +10492,12 @@ function setSeverity(symKey, value) {
   if (!_checkinDateManual && _checkinDate !== today()) _checkinDate = today();
   const d = _checkinDate || today();
   const checkins = loadCheckins();
+  // v107: whether the day already existed, read BEFORE the write. A picked past
+  // day now always has a (dashed) matrix column, so the fast path below would
+  // happily patch it — and leave the Manage row still showing "nothing here"
+  // for a day that just gained its first score. Scoring a fresh day is a full
+  // render, exactly as it was before that column existed.
+  const hadDay = !!checkins[d];
   if (!checkins[d]) checkins[d] = {};
   // Toggle off if already selected
   if (checkins[d][symKey] === value) {
@@ -10510,7 +10516,7 @@ function setSeverity(symKey, value) {
   // midnight rollover (whole header is stale).
   const row = document.getElementById('ci-row-' + symKey);
   const cell = document.getElementById(`hist-cell-${symKey}-${d}`);
-  if (row && cell && checkins[d] && !dateRolled) {
+  if (row && cell && checkins[d] && hadDay && !dateRolled) {
     const existingNow = checkins[d];
     const allCiSyms = allCheckinSymptoms();
     const sym = allCiSyms.find(s => s.key === symKey);
@@ -10644,6 +10650,23 @@ function histDotHTML(v) {
            : `<span class="sev-dot" style="margin:0; width:34px; height:28px; border-radius:8px; background: rgba(0, 0, 0, 0.03); border:1.5px dashed var(--border); color:var(--muted) !important;">—</span>`;
 }
 
+// v107: which days the Past Vitals matrix shows. It used to be the last 14
+// recorded days in the whole store, full stop — so filtering to a past day
+// moved the score rows and the day face map but left the matrix ending on
+// today, which read as "the day I picked has no data". The window now ENDS on
+// the picked day: the N most recent recorded check-in days at or before it.
+// The picked day is always the last column even when nothing is scored on it
+// yet, because an empty dashed column says "nothing here" far better than a
+// column that simply isn't drawn. PURE.
+function ciHistWindow(checkins, selDate, n) {
+  const limit = n || 14;
+  const keys = Object.keys(checkins || {});
+  if (!selDate) return keys.sort().slice(-limit); // defensive: no day picked
+  const days = keys.filter(hd => hd <= selDate);
+  if (days.indexOf(selDate) < 0) days.push(selDate);
+  return days.sort().slice(-limit);
+}
+
 function renderCheckin() {
   const wrap = document.getElementById('checkin-wrap');
   if (!wrap) return;
@@ -10664,16 +10687,26 @@ function renderCheckin() {
   const symptomRows = allCiSyms.map(sym => ciRowFor(sym, d, existing, allCiKeys)).join('');
 
   // ─── Build history matrix (Left-to-Right reading, up to 14 days) ───
-  const histDates = Object.keys(checkins).sort().slice(-14);
+  // v107: the window ENDS on the day picked above, not on today.
+  const histDates = ciHistWindow(checkins, d, 14);
   let histHTML;
-  
-  if (histDates.length) {
+
+  // The friendly empty state belongs to a store with nothing in it at all.
+  // A picked day that simply has no scores yet gets its own dashed column
+  // instead, which is the honest answer to "what did I record that day?".
+  if (Object.keys(checkins).length) {
     // 1. HEADER ROW: The Dates (Increased offset to 180px)
     const headerCells = histDates.map(hd => {
-      const [y, m, d] = hd.split('-');
+      const [y, m, dd] = hd.split('-');
       const isToday = hd === today();
-      return `<div style="text-align:center; min-width:36px; display:flex; flex-direction:column; justify-content:flex-end; padding-bottom:8px;">
-         <span style="font-size:14px; font-weight:800; color:${isToday ? 'var(--navy-ink)' : 'var(--text)'}; line-height:1.1;">${+d}</span>
+      const isSel = hd === d;
+      // The second background wins where color-mix is supported (it tints in
+      // dark mode too, where a flat navy wash is invisible); where it is not,
+      // it is dropped at parse time and the rgba stands. The underline is the
+      // marker that reads in both themes either way.
+      const selStyle = isSel ? 'background:rgba(46,64,87,0.07); background:color-mix(in srgb, var(--navy-ink) 14%, transparent); border-radius:8px 8px 0 0; box-shadow:inset 0 -2px 0 var(--navy-ink);' : '';
+      return `<div style="text-align:center; min-width:36px; display:flex; flex-direction:column; justify-content:flex-end; padding-bottom:8px;${selStyle}"${isSel ? ' title="The day picked above"' : ''}>
+         <span style="font-size:14px; font-weight:800; color:${isToday || isSel ? 'var(--navy-ink)' : 'var(--text)'}; line-height:1.1;">${+dd}</span>
          <span style="font-size:9px; font-weight:700; text-transform:uppercase; color:var(--muted);">${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+m-1]}</span>
       </div>`;
     }).join('') + `<div style="text-align:center; min-width:54px; display:flex; flex-direction:column; justify-content:flex-end; padding-bottom:8px;"><span style="font-size:10px; font-weight:800; color:var(--muted); text-transform:uppercase; letter-spacing:.5px;">TREND</span></div>`;
@@ -10684,13 +10717,15 @@ function renderCheckin() {
       const emoji = ciMeta.emoji || '📋';
       const name = ciMeta.name || sym.name || sym.label || '';
       
+      // v107: the picked day can be in the window with no entry behind it, so
+      // every lookup has to tolerate a missing day.
       const dots = histDates.map(hd => {
-        const v = checkins[hd][sym.key];
+        const v = (checkins[hd] || {})[sym.key];
         return `<div id="hist-cell-${sym.key}-${hd}" style="display:flex; justify-content:center; align-items:center; min-width:36px;">${histDotHTML(v)}</div>`;
       }).join('');
 
       // Trend Calculation Logic: Latest Score vs 3-Day Rolling Baseline
-      const validScores = histDates.map(hd => checkins[hd][sym.key]).filter(v => v != null).map(Number);
+      const validScores = histDates.map(hd => (checkins[hd] || {})[sym.key]).filter(v => v != null).map(Number);
       let trendHtml = `<div style="display:flex; justify-content:center; align-items:center; min-width:54px;"><span style="font-size:12px; color:var(--muted); font-weight:800;">—</span></div>`;
       
       if (validScores.length >= 2) {
@@ -10707,8 +10742,8 @@ function renderCheckin() {
           arrowHtml = `<span style="color:var(--neg); margin-left:4px; font-weight:900;">↓</span>`;
         }
         
-        trendHtml = `<div style="display:flex; justify-content:center; align-items:center; min-width:54px;" 
-          title="Latest score: ${current}  |  Prior 3-day baseline: ${baselineAvg.toFixed(1)}">
+        trendHtml = `<div style="display:flex; justify-content:center; align-items:center; min-width:54px;"
+          title="Most recent score in this window: ${current}  |  Average of the scored days before it: ${baselineAvg.toFixed(1)}">
           <span style="font-weight:800; font-size:13px; color:var(--text); display:flex; align-items:center;">
              <span style="font-size:9px; color:var(--muted); margin-right:4px; text-transform:uppercase; letter-spacing:.5px;">avg</span>${baselineAvg.toFixed(1)}${arrowHtml}
           </span>
@@ -10731,7 +10766,9 @@ function renderCheckin() {
         <div style="width:180px; padding-right:20px; flex-shrink:0; font-size:10px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:1px; text-align:right;">Manage</div>
         <div style="display:flex; gap:8px;">
           ${histDates.map(hd => `<div style="display:flex; justify-content:center; align-items:center; min-width:36px;">
-             <button class="delete-btn" onclick="deleteCheckin('${hd}')" title="Delete check-in for ${hd}" style="font-size:14px; padding:4px;">✕</button>
+             ${checkins[hd]
+               ? `<button class="delete-btn" onclick="deleteCheckin('${hd}')" title="Delete check-in for ${hd}" style="font-size:14px; padding:4px;">✕</button>`
+               : `<span title="Nothing recorded on ${hd} yet" style="font-size:12px; color:var(--muted);">·</span>`}
           </div>`).join('')}
           <div style="min-width:54px;"></div>
         </div>
@@ -10865,7 +10902,9 @@ function renderCheckin() {
         <button class="btn-primary" style="margin:0 auto;" onclick="saveCheckinDay()">💾 Save Check-In</button>
       </div>
     </div>
-    <p class="section-title" style="margin-top:28px;">Past Vitals</p>
+    <p class="section-title" style="margin-top:28px;">Past Vitals${d !== today()
+      ? ` <span style="font-weight:600; font-size:11px; color:var(--muted); text-transform:none; letter-spacing:0;">· ending ${esc(fmt(d))}</span>`
+      : ''}</p>
     <div class="card" style="padding:0;overflow:hidden;">${histHTML}</div>
   `;
 
@@ -21432,6 +21471,35 @@ function runSelfTest() {
     const b = ciRowHTML(_ciSym, today(), {}, ['ci_probe']).indexOf("setSeverity('ci_probe',3)") > -1;
     return (a && b) ? true : 'the two row builders disagree about how a score is written';
   });
+
+  // ── v107: the Past Vitals window follows the picked day ──
+  // The bug: the matrix was the last 14 recorded days in the store regardless
+  // of the date picker, so a past day was never even a column in it.
+  const _ciStore = { '2026-09-01': { a: 3 }, '2026-09-02': { a: 4 }, '2026-09-03': { a: 2 }, '2026-09-10': { a: 5 } };
+  t('past vitals window: nothing after the picked day gets in', () =>
+    eq(ciHistWindow(_ciStore, '2026-09-02', 14).join(','), '2026-09-01,2026-09-02'));
+  t('past vitals window: the picked day is the last column', () =>
+    eq(ciHistWindow(_ciStore, '2026-09-03', 14).slice(-1)[0], '2026-09-03'));
+  t('past vitals window: a picked day with no scores still gets a column', () => {
+    const w = ciHistWindow(_ciStore, '2026-09-05', 14);
+    return (w.indexOf('2026-09-05') === w.length - 1 && w.indexOf('2026-09-10') === -1)
+      ? true : 'an unscored picked day is missing from its own window: ' + w.join(',');
+  });
+  t('past vitals window: never more days than the limit, and they are the newest', () => {
+    const many = {};
+    for (let i = 1; i <= 30; i++) many['2026-09-' + String(i).padStart(2, '0')] = { a: 1 };
+    const w = ciHistWindow(many, '2026-09-20', 14);
+    return (w.length === 14 && w[0] === '2026-09-07' && w[13] === '2026-09-20')
+      ? true : 'wrong 14-day slice: ' + w.join(',');
+  });
+  t('past vitals window: picking today is the behaviour that always shipped', () => {
+    const store = { ...(_ciStore), [today()]: { a: 3 } };
+    return eq(ciHistWindow(store, today(), 14).join(','), Object.keys(store).sort().slice(-14).join(','));
+  });
+  t('past vitals window: no day picked falls back to the newest days', () =>
+    eq(ciHistWindow(_ciStore, '', 14).join(','), '2026-09-01,2026-09-02,2026-09-03,2026-09-10'));
+  t('past vitals window: an empty store yields just the picked day', () =>
+    eq(ciHistWindow({}, '2026-09-02', 14).join(','), '2026-09-02'));
 
   // ── v81 B4: one way to find the Overall metric ──
   // Both halves of the divergence are asserted: the KEY wins even when the
