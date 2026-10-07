@@ -3516,9 +3516,20 @@ body.dark .fp-verdict-pill.gentler { background:rgba(30,132,73,0.15); color:#7DD
 /* v110: a comparison built on a handful of days must not render as a solid,
    confident bar. 23 metrics drawn off 3 days read as a discovery; hollowing the
    bar and printing the day count is what tells the reader otherwise. */
-.fp-imp-row.thin .fp-imp-bar i { opacity:.28; }
-.fp-imp-row.thin .fp-imp-delta { font-weight:600; opacity:.6; }
+/* v110: a thin comparison keeps its FULL colour and gains a diagonal hatch, so
+   it reads as provisional rather than merely dim. Fading was the first attempt
+   and it failed the ordinary case: when every row is thin the whole table
+   washes out and reads as broken, with nothing solid left to contrast against.
+   A stripe survives that, because the texture is legible without a neighbour to
+   compare it to. The stripe colour is the track colour, so it follows the theme
+   and looks like the bar is perforated rather than tinted. */
+.fp-imp-row.thin .fp-imp-bar i {
+  background-image: repeating-linear-gradient(135deg,
+    rgba(0,0,0,0) 0 4px, var(--bg) 4px 7px);
+}
 .fp-imp-days { flex:0 0 32px; font-size:10px; color:var(--muted); text-align:right; font-weight:700; }
+/* the day count carries the warning instead of the data being dimmed */
+.fp-imp-row.thin .fp-imp-days { color:var(--warn, #C98A12); }
 .fd-warn {
   display:flex; gap:9px; align-items:flex-start; background:var(--bg); border-left:3px solid var(--neg);
   border-radius:0 7px 7px 0; padding:9px 11px; margin-bottom:10px;
@@ -4726,7 +4737,7 @@ try {
   </div>
 
   <div style="margin-left: auto; display: flex; align-items: center; gap: 4px;">
-    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v110</span>
+    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v110.1</span>
   </div>
 
   <div id="nav-more-tray" style="display:none; flex-basis:100%; flex-wrap:wrap; gap:4px; padding-top:6px; margin-top:4px; border-top:1px dashed rgba(255,255,255,0.18);">
