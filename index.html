@@ -3469,7 +3469,7 @@ body.dark .fp-verdict-pill.gentler { background:rgba(30,132,73,0.15); color:#7DD
 }
 .fp-imp-head span:nth-child(1) { flex:0 0 108px; }
 .fp-imp-head span:nth-child(2) { flex:1; text-align:center; }
-.fp-imp-head span:nth-child(3), .fp-imp-head span:nth-child(4) { flex:0 0 auto; }
+.fp-imp-head span:nth-child(3), .fp-imp-head span:nth-child(4), .fp-imp-head span:nth-child(5) { flex:0 0 auto; }
 .fp-imp-row { display:flex; align-items:center; gap:8px; padding:4px 0; font-size:12.5px; }
 .fp-imp-label { flex:0 0 108px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .fp-imp-bar { flex:1; position:relative; height:9px; background:var(--bg); border-radius:5px; overflow:hidden; }
@@ -3513,6 +3513,19 @@ body.dark .fp-verdict-pill.gentler { background:rgba(30,132,73,0.15); color:#7DD
 .fd-tier2-head { font-size:11px; font-weight:800; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }
 .fd-tier2-hint { font-size:11px; color:var(--muted); line-height:1.45; margin:4px 0 8px; }
 .fd-break { margin-top:20px; }
+/* v110: a comparison built on a handful of days must not render as a solid,
+   confident bar. 23 metrics drawn off 3 days read as a discovery; hollowing the
+   bar and printing the day count is what tells the reader otherwise. */
+.fp-imp-row.thin .fp-imp-bar i { opacity:.28; }
+.fp-imp-row.thin .fp-imp-delta { font-weight:600; opacity:.6; }
+.fp-imp-days { flex:0 0 32px; font-size:10px; color:var(--muted); text-align:right; font-weight:700; }
+.fd-warn {
+  display:flex; gap:9px; align-items:flex-start; background:var(--bg); border-left:3px solid var(--neg);
+  border-radius:0 7px 7px 0; padding:9px 11px; margin-bottom:10px;
+}
+.fd-warn-ico { font-size:15px; line-height:1.2; }
+.fd-warn-txt { font-size:11.5px; line-height:1.5; }
+.fd-scanline { font-size:11px; color:var(--muted); line-height:1.5; margin-top:9px; padding-top:8px; border-top:1px dashed var(--border); }
 .fp-note { font-size:13px; line-height:1.5; white-space:pre-wrap; }
 @media (max-width:480px) {
   .fp-statgrid { grid-template-columns:repeat(2, 1fr); }
@@ -4713,7 +4726,7 @@ try {
   </div>
 
   <div style="margin-left: auto; display: flex; align-items: center; gap: 4px;">
-    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v109</span>
+    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v110</span>
   </div>
 
   <div id="nav-more-tray" style="display:none; flex-basis:100%; flex-wrap:wrap; gap:4px; padding-top:6px; margin-top:4px; border-top:1px dashed rgba(255,255,255,0.18);">
@@ -20789,6 +20802,34 @@ function fdInsights(parts) {
   // in twenty reaches that line from nothing at all, so with a pantry's worth
   // of foods a raw hit is a candidate and an FDR hit is a finding. Both print
   // the counts they rest on, and the reader is told how many were tested.
+  // The whole-profile lag result. The third branch is the one that matters most
+  // for trust: when the card LOOKS dramatic but the test says it is not, saying
+  // nothing leaves the reader to believe their own eyes. An unexplained silence
+  // is read as the tool missing something, so the silence is explained.
+  const pf = p.profile;
+  if (pf && pf.best) {
+    const b = pf.best;
+    const at = b.lag === 0 ? 'the day you eat it' : b.lag + ' day' + (b.lag === 1 ? '' : 's') + ' later';
+    const sgn = b.diff < 0 ? '−' : '+';
+    const dir = b.diff < 0 ? 'worse' : 'better';
+    if (pf.state === 'named')
+      add('profile', 1, 98, b.diff < 0 ? 'bad' : 'good', b.diff < 0 ? 'PROFBAD' : 'PROFGOOD',
+        'Your whole check-in profile shifts ' + dir + ' ' + at,
+        'Every metric averaged together moves ' + sgn + Math.abs(b.diff).toFixed(2) + ' points ' + at + ', across ' + b.nEaten + ' days against ' + b.nOther + '. That clears the false-discovery budget over all ' + pf.tested + ' food-and-lag combinations tested, and the structural drift in your log — every food skews a little negative on the day it is eaten and positive a few days after — has already been subtracted.');
+    else if (pf.state === 'lead')
+      add('profile', 2, 76, b.diff < 0 ? 'bad' : 'good', b.diff < 0 ? 'PROFBAD' : 'PROFGOOD',
+        'Whole-profile lead: everything shifts ' + dir + ' ' + at,
+        'Averaged over every metric, ' + sgn + Math.abs(b.diff).toFixed(2) + ' points ' + at + ' across ' + b.nEaten + ' days (p = ' + b.p.toFixed(3) + '). But ' + pf.tested + ' food-and-lag combinations were tested and roughly ' + Math.round(pf.tested * 0.05) + ' reach that level by chance, so it does not clear the budget. Worth a trial, not worth acting on yet.');
+    else if (Math.abs(b.diff) >= 0.5 && (pf.state === 'untestable' || b.nEaten < PROFILE_TRUST_DAYS))
+      add('profile', 2, 74, 'info', 'MIRAGE',
+        'That big swing ' + at + ' is not what it looks like',
+        'Most of your metrics move together ' + at + ' — the raw gap is ' + sgn + Math.abs(b.diff).toFixed(2) + ' points, which looks dramatic on the chart. It rests on ' + b.nEaten + ' day' + (b.nEaten === 1 ? '' : 's') + '. Your metrics rise and fall together anyway, so that is one good spell showing up in every row rather than a finding in each of them'
+          + (pf.state === 'untestable'
+            ? ', and ' + b.nEaten + ' day' + (b.nEaten === 1 ? ' is' : 's are') + ' too few to test at all \u2014 the engine is not missing it, it is refusing to guess from it.'
+            : ', and against all ' + pf.tested + ' food-and-lag combinations tested it sits inside the range chance produces (p = ' + b.p.toFixed(3) + ').')
+          + ' Eat it on more days and this becomes answerable.');
+  }
+
   const sk = p.skin && p.skin.row ? p.skin.row : null;
   if (sk) {
     const worse = sk.diff < 0;
@@ -20939,6 +20980,195 @@ function fdNextAction(vrec, gap, conf, trialState, parts) {
   if (gap && (gap.kind === 'trial' || gap.kind === 'conflict'))
     return { icon: 'TRIAL', text: gap.long };
   return { icon: 'MARK', text: 'Mark the reaction windows on its next few servings in Logs — that is what every number on this page is built from.' };
+}
+
+// === Whole-profile lag scan (v110) =========================================
+// The question this answers: "every one of my metrics jumped two days after
+// eating that - why did nothing flag it?"
+//
+// Because, measured across every food and every lag at once, that surface is
+// empty. Scanning 5 lags over a pantry of foods is hundreds of comparisons, and
+// the number reaching p<0.05 came out at or BELOW the number chance predicts,
+// with nothing surviving a false-discovery correction. The striking cell that
+// prompted this was three days of data. A detector that fired on it would fire
+// on noise all day, which is worse than silence - so this one is built to be
+// honest in both directions: it names a whole-profile shift when one clears the
+// budget, and it says "nothing here is above chance" when nothing is, instead
+// of leaving a row of big coloured bars to be read as a finding.
+//
+// THREE THINGS IT CORRECTS THAT EYEBALLING THE CARD CANNOT:
+//  1. The LAG FAMILY. Flipping through five lags and stopping at the best one
+//     is five tests, not one. Every lag of every food is in one FDR family.
+//  2. STRUCTURAL DRIFT. Measured: foods skew negative on the day they are
+//     eaten and positive two to four days later - ALL foods, as a property of
+//     the log rather than of any food. Left in, "+2d looks great" fires on
+//     everything. Each lag's contrast is centred on the median contrast across
+//     foods at that lag, so a food is judged against the drift, not against 0.
+//  3. ONE COMPOSITE, NOT N METRICS. Twenty-odd metrics moving together is one
+//     observation of a good spell, not twenty findings. They are averaged, and
+//     the permutation null carries the same correlation structure.
+const PROFILE_LAGS = [0, 1, 2, 3, 4];
+const PROFILE_MIN_METRICS = 5;   // metrics needed on a day to form a composite
+const PROFILE_MIN_DAYS = 5;      // per arm, to be TESTED at all
+const PROFILE_TRUST_DAYS = 8;    // below this the card refuses to look confident
+const PROFILE_PERMS = 999;
+const PROFILE_FDR = 0.10;
+
+// Mean of every numeric check-in metric present that day. All of them run
+// 1-5 with higher = better, so a plain mean is already on a common scale.
+function profileDayScores(checkins) {
+  const out = {};
+  Object.keys(checkins || {}).forEach(d => {
+    const c = checkins[d]; if (!c) return;
+    let n = 0, sum = 0;
+    Object.keys(c).forEach(k => { const v = c[k]; if (typeof v === 'number') { sum += v; n++; } });
+    if (n >= PROFILE_MIN_METRICS) out[d] = sum / n;
+  });
+  return out;
+}
+
+function profileScan(entries, checkins, opts) {
+  const o = opts || {};
+  const perms = o.perms || PROFILE_PERMS, minDays = o.minDays || PROFILE_MIN_DAYS;
+  const day = profileDayScores(checkins);
+  const dates = Object.keys(day).sort();
+  const empty = { rows: [], byFood: {}, tested: 0, scoredDays: dates.length, drift: {} };
+  if (dates.length < minDays * 2) return empty;
+
+  const axis = [];
+  for (let d = dates[0], g = 0; d <= dates[dates.length - 1] && g < 20000; d = addDays(d, 1), g++) axis.push(d);
+  const N = axis.length;
+  const val = axis.map(d => (d in day ? day[d] : null));
+  const have = val.map(v => v !== null);
+  let tS = 0, tQ = 0, tN = 0;
+  val.forEach(v => { if (v !== null) { tS += v; tQ += v * v; tN++; } });
+  const gVar = tN > 1 ? Math.max(1e-9, (tQ - tS * tS / tN) / (tN - 1)) : 1e-9;
+
+  const pos = {}; axis.forEach((d, i) => { pos[d] = i; });
+  const idxByFood = {}, nameByKey = {};
+  (entries || []).forEach(e => {
+    if (!e || effectiveItemType(e) !== 'food') return;
+    const k = normFood(e.food || ''); if (!k) return;
+    if (!nameByKey[k]) nameByKey[k] = e.food;
+    (idxByFood[k] || (idxByFood[k] = new Set())).add(e.date);
+  });
+
+  // source positions for (food, lag): a day is "exposed" at lag L when the food
+  // was eaten L days before it
+  const srcOf = (k, L) => {
+    const out = [];
+    axis.forEach((d, i) => { const w = addDays(d, -L); if (idxByFood[k].has(w)) out.push(i); });
+    return out;
+  };
+  const raw = (src, off) => {
+    let s = 0, q = 0, n = 0;
+    for (let i = 0; i < src.length; i++) {
+      const jj = off === 0 ? src[i] : (src[i] + off) % N;
+      if (!have[jj]) continue;
+      const v = val[jj]; s += v; q += v * v; n++;
+    }
+    return [s, q, n];
+  };
+  const stat = (s, q, n, centre) => {
+    const nB = tN - n, sB = tS - s, qB = tQ - q;
+    if (n < 2 || nB < 2) return null;
+    const ssA = Math.max(0, q - s * s / n), ssB = Math.max(0, qB - sB * sB / nB);
+    const vA = (ssA + 2 * gVar) / (n + 1), vB = (ssB + 2 * gVar) / (nB + 1);
+    const se = Math.sqrt(vA / n + vB / nB);
+    if (!(se > 0)) return null;
+    const d = (s / n - sB / nB) - centre;
+    return { t: d / se, diff: d, nA: n, nB: nB };
+  };
+
+  const foods = Object.keys(idxByFood);
+  const srcCache = {};
+  foods.forEach(k => { srcCache[k] = {}; PROFILE_LAGS.forEach(L => { srcCache[k][L] = srcOf(k, L); }); });
+
+  // pass 1: the drift at each lag, as the MEDIAN across foods. Median, not mean,
+  // so a couple of genuinely extreme foods cannot define the thing they are
+  // supposed to be measured against.
+  const drift = {};
+  PROFILE_LAGS.forEach(L => {
+    const ds = [];
+    foods.forEach(k => {
+      const [s, q, n] = raw(srcCache[k][L], 0);
+      const st = stat(s, q, n, 0);
+      if (st && st.nA >= 3) ds.push(st.diff);
+    });
+    ds.sort((a, b) => a - b);
+    drift[L] = ds.length ? (ds.length % 2 ? ds[ds.length >> 1] : (ds[(ds.length >> 1) - 1] + ds[ds.length >> 1]) / 2) : 0;
+  });
+
+  let seed = 20261008;
+  const rnd = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+  const offs = [];
+  for (let p = 0; p < perms; p++) offs.push(1 + Math.floor(rnd() * Math.max(1, N - 2)));
+
+  const rows = [], thin = {};
+  foods.forEach(k => {
+    PROFILE_LAGS.forEach(L => {
+      const src = srcCache[k][L];
+      const [s0, q0, n0] = raw(src, 0);
+      if (n0 < minDays || tN - n0 < minDays) {
+        // Too thin to TEST, but the card still draws bars for it, so the raw
+        // gap is kept and reported as the mirage it is. Dropping it here is
+        // what let a three-day food produce a screenful of green with nothing
+        // anywhere on the page willing to say so.
+        const st0 = stat(s0, q0, n0, drift[L]);
+        if (st0 && (!thin[k] || Math.abs(st0.diff) > Math.abs(thin[k].diff)))
+          thin[k] = { food: nameByKey[k], key: k, lag: L, diff: st0.diff, nEaten: st0.nA, nOther: st0.nB, p: null, q: null };
+        return;
+      }
+      const obs = stat(s0, q0, n0, drift[L]);
+      if (!obs) return;
+      let ge = 0;
+      for (let p = 0; p < perms; p++) {
+        const [sp, qp, np] = raw(src, offs[p]);
+        const st = stat(sp, qp, np, drift[L]);
+        if (st && Math.abs(st.t) >= Math.abs(obs.t)) ge++;
+      }
+      rows.push({ food: nameByKey[k], key: k, lag: L, diff: obs.diff, nEaten: obs.nA, nOther: obs.nB,
+        p: (ge + 1) / (perms + 1), q: 1 });
+    });
+  });
+
+  rows.sort((a, b) => a.p - b.p || Math.abs(b.diff) - Math.abs(a.diff));
+  const m = rows.length;
+  let prev = 1;
+  for (let i = m - 1; i >= 0; i--) { prev = Math.min(prev, rows[i].p * m / (i + 1)); rows[i].q = prev; }
+
+  const byFood = {};
+  rows.forEach(r => { (byFood[r.key] || (byFood[r.key] = [])).push(r); });
+  Object.keys(byFood).forEach(k => byFood[k].sort((a, b) => a.lag - b.lag));
+  return { rows: rows, byFood: byFood, thin: thin, tested: m, scoredDays: tN, drift: drift,
+    named: rows.filter(r => r.q <= PROFILE_FDR).length };
+}
+
+let _profileMemo = null, _profileRaw = '';
+function profileScanCached() {
+  const e = localStorage.getItem('fst_entries') || '', c = localStorage.getItem('fst_checkins') || '';
+  const raw = e.length + '|' + c.length + '|' + e.slice(-120) + c.slice(-120);
+  if (_profileMemo && raw === _profileRaw) return _profileMemo;
+  _profileMemo = profileScan(loadMigrated(), loadCheckins());
+  _profileRaw = raw;
+  return _profileMemo;
+}
+
+// What to SAY about one food's five lags. Returns null when the food was never
+// testable, which is itself worth printing rather than hiding.
+function profileVerdictFor(food, scan) {
+  const k = normFood(food);
+  const rows = (scan && scan.byFood && scan.byFood[k]) || [];
+  if (!rows.length) {
+    // Never testable. That is an ANSWER - "this is a handful of days" - and it
+    // is the one the card most needs, so it is returned rather than null.
+    const t = scan && scan.thin ? scan.thin[k] : null;
+    if (!t) return null;
+    return { rows: [], best: t, tested: scan.tested, state: 'untestable' };
+  }
+  const best = rows.slice().sort((a, b) => a.p - b.p)[0];
+  return { rows: rows, best: best, tested: scan.tested,
+    state: best.q <= PROFILE_FDR ? 'named' : best.p <= 0.05 ? 'lead' : 'nothing' };
 }
 
 // === Skin-driven verdicts (v109) ===========================================
@@ -21354,6 +21584,7 @@ function renderFoodProfile() {
     buildup: fdBuildup(entries, food),
     slot: fdSlot(entries, food),
     streak: fdStreak(entries, food),
+    profile: profileVerdictFor(food, profileScanCached()),
     skin: (() => {
       const r = skinRowFor(food);
       return { row: r.row, scan: r.scan,
@@ -21368,7 +21599,8 @@ function renderFoodProfile() {
   const FD_ICO = { PASS:'🛡️', CALM:'🟢', HOLD:'🔺', TIED:'🔗',
     ALL:'📌', WORSE:'🔺', EASY:'🟢', FLAT:'🟡', SOLO:'🔬',
     DOWN:'📉', UP:'📈', BACK:'🔄', DOSE:'⚖️', LOAD:'🧱',
-    WHEN:'🕐', ZERO:'✨', RUN:'⏳', SKINBAD:'🔴', SKINGOOD:'💚', CYCLE:'🔁' };
+    WHEN:'🕐', ZERO:'✨', RUN:'⏳', SKINBAD:'🔴', SKINGOOD:'💚', CYCLE:'🔁',
+    PROFBAD:'📊', PROFGOOD:'📊', MIRAGE:'🌫️' };
   const FD_ACT_ICO = { RUN:'⏳', EAT:'🍽️', SKIP:'🚫', CUT:'✂️',
     TEST:'🔬', MARK:'✍️', DONE:'✅', TRIAL:'🧪' };
 
@@ -21498,21 +21730,49 @@ function renderFoodProfile() {
     const cls = d <= -4 ? 'bad' : d >= 4 ? 'good' : 'flat';
     const w = Math.min(Math.abs(x.deltaPct), 25) / 25 * 50;
     const tip = `${_fpLag === 0 ? 'On days you ate it' : _fpLag + ' day' + (_fpLag === 1 ? '' : 's') + ' after eating it'}: avg ${x.expAvg.toFixed(1)} (${x.expN}d) vs other days ${x.ctlAvg.toFixed(1)} (${x.ctlN}d)`;
-    return `<div class="fp-imp-row" title="${escAttr(tip)}">
+    return `<div class="fp-imp-row${x.thin ? ' thin' : ''}" title="${escAttr(tip)}">
       <span class="fp-imp-label">${x.label}</span>
       <span class="fp-imp-bar"><i class="${cls}" style="width:${w.toFixed(1)}%; ${d < 0 ? 'right:50%' : 'left:50%'};"></i></span>
       <span class="fp-imp-delta ${cls}">${d > 0 ? '+' : ''}${d}%</span>
+      <span class="fp-imp-days" title="Days on the eaten side of this comparison">${x.expN}d</span>
       <span class="fp-imp-next" title="The same comparison one day further out">${d1 == null ? '' : `+${_fpLag + 1}d ${d1 > 0 ? '+' : ''}${d1}%`}</span>
-      ${x.thin ? '<span class="fp-thin" title="Fewer than 5 days on one side — weak evidence">°</span>' : ''}
     </div>`;
   };
   const lagChips = Array.from({ length: FP_LAG_MAX + 1 }, (_, n) =>
     `<button class="tf-btn${n === _fpLag ? ' active' : ''}" onclick="fpSetLag(${n})" title="${n === 0 ? 'Compare the day you ate it' : 'Compare ' + n + ' day' + (n === 1 ? '' : 's') + ' after eating it'}">${n === 0 ? 'Same day' : '+' + n + 'd'}</button>`).join('');
+  // v110: how many days is this comparison ACTUALLY built on, and what does the
+  // whole-profile test make of it? Without both, a row of big coloured bars
+  // drawn from three days reads as a discovery.
+  const impN = rows.length ? Math.max.apply(null, rows.map(r => r.expN)) : 0;
+  const impCtl = rows.length ? Math.max.apply(null, rows.map(r => r.ctlN)) : 0;
+  const pScan = profileScanCached();
+  const pv = profileVerdictFor(food, pScan);
+  const pvHere = pv ? pv.rows.find(r => r.lag === _fpLag) : null;
+  const thinBanner = (rows.length && impN < PROFILE_TRUST_DAYS) ? `<div class="fd-warn">
+    <span class="fd-warn-ico">⚠️</span><span class="fd-warn-txt">Every bar below rests on <b>${impN} day${impN === 1 ? '' : 's'}</b>${impCtl ? ' against ' + impCtl + ' others' : ''}. At that size a whole column can swing wide in either direction from ordinary day-to-day variation, and the metrics move together, so a run of green is one good spell rather than ${rows.length} separate findings. Read the direction, not the size — and see the line under the table for what the test makes of it.</span>
+  </div>` : '';
+  const scanLine = (() => {
+    if (!rows.length) return '';
+    if (!pv) return `<div class="fd-scanline">Not testable at any lag — it needs ${PROFILE_MIN_DAYS} days with a check-in and ${PROFILE_MIN_DAYS} without.</div>`;
+    if (pv.state === 'untestable') {
+      const b0 = pv.best, at0 = b0.lag === 0 ? 'the day you eat it' : b0.lag + ' day' + (b0.lag === 1 ? '' : 's') + ' after';
+      return `<div class="fd-scanline">Its biggest raw swing is <b>${b0.diff < 0 ? '−' : '+'}${Math.abs(b0.diff).toFixed(2)} points ${at0}</b>, on ${b0.nEaten} day${b0.nEaten === 1 ? '' : 's'} — too few to test at any lag, so no p-value is quoted and none should be inferred from the bars.</div>`;
+    }
+    const b = pv.best, at = b.lag === 0 ? 'the day you eat it' : b.lag + ' day' + (b.lag === 1 ? '' : 's') + ' after';
+    const sign = b.diff < 0 ? '−' : '+';
+    const common = `Across all ${PROFILE_LAGS.length} lags, the strongest shift in your whole check-in profile is <b>${sign}${Math.abs(b.diff).toFixed(2)} points ${at}</b> (${b.nEaten} days), p = ${b.p.toFixed(3)}.`;
+    if (pv.state === 'named')
+      return `<div class="fd-scanline">${common} It <b>clears</b> the ${Math.round(PROFILE_FDR * 100)}% false-discovery budget across all ${pv.tested} food-and-lag combinations tested — a real whole-profile effect.</div>`;
+    if (pv.state === 'lead')
+      return `<div class="fd-scanline">${common} On its own that looks striking, but ${pv.tested} food-and-lag combinations were tested and about ${Math.round(pv.tested * 0.05)} reach that level from chance alone, so it does not clear the ${Math.round(PROFILE_FDR * 100)}% budget. A lead, not a finding.</div>`;
+    return `<div class="fd-scanline">${common} Nothing here is above chance: checked at every lag, against all ${pv.tested} food-and-lag combinations tested, this food's profile is indistinguishable from your ordinary days.</div>`;
+  })();
   const impactCard = `<div class="card fp-card">
     <div class="fp-h-row"><span class="fp-h">💓 Vitals &amp; symptoms ${_fpLag === 0 ? 'on days you eat it' : esc(_fpLag + ' day' + (_fpLag === 1 ? '' : 's') + ' after you eat it')}</span><button class="fp-jump" onclick="showTab('insights')">all factors →</button></div>
     <div class="time-filter-row" style="margin:0 0 10px;">${lagChips}</div>
-    ${rows.length ? `<div class="fp-imp-head"><span></span><span>worse ← · → better</span><span>${esc(fpLagLabel(_fpLag).toLowerCase())}</span><span>${_fpLag < FP_LAG_MAX ? '+' + (_fpLag + 1) + 'd' : ''}</span></div>${rows.map(impRow).join('')}
-      <div class="fp-legend">Score scale 1–5 (higher = better) · % of full scale · ° = thin data${_fpLag ? ' · comparing check-ins ' + _fpLag + ' day' + (_fpLag === 1 ? '' : 's') + ' after a serving' : ''}</div>`
+    ${thinBanner}
+    ${rows.length ? `<div class="fp-imp-head"><span></span><span>worse ← · → better</span><span>${esc(fpLagLabel(_fpLag).toLowerCase())}</span><span>days</span><span>${_fpLag < FP_LAG_MAX ? '+' + (_fpLag + 1) + 'd' : ''}</span></div>${rows.map(impRow).join('')}
+      <div class="fp-legend">Score scale 1–5 (higher = better) · % of full scale · faded bars rest on under ${PROFILE_TRUST_DAYS} days${_fpLag ? ' · comparing check-ins ' + _fpLag + ' day' + (_fpLag === 1 ? '' : 's') + ' after a serving' : ''}</div>${scanLine}`
       : `<div class="fp-empty">No days with both a check-in and this food ${_fpLag === 0 ? '' : _fpLag + ' day' + (_fpLag === 1 ? '' : 's') + ' earlier '}yet.</div>`}
     ${noData.length && rows.length ? `<div class="fp-legend">No comparable days for: ${noData.map(esc).join(', ')}</div>` : ''}
   </div>`;
@@ -23532,6 +23792,117 @@ function runSelfTest() {
     const parts = { skin: { row: { diff: -0.4, q: 0.9, p: 0.3, periodic: true, nEaten: 30, nOther: 140 }, scan: { tested: 73 }, apart: null } };
     return eq(fdNextAction({ verdict: 'typical' }, { kind: 'settled', long: 'x' }, null, null, parts).icon, 'EAT');
   });
+  // -- whole-profile lag scan (v110) --
+  // Built after Alex saw every metric swing hugely positive at +2 days on a food
+  // eaten 3 times and asked why nothing flagged it. The answer was that the
+  // swing was not real; these pin both halves of that answer.
+  const _pfFix = (plant) => {
+    let seed = 31337;
+    const rnd = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+    const checkins = {}, entries = [];
+    const hitDays = new Set();
+    for (let i = 0; i < 150; i++) {
+      const d = addDays('2026-01-01', i);
+      // irregular exposure; a periodic one saturates the circular-shift null
+      if ((i * 5 + ((i * i) % 7)) % 11 < 3) hitDays.add(d);
+    }
+    for (let i = 0; i < 150; i++) {
+      const d = addDays('2026-01-01', i);
+      const lagged = hitDays.has(addDays(d, -2));
+      const base = 3 + (rnd() < 0.5 ? 0 : 1) - (rnd() < 0.5 ? 1 : 0);
+      const v = Math.max(1, Math.min(5, base + (plant && lagged ? 1.5 : 0)));
+      const c = {};
+      for (let m = 0; m < 6; m++) c['m' + m] = v;
+      checkins[d] = c;
+      if (hitDays.has(d)) entries.push(migrate({ id: 'pf' + i, date: d, food: 'LagFood', logTime: '12:00', mealType: 'lunch', notes: '', windows: {} }));
+      for (let f = 0; f < 4; f++) if ((i * 3 + f * 7) % 6 === 0) entries.push(migrate({ id: 'pz' + i + '_' + f, date: d, food: 'Filler' + f, logTime: '12:00', mealType: 'lunch', notes: '', windows: {} }));
+    }
+    return { entries, checkins };
+  };
+
+  t('profile scan: a real whole-profile shift at +2d is found and named', () => {
+    const fx = _pfFix(true);
+    const sc = profileScan(fx.entries, fx.checkins, { perms: 199 });
+    const v = profileVerdictFor('LagFood', sc);
+    if (!v) return 'LagFood was never testable';
+    return (v.state === 'named' && v.best.lag === 2 && v.best.diff > 0.4)
+      ? true : 'got ' + JSON.stringify({ state: v.state, lag: v.best.lag, d: +v.best.diff.toFixed(2), q: +v.best.q.toFixed(3) });
+  });
+  t('profile scan: with no planted shift nothing is named at any lag', () => {
+    const sc = profileScan(_pfFix(false).entries, _pfFix(false).checkins, { perms: 199 });
+    return sc.named === 0 ? true : 'named ' + sc.named + ' food-and-lag cell(s) out of noise';
+  });
+  t('profile scan: a food on too few days is not tested at all', () => {
+    // THE case from the screenshot: 3 eaten days producing a huge raw gap. It
+    // must not be testable, and so must never be reported as a finding.
+    const fx = _pfFix(false);
+    ['2026-02-02', '2026-02-09', '2026-02-16'].forEach((d, i) => {
+      fx.entries.push(migrate({ id: 'rare' + i, date: d, food: 'ThreeDayThing', logTime: '12:00', mealType: 'lunch', notes: '', windows: {} }));
+      const c = {}; for (let m = 0; m < 6; m++) c['m' + m] = 5;   // wildly good days
+      fx.checkins[addDays(d, 2)] = c;
+    });
+    const sc = profileScan(fx.entries, fx.checkins, { perms: 99 });
+    const tested = !!(sc.byFood && sc.byFood['threedaything']);
+    const v = profileVerdictFor('ThreeDayThing', sc);
+    // never TESTED, but never silently dropped either: it comes back as an
+    // untestable mirage carrying its day count, which is what the card needs
+    return (!tested && v && v.state === 'untestable' && v.best.nEaten === 3)
+      ? true : 'tested=' + tested + ' verdict=' + JSON.stringify(v && { s: v.state, n: v.best.nEaten });
+  });
+  t('profile scan: the structural lag drift is measured and removed', () => {
+    // every food gets a uniform +0.8 bump two days after being eaten, so the
+    // drift IS the effect and no individual food should stand out for it
+    let seed = 5150;
+    const rnd = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+    const checkins = {}, entries = [], eatenBy = {};
+    for (let f = 0; f < 6; f++) eatenBy['F' + f] = new Set();
+    for (let i = 0; i < 150; i++) {
+      const d = addDays('2026-01-01', i);
+      for (let f = 0; f < 6; f++) if ((i * (f + 2) + f) % 5 === 0) { eatenBy['F' + f].add(d); entries.push(migrate({ id: 'd' + i + '_' + f, date: d, food: 'F' + f, logTime: '12:00', mealType: 'lunch', notes: '', windows: {} })); }
+    }
+    for (let i = 0; i < 150; i++) {
+      const d = addDays('2026-01-01', i);
+      let bump = 0;
+      for (let f = 0; f < 6; f++) if (eatenBy['F' + f].has(addDays(d, -2))) { bump = 0.8; break; }
+      const v = Math.max(1, Math.min(5, 3 + bump + (rnd() < 0.5 ? 0 : 1) - (rnd() < 0.5 ? 1 : 0)));
+      const c = {}; for (let m = 0; m < 6; m++) c['m' + m] = v;
+      checkins[d] = c;
+    }
+    const sc = profileScan(entries, checkins, { perms: 199 });
+    return sc.drift[2] > 0 ? true : 'lag-2 drift was not detected: ' + JSON.stringify(sc.drift);
+  });
+  t('profile scan: the composite needs enough metrics on a day', () => {
+    const d = profileDayScores({ '2026-01-01': { a: 1, b: 2, c: 3, d: 4, e: 5 }, '2026-01-02': { a: 1, b: 2 } });
+    return eq([Object.keys(d).length, d['2026-01-01']].join('|'), '1|3');
+  });
+  t('profile scan: a striking but thin swing is explained, not silently dropped', () => {
+    // the regression this whole feature exists for: the card looked dramatic,
+    // the engine said nothing, and silence read as the tool missing something
+    const out = fdInsights({ conf: null, profile: {
+      state: 'nothing', tested: 430,
+      best: { lag: 2, diff: 0.92, nEaten: 3, nOther: 170, p: 0.4, q: 1 }, rows: [] } });
+    const row = out.find(x => x.key === 'profile');
+    return row && row.icon === 'MIRAGE' && row.tier === 2 && row.text.includes('3 days')
+      ? true : 'got ' + JSON.stringify(out.map(x => x.key + '/' + x.icon));
+  });
+  t('profile scan: an UNTESTABLE striking swing is still explained', () => {
+    // the exact screenshot case: 3 eaten days, huge raw gap, below the test
+    // minimum. Before this it produced no insight at all and the silence read
+    // as the engine missing something.
+    const out = fdInsights({ conf: null, profile: {
+      state: 'untestable', tested: 562,
+      best: { lag: 2, diff: 0.92, nEaten: 3, nOther: 173, p: null, q: null }, rows: [] } });
+    const row = out.find(x => x.key === 'profile');
+    return row && row.icon === 'MIRAGE' && row.text.includes('too few to test')
+      ? true : 'got ' + JSON.stringify(row && row.text.slice(0, 120));
+  });
+  t('profile scan: a thin swing that is SMALL stays quiet', () => {
+    const out = fdInsights({ conf: null, profile: {
+      state: 'nothing', tested: 430,
+      best: { lag: 2, diff: 0.1, nEaten: 3, nOther: 170, p: 0.8, q: 1 }, rows: [] } });
+    return eq(out.some(x => x.key === 'profile'), false);
+  });
+
   t('marking health: a coin-flip rate is called uninformative', () => {
     const mk = (w) => migrate({ id: 'm' + Math.random(), date: '2026-01-01', food: 'X', logTime: '12:00', mealType: 'lunch', notes: '', windows: w });
     const half = [mk({ w1: true, w2: false }), mk({ w1: true, w2: false })];
