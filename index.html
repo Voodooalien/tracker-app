@@ -3490,6 +3490,29 @@ body.dark .fp-verdict-pill.gentler { background:rgba(30,132,73,0.15); color:#7DD
 .fp-trial-phase { color:var(--muted); font-size:11px; }
 .fp-trial-v { margin-left:auto; font-weight:800; font-size:11.5px; }
 .fp-hist { width:100%; height:auto; display:block; }
+/* Food deep-dive (v108). The synthesis layer above the number cards: a plain
+   headline, one next step, then the ranked read-out. Tier-2 "leads" carry a
+   left rule so a descriptive split can never be mistaken at a glance for a
+   gated finding - that visual difference IS the honesty guarantee. */
+.fd-head { font-size:13.5px; line-height:1.6; margin-top:10px; padding-top:10px; border-top:1px dashed var(--border); }
+.fd-next { display:flex; gap:10px; align-items:flex-start; }
+.fd-next-ico { font-size:20px; line-height:1.15; flex:0 0 auto; }
+.fd-next-txt { font-size:13px; line-height:1.55; min-width:0; }
+.fd-ins { display:flex; flex-direction:column; }
+.fd-ins-row { display:flex; gap:10px; padding:10px 0; border-bottom:1px solid var(--border); }
+.fd-ins-row:last-child { border-bottom:none; padding-bottom:0; }
+.fd-ins-ico { flex:0 0 22px; font-size:17px; line-height:1.25; text-align:center; }
+.fd-ins-body { min-width:0; }
+.fd-ins-title { font-size:13px; font-weight:800; }
+.fd-ins-title.bad { color:var(--neg); }
+.fd-ins-title.good { color:var(--pos); }
+.fd-ins-title.flat, .fd-ins-title.info { color:var(--text); }
+.fd-ins-text { font-size:12px; color:var(--muted); line-height:1.55; margin-top:3px; }
+.fd-ins-row.lead { border-left:2px solid var(--border); padding-left:10px; }
+.fd-tier2 { margin-top:12px; padding-top:10px; border-top:1px solid var(--border); }
+.fd-tier2-head { font-size:11px; font-weight:800; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }
+.fd-tier2-hint { font-size:11px; color:var(--muted); line-height:1.45; margin:4px 0 8px; }
+.fd-break { margin-top:20px; }
 .fp-note { font-size:13px; line-height:1.5; white-space:pre-wrap; }
 @media (max-width:480px) {
   .fp-statgrid { grid-template-columns:repeat(2, 1fr); }
@@ -4683,18 +4706,17 @@ try {
     <button data-tab="log" onclick="showTab('log',this)" style="color: #FDECEC; ">📑 Logs<span id="logs-pending-badge" style="display:none; margin-left:5px; background:#E74C3C; color:#fff; border-radius:10px; padding:1px 6px; font-size:10px; font-weight:800; vertical-align:middle;"></span></button>
     <button data-tab="history" onclick="showTab('history',this)" style="color: #FDECEC; ">📦 History</button>
     <button data-tab="archives2" onclick="showTab('archives2',this)" style="color: #FDECEC; ">📖 Diary</button>
-    <button data-tab="profile" onclick="showTab('profile',this)" style="color: #FDECEC; ">📇 Food Profile</button>
+    <button data-tab="profile" onclick="showTab('profile',this)" style="color: #FDECEC; ">🔎 Food Deep Dive</button>
     <button data-tab="summary" onclick="showTab('summary',this)" style="color: #FDECEC; ">📋 Summary</button>
     <button data-tab="weekly" onclick="showTab('weekly',this)" style="color: #FDECEC; ">📅 Weekly</button>
     <button id="nav-more-btn" onclick="toggleNavMore()" title="Analysis, Timeline, Trials and more" style="color: #FDECEC; border: 1px dashed rgba(255,255,255,0.4);">⋯ More</button>
   </div>
 
   <div style="margin-left: auto; display: flex; align-items: center; gap: 4px;">
-    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v107</span>
+    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v109</span>
   </div>
 
   <div id="nav-more-tray" style="display:none; flex-basis:100%; flex-wrap:wrap; gap:4px; padding-top:6px; margin-top:4px; border-top:1px dashed rgba(255,255,255,0.18);">
-    <button data-tab="verdicts" onclick="showTab('verdicts',this)" style="color: #FDECEC; ">⚖️ Verdicts</button>
     <button data-tab="detective" onclick="showTab('detective',this)" style="color: #FDECEC; ">🕵️ Detective</button>
     <button data-tab="facemap" onclick="showTab('facemap',this)" style="color: #FDECEC; ">👤 Face Map</button>
     <button data-tab="anomalies" onclick="showTab('anomalies',this)" style="color: #FDECEC; ">📡 Anomalies</button>
@@ -5019,7 +5041,7 @@ html body select.status-badge-select.status-toxic {
   </div>
   <div class="card" style="margin-bottom:16px;">
     <div style="font-size:12.5px; color:var(--muted); line-height:1.6;">
-      Your accumulated conclusions in one place, fusing three sources: <b>your own labels</b> (set in 📋 Summary), the <b>⚖️ Verdicts</b> analysis, and your <b>🧪 Trial</b> results. Trial-proven findings rank first. Where a food's signals disagree, it's flagged for you to settle — nothing is silently overridden.
+      Your accumulated conclusions in one place, fusing three sources: <b>your own labels</b> (set in 📋 Summary), the <b>verdict engine</b>, and your <b>🧪 Trial</b> results. Trial-proven findings rank first. Where a food's signals disagree, it's flagged for you to settle — nothing is silently overridden.
     </div>
   </div>
   <div id="learned-content"></div>
@@ -5179,10 +5201,10 @@ html body select.status-badge-select.status-toxic {
 
 <div id="tab-profile" class="tab-content">
 <main>
-  <p class="section-title">Food Profile</p>
+  <p class="section-title">🔎 Food Deep Dive — everything about one food</p>
   <div id="foodprofile-wrap"></div>
   <p style="font-size:11px;color:var(--muted);margin-top:10px;">
-    Everything the app knows about one food, in one place — pulled from the same engines as Verdicts, Insights, the Face Map and Trials, so the numbers always agree.
+    One food, every angle: a plain summary, the verdict the engines will stand behind, the patterns worth testing next, then the raw numbers. Pulled from the same engines as Insights, the Face Map and Trials, so no two screens can disagree.
   </p>
 </main>
 </div>
@@ -7527,9 +7549,8 @@ const NAV_ITEMS = [
   { tab: 'history',     ico: '📦', label: 'History', bar: true },
   { tab: 'summary',     ico: '📋', label: 'Summary', bar: true },
   { tab: 'archives2',   ico: '📖', label: 'Diary' },
-  { tab: 'profile',     ico: '📇', label: 'Food Profile' },
+  { tab: 'profile',     ico: '🔎', label: 'Food Deep Dive' },
   { tab: 'weekly',      ico: '📅', label: 'Weekly' },
-  { tab: 'verdicts',    ico: '⚖️', label: 'Verdicts' },
   { tab: 'detective',   ico: '🕵️', label: 'Detective' },
   { tab: 'facemap',     ico: '👤', label: 'Face Map' },
   { tab: 'anomalies',   ico: '📡', label: 'Anomalies' },
@@ -9269,8 +9290,8 @@ function notesGroupKeyOf(food, scope) {
   // prepVariants; neither is touched here.
   //   item — poolKeyOf: preparations separate ("potato baked" != "potato mashed")
   //   food — baseFoodName: known prep words dropped, so baked+mashed fold. But
-  //          words it does not know stay: "Potato air-fries in refined canola oil"
-  //          keeps "air fries refined canola oil", so it will NOT join them.
+  //          words it does not know stay: "Potato air-fries in refined seed oil"
+  //          keeps "air fries refined seed oil", so it will NOT join them.
   //   head — the first word only, so every potato spelling folds. Looser, and it
   //          can join things that merely share a first word ("Olive oil" with
   //          "Olive tapenade"), which is why it is opt-in and why the preview
@@ -10005,7 +10026,7 @@ function notesBatchDiagnosis(q, scope, notes, itemNotes) {
 function notesBatchEmptyHTML(d) {
   const list = d.items.map(i => `<b>${esc(i)}</b>`).join(' · ');
   if (d.kind === 'none') return `<div class="nm-empty">You have no food notes yet.<br>
-    <span>Notes are written on a food from the Summary table or a Food Profile. This screen folds them together once you have two on one food.</span></div>`;
+    <span>Notes are written on a food from the Summary table or a Food Deep Dive. This screen folds them together once you have two on one food.</span></div>`;
   if (d.kind === 'consolidated') return `<div class="nm-empty">✅ Nothing left to combine — all ${d.notes} of your notes are already consolidated.<br>
     <span>A food reappears here once it has notes on two different serving sizes, or a serving note plus an all-servings note.</span></div>`;
   if (d.kind === 'nomatch') return `<div class="nm-empty small">No note mentions “${esc(d.q)}” — no food name or note key matches it.</div>`;
@@ -13648,7 +13669,7 @@ function renderSafeBaseline() {
   wrap.innerHTML = `
     <div style="font-size:12px; color:var(--muted); line-height:1.5;">
       These foods were most frequently eaten on your <strong>best symptom days and the 2 days before them</strong>.
-      ⚠️ This is raw co-occurrence — foods you eat daily will always rank high here regardless of safety. For controlled per-food signals, use the ⚖️ Verdicts tab.
+      ⚠️ This is raw co-occurrence — foods you eat daily will always rank high here regardless of safety. For controlled per-food signals, open the food in 🔎 Food Deep Dive.
     </div>
     <div class="lab-baseline-list">
       ${topSafe.map(([food, count]) => `
@@ -15598,7 +15619,7 @@ function renderVerdicts() {
               <span class="verdict-badges">
                 ${i.staple ? '<span class="verdict-tag staple" title="Eaten on 70%+ of tracked days — day-comparison analyses cannot isolate it">📌 staple</span>' : ''}
                 <span class="verdict-tag conf-neutral" title="Backed by ${i.scored} scored reaction windows — more windows means a more trustworthy verdict">${i.conf.evidence}</span>
-                <button class="verdict-test-btn" title="Open the full Food Profile dossier" onclick="openFoodProfile(${escAttr(JSON.stringify(i.food))})">📇</button>
+                <button class="verdict-test-btn" title="Open the full Food Deep Dive" onclick="openFoodProfile(${escAttr(JSON.stringify(i.food))})">📇</button>
                 <button class="verdict-test-btn" title="Run a controlled elimination trial on this food" onclick="startExperiment(${escAttr(JSON.stringify(i.food))})">🧪 Test</button>
               </span>
             </div>
@@ -16404,7 +16425,7 @@ function renderExperiments() {
 
   const exps = loadExperiments();
   if (!exps.length) {
-    listEl.innerHTML = `<div class="card"><div class="empty"><span>🧪</span>No trials yet. Pick a suspect from ⚖️ Verdicts (look for “🔬 Worth testing”) or type a food above. To test something you DO instead, use the 🔁 Habit trial box.</div></div>`;
+    listEl.innerHTML = `<div class="card"><div class="empty"><span>🧪</span>No trials yet. Pick a suspect from 🔎 Food Deep Dive (its landing page lists them) or type a food above. To test something you DO instead, use the 🔁 Habit trial box.</div></div>`;
     return;
   }
 
@@ -17860,9 +17881,9 @@ function renderDigestStrip() {
   const rows = d.changes.slice(0, 4).map(c =>
     `<div class="dg-row"><span class="dg-food" title="${escAttr(c.food)}">${esc(c.food)}</span><span class="dg-move">${MV[c.from] || esc(c.from)} → <b>${MV[c.to] || esc(c.to)}</b></span></div>`).join('');
   const more = d.changes.length > 4
-    ? `<div class="dg-row"><span class="dg-move">…and ${d.changes.length - 4} more — see ⚖️ Verdicts</span></div>` : '';
+    ? `<div class="dg-row"><span class="dg-move">…and ${d.changes.length - 4} more</span></div>` : '';
   const nextRow = d.next
-    ? `<div class="dg-row dg-next"><span class="dg-food" title="${escAttr(d.next.i.food)}">🎯 ${esc(d.next.i.food)}</span><span class="dg-move">${esc(d.next.g.short)} and it settles</span><button class="verdict-test-btn" onclick="showTab('verdicts')">Open</button></div>`
+    ? `<div class="dg-row dg-next"><span class="dg-food" title="${escAttr(d.next.i.food)}">🎯 ${esc(d.next.i.food)}</span><span class="dg-move">${esc(d.next.g.short)} and it settles</span><button class="verdict-test-btn" onclick="openFoodProfile(${escAttr(JSON.stringify(d.next.i.food))})">Open</button></div>`
     : '';
   if (!rows && !nextRow) { el.style.display = 'none'; el.innerHTML = ''; return; }
   el.style.display = '';
@@ -19757,7 +19778,7 @@ function fmSuspectsHTML(marks) {
         <span class="fm-rank">${i + 1}</span><b>${esc(x.food)}</b>
         <span class="fm-bar"><i style="width:${Math.round(100 * x.weight / maxW)}%;"></i></span>
         <span class="fm-count">${x.count}× · last ${esc(fmt(x.last))}</span>
-        <button class="fm-profile-btn" data-food="${escAttr(x.food)}" onclick="event.stopPropagation();openFoodProfile(this.dataset.food)" title="Open the full Food Profile dossier">📇</button>
+        <button class="fm-profile-btn" data-food="${escAttr(x.food)}" onclick="event.stopPropagation();openFoodProfile(this.dataset.food)" title="Open the full Food Deep Dive">🔎</button>
       </div>`).join('');
     }
   } else {
@@ -20406,6 +20427,13 @@ function dfmOpenFull() {
 // All fp* compute helpers are pure (entries/checkins passed in) → self-tested.
 
 let _fpFood = '';
+// Which day the Vitals card compares on: 0 = the day you ate it, 4 = four days
+// later. A reaction that takes days to show up is invisible at lag 0, and the
+// engine already took a lag argument - only the UI was pinned to "same day".
+let _fpLag = 0;
+const FP_LAG_MAX = 4;
+function fpLagLabel(n) { return n === 0 ? 'Same day' : '+' + n + ' day' + (n === 1 ? '' : 's'); }
+function fpSetLag(n) { _fpLag = Math.max(0, Math.min(FP_LAG_MAX, n | 0)); renderFoodProfile(); }
 
 // Times eaten, distinct days, first/last, per-week frequency, meal-type split.
 function fpBasics(entries, food) {
@@ -20529,12 +20557,678 @@ function fpWeeklyHistory(entries, food, weeks) {
   return out;
 }
 
+// === Food deep-dive engine (v108) ==========================================
+// The Verdicts tab answered ONE categorical question per food and filed 200 of
+// 218 foods under "Typical" - technically honest, useless to read. This module
+// answers the question actually being asked ("tell me everything about THIS
+// food") and splits the answer into two tiers that must never be blurred:
+//
+//   TIER 1 - what the engines will stand behind: computeVerdicts' gated
+//     verdict, foodMealLift's confound-adjusted contrast, evidenceGap's "what
+//     would settle it". Conservative, statistically gated, math UNCHANGED.
+//   TIER 2 - descriptive splits of one food's own data (dose, build-up, meal
+//     slot, trend over time, re-introduction). Running a dozen of these on one
+//     food guarantees a couple look striking by luck, so they are never gated
+//     as proof: every one prints its raw counts and is labelled a lead.
+//
+// Blurring the two is the exact failure the split exists to prevent - a hint
+// dressed as a finding is what made the old tab untrustworthy. All fd* compute
+// helpers are PURE (entries passed in) -> self-tested.
+
+// Both arms of a descriptive split must carry this many scored windows, and the
+// gap must reach FD_MIN_GAP, before the split is shown AT ALL. Picked to match
+// evidenceConf's weak-evidence floor, not to maximise how much the card says:
+// under 6 windows a "pattern" is one or two marks deciding a headline.
+const FD_MIN_ARM = 6;
+const FD_MIN_GAP = 0.20;
+// A break this long and the food is effectively NEW again on return - the one
+// shape the Anomalies hints are blind to, so this card says it out loud.
+const FD_GAP_DAYS = 14;
+
+// ONE definition of "count the reaction windows over these entries", used by
+// every split below so two of them can never disagree about what a rate means.
+function fdWinCount(es) {
+  let neg = 0, tot = 0;
+  (es || []).forEach(e => {
+    if (!e || !e.windows) return;
+    WINDOWS.forEach(w => {
+      const v = e.windows[w.key];
+      if (v === true) tot++;
+      else if (v === false) { tot++; neg++; }
+    });
+  });
+  return { neg: neg, tot: tot, rate: tot ? neg / tot : null };
+}
+
+// This food's own servings, oldest first (every split below walks them in order).
+function fdEntriesFor(entries, food) {
+  const k = normFood(food);
+  return (entries || []).filter(e => e && normFood(e.food) === k)
+    .slice().sort((a, b) => String(a.date).localeCompare(String(b.date)));
+}
+
+// A two-arm descriptive split, or null. Returning null for a thin or small gap
+// is deliberate: that is not a weaker finding, it is no finding.
+function fdSplit(aEs, bEs) {
+  const a = fdWinCount(aEs), b = fdWinCount(bEs);
+  if (a.tot < FD_MIN_ARM || b.tot < FD_MIN_ARM) return null;
+  const gap = a.rate - b.rate;
+  if (Math.abs(gap) < FD_MIN_GAP) return null;
+  return { a: a, b: b, gap: gap };
+}
+
+// Dose: days you had it two-or-more times vs days you had it once.
+function fdDose(entries, food) {
+  const es = fdEntriesFor(entries, food);
+  const perDay = {};
+  es.forEach(e => { (perDay[e.date] || (perDay[e.date] = [])).push(e); });
+  const one = [], many = [];
+  let oneDays = 0, manyDays = 0;
+  Object.keys(perDay).forEach(d => {
+    if (perDay[d].length >= 2) { manyDays++; many.push.apply(many, perDay[d]); }
+    else { oneDays++; one.push.apply(one, perDay[d]); }
+  });
+  const sp = fdSplit(many, one);
+  return sp ? { a: sp.a, b: sp.b, gap: sp.gap, manyDays: manyDays, oneDays: oneDays } : null;
+}
+
+// Build-up: servings on a day right after another day of it, vs servings on a
+// day you had NOT eaten it the day before.
+function fdBuildup(entries, food) {
+  const es = fdEntriesFor(entries, food);
+  const days = new Set(es.map(e => e.date));
+  const back = [], fresh = [];
+  es.forEach(e => { (days.has(addDays(e.date, -1)) ? back : fresh).push(e); });
+  const sp = fdSplit(back, fresh);
+  return sp ? { a: sp.a, b: sp.b, gap: sp.gap } : null;
+}
+
+// Meal slot: the slot whose rate is furthest from this food's OTHER slots.
+// Compared against the food's own other servings, never against the whole log -
+// the question is "does WHEN I eat it matter", not "is this food bad".
+function fdSlot(entries, food) {
+  const es = fdEntriesFor(entries, food);
+  const slots = {};
+  es.forEach(e => { const m = e.mealType || 'other'; (slots[m] || (slots[m] = [])).push(e); });
+  const keys = Object.keys(slots);
+  if (keys.length < 2) return null;
+  let best = null;
+  keys.forEach(m => {
+    const rest = es.filter(e => (e.mealType || 'other') !== m);
+    const sp = fdSplit(slots[m], rest);
+    // With exactly two slots the two candidate gaps are exact negatives of each
+    // other, so |gap| alone leaves the winner down to key insertion order. Break
+    // that tie toward the WORSE slot - "worse at dinner" is the actionable half.
+    const better = sp && (!best || Math.abs(sp.gap) > Math.abs(best.gap)
+      || (Math.abs(sp.gap) === Math.abs(best.gap) && sp.gap > best.gap));
+    if (better) best = { a: sp.a, b: sp.b, gap: sp.gap, slot: m };
+  });
+  return best;
+}
+
+// Trend: its most recent half of scored servings against its first half. The
+// middle serving of an odd count is dropped so the two arms never overlap.
+function fdTrend(entries, food) {
+  const es = fdEntriesFor(entries, food).filter(e => fdWinCount([e]).tot > 0);
+  if (es.length < 4) return null;
+  const mid = Math.floor(es.length / 2);
+  const early = es.slice(0, mid), late = es.slice(es.length - mid);
+  const sp = fdSplit(late, early);
+  if (!sp) return null;
+  return { a: sp.a, b: sp.b, gap: sp.gap,
+    earlyFrom: early[0].date, earlyTo: early[early.length - 1].date,
+    lateFrom: late[0].date, lateTo: late[late.length - 1].date };
+}
+
+// Re-introduction: the LAST break of FD_GAP_DAYS or more, and how it has gone
+// since. Ties go to the later break on purpose - the most recent return is the
+// one still unfolding.
+function fdReturn(entries, food) {
+  const es = fdEntriesFor(entries, food);
+  const days = [...new Set(es.map(e => e.date))].sort();
+  if (days.length < 2) return null;
+  let at = -1, gap = 0;
+  for (let i = 1; i < days.length; i++) {
+    const g = Math.round((parseYMD(days[i]) - parseYMD(days[i - 1])) / 86400000);
+    if (g >= FD_GAP_DAYS && g >= gap) { gap = g; at = i; }
+  }
+  if (at < 0) return null;
+  const from = days[at];
+  return { date: from, gapDays: gap, daysSince: days.length - at,
+    since: fdWinCount(es.filter(e => e.date >= from)),
+    before: fdWinCount(es.filter(e => e.date < from)) };
+}
+
+// How long since it last went wrong, counted in SERVINGS as well as days - a
+// calm month means nothing if you only ate it once in it.
+function fdStreak(entries, food) {
+  const es = fdEntriesFor(entries, food);
+  let lastNeg = '', lastScored = '', clean = 0, scored = 0;
+  es.forEach(e => {
+    const c = fdWinCount([e]);
+    if (!c.tot) return;
+    scored++;
+    lastScored = e.date;
+    if (c.neg > 0) { lastNeg = e.date; clean = 0; } else clean++;
+  });
+  return { lastNeg: lastNeg, lastScored: lastScored, scoredServings: scored, cleanServings: clean,
+    daysSinceNeg: lastNeg ? Math.round((parseYMD(today()) - parseYMD(lastNeg)) / 86400000) : null };
+}
+
+// TIER 1. The confound question, read straight off the shipped stratification
+// engine: once you set aside the plate-mate it rides with, do ITS OWN meals
+// still run worse? foodMealLift already computes the conditional contrast
+// (cLift/cSE) and who it was adjusted for - this only asks which of the five
+// possible answers applies, so the deep dive can never contradict the Verdict.
+function fdConfound(entries, food) {
+  const k = normFood(food);
+  const rows = foodMealLift((entries || []).filter(e => e && effectiveItemType(e) === 'food'));
+  const r = rows.find(x => normFood(x.food) === k);
+  if (!r) return null;
+  const apartN = Math.max(0, r.nMeals - r.mateN);
+  const dominant = !!r.mate && r.mateN >= STRAT_MATE_FRAC * r.nMeals;
+  let state;
+  if (r.noContrast) state = 'nocontrast';
+  else if (r.cSE != null) state = r.cLift > r.cSE ? 'holds' : (r.cLift < -r.cSE ? 'calmer' : 'passenger');
+  else if (dominant) state = 'inseparable';
+  else state = r.lift > r.se ? 'marginalWorse' : (r.lift < -r.se ? 'marginalCalmer' : 'marginalFlat');
+  return { row: r, separable: r.cSE != null, state: state, apartN: apartN, dominant: dominant,
+    apartNeeded: dominant ? Math.max(0, STRAT_MIN_ARM - apartN) : 0 };
+}
+
+// The ranked read-out. PURE over the parts above so the wording is testable:
+// each entry is { key, icon, title, text, tone, w, tier }, highest w first.
+// `w` is editorial priority, not a statistic - it decides reading order only.
+function fdInsights(parts) {
+  const p = parts || {}, out = [];
+  const pc = x => Math.round((x || 0) * 100);
+  const add = (key, tier, w, tone, icon, title, text) =>
+    out.push({ key: key, tier: tier, w: w, tone: tone, icon: icon, title: title, text: text });
+  const c = p.conf, r = c ? c.row : null;
+  const bad1 = n => (n < 0 ? '−' : '+') + Math.abs(n).toFixed(2);
+
+  if (c && r) {
+    const mate = c.row.cMate || c.row.mate || '';
+    if (c.state === 'passenger')
+      add('conf', 1, 100, 'good', 'PASS', 'Looks like a passenger, not the driver',
+        'Its reaction windows may look bad, but set aside the meals it shared with ' + mate + ' and the ' + c.row.cApartN + ' meals it had apart from it were no worse than your meals without it. On this log ' + mate + ' is the likelier culprit, and blaming this food would be blaming the company it keeps.');
+    else if (c.state === 'calmer')
+      add('conf', 1, 100, 'good', 'CALM', 'Its own meals run calmer',
+        'Across the ' + c.row.cApartN + ' meals it had apart from ' + mate + ', those meals ran ' + bad1(c.row.cLift) + ' badness per meal against your meals without it — calmer, not worse. Whatever goes wrong on its bad days is not being carried by this.');
+    else if (c.state === 'holds')
+      add('conf', 1, 100, 'bad', 'HOLD', 'It holds up on its own',
+        'This is the hard version of the test: even on the ' + c.row.cApartN + ' meals you ate it WITHOUT ' + mate + ', those meals still ran ' + bad1(c.row.cLift) + ' badness per meal above your meals without it (margin of error ' + c.row.cSE.toFixed(2) + '). The reaction follows the food, not its plate-mates.');
+    else if (c.state === 'inseparable')
+      add('conf', 1, 96, 'info', 'TIED', 'Cannot be told apart from ' + mate + ' yet',
+        'It has shared ' + r.mateN + ' of its ' + r.nMeals + ' meals with ' + mate + ' and had only ' + c.apartN + ' apart from it, so every comparison carries ' + mate + ' on BOTH sides and nothing here can separate the two. Eat it without ' + mate + ' about ' + c.apartNeeded + ' more times and this resolves itself — or settle it today with a trial.');
+    else if (c.state === 'nocontrast')
+      add('conf', 1, 96, 'info', 'ALL', 'It is in every single meal',
+        'There is no meal in range without it, so there is nothing to compare its meals against. No amount of further logging fixes that - only skipping it for a few days will.');
+    else if (c.state === 'marginalWorse')
+      add('conf', 1, 92, 'bad', 'WORSE', 'Its own meals run worse',
+        'It has no dominant plate-mate to hide behind: the ' + r.nMeals + ' meals containing it ran ' + bad1(r.lift) + ' badness per meal above the meals without it (margin of error ' + r.se.toFixed(2) + ').');
+    else if (c.state === 'marginalCalmer')
+      add('conf', 1, 88, 'good', 'EASY', 'Its meals run calmer than your average',
+        'The ' + r.nMeals + ' meals containing it ran ' + bad1(r.lift) + ' badness per meal against the meals without it (margin of error ' + r.se.toFixed(2) + ').');
+    else
+      add('conf', 1, 40, 'flat', 'FLAT', 'No meal-level signal either way',
+        'The ' + r.nMeals + ' meals containing it are indistinguishable from the meals without it (' + bad1(r.lift) + ' badness per meal, margin of error ' + r.se.toFixed(2) + '). That is a real answer, not missing data.');
+    if (r.soloN > 0)
+      add('solo', 1, 62, 'info', 'SOLO', r.soloN + ' deliberate solo test' + (r.soloN === 1 ? '' : 's') + ' on record',
+        'You have marked it as a solo test ' + r.soloN + ' time' + (r.soloN === 1 ? '' : 's') + ' - un-confounded evidence, the cleanest kind this log can hold. More of those beat any amount of mixed-meal data.');
+  }
+
+  // A food that came back worse after a break ALSO reads as a worsening trend -
+  // same fact, and two rows would read as two pieces of evidence. The
+  // re-introduction row is the better of the two (it names the date and the
+  // break), so when both point the same way only that one is kept.
+  const retRose = !!(p.ret && p.ret.before && p.ret.since && p.ret.before.rate != null
+    && p.ret.since.rate != null && p.ret.since.rate - p.ret.before.rate >= FD_MIN_GAP);
+  // TIER 1 when it clears the false-discovery budget, a LEAD when it only
+  // clears raw 0.05. The difference is the whole point: at raw 0.05, one food
+  // in twenty reaches that line from nothing at all, so with a pantry's worth
+  // of foods a raw hit is a candidate and an FDR hit is a finding. Both print
+  // the counts they rest on, and the reader is told how many were tested.
+  const sk = p.skin && p.skin.row ? p.skin.row : null;
+  if (sk) {
+    const worse = sk.diff < 0;
+    const pts = Math.abs(sk.diff).toFixed(2);
+    const tested = p.skin.scan ? p.skin.scan.tested : 0;
+    const ap = p.skin.apart;
+    const apTxt = !ap ? ''
+      : ap.thin
+        ? ' It shares ' + ap.mateDays + ' of its ' + ap.mineDays + ' days with ' + ap.mate + ' and has only ' + ap.apartDays + ' apart from it, so at day level the two cannot be separated yet.'
+        : ' On the ' + ap.apartDays + ' days it was eaten WITHOUT ' + ap.mate + ' the gap is ' + (ap.diff < 0 ? '−' : '+') + Math.abs(ap.diff).toFixed(2) + ' points — ' + (Math.sign(ap.diff) === Math.sign(sk.diff) && Math.abs(ap.diff) >= Math.abs(sk.diff) * 0.5 ? 'it holds up without that company.' : 'most of it came from the company it keeps.');
+    if (sk.q <= SKIN_FDR)
+      add('skin', 1, 102, worse ? 'bad' : 'good', worse ? 'SKINBAD' : 'SKINGOOD',
+        'Your skin runs ' + pts + ' points ' + (worse ? 'worse' : 'better') + ' on the days you eat it',
+        'Across ' + sk.nEaten + ' days you ate it against ' + sk.nOther + ' days you did not, your combined skin score is ' + pts + ' points ' + (worse ? 'lower' : 'higher') + ' on the 1−5 scale. This is the strongest statement your log can make about a single food: it survives correction for all ' + tested + ' foods tested at once, so it is not one lucky result picked out of many.' + apTxt);
+    else if (sk.periodic)
+      add('skin', 2, 60, 'info', 'CYCLE', 'Eaten on too regular a rhythm to test',
+        'Its skin gap is ' + (sk.diff < 0 ? '−' : '+') + pts + ' points across ' + sk.nEaten + ' days, but you eat it on such a regular cycle that the test cannot tell it apart from the calendar itself: sliding the eating pattern keeps landing it back on the same days. Eat it on different days of the week for a few weeks and this becomes answerable.');
+    else if (sk.p <= SKIN_LEAD_P)
+      add('skin', 2, 82, worse ? 'bad' : 'good', worse ? 'SKINBAD' : 'SKINGOOD',
+        'Skin lead: ' + pts + ' points ' + (worse ? 'worse' : 'better') + ' on days you eat it',
+        'Across ' + sk.nEaten + ' days you ate it against ' + sk.nOther + ' days you did not, your skin score is ' + pts + ' points ' + (worse ? 'lower' : 'higher') + '. Taken alone that is a 1-in-' + Math.max(2, Math.round(1 / sk.p)) + ' result — but ' + tested + ' foods were tested, and about ' + Math.round(tested * SKIN_LEAD_P) + ' of them reach this level from chance alone. A real lead, not yet a finding.' + apTxt);
+  }
+
+  const t = retRose && p.trend && p.trend.gap > 0 ? null : p.trend;
+  if (t) add('trend', 2, 85, t.gap > 0 ? 'bad' : 'good',
+    t.gap > 0 ? 'DOWN' : 'UP',
+    t.gap > 0 ? 'It has got worse over time' : 'It has got better over time',
+    'Over its first ' + t.b.tot + ' scored windows (' + fmt(t.earlyFrom) + ' to ' + fmt(t.earlyTo) + ') it reacted ' + pc(t.b.rate) + '% of the time. Over its most recent ' + t.a.tot + ' (' + fmt(t.lateFrom) + ' to ' + fmt(t.lateTo) + ') it reacts ' + pc(t.a.rate) + '%. Same food, different answer depending on when you ask.');
+
+  const rr = p.ret;
+  if (rr && rr.since.tot >= 1) {
+    const rose = retRose;
+    add('ret', 2, rose ? 88 : 56, rose ? 'bad' : 'info', 'BACK',
+      'Re-introduced after ' + rr.gapDays + ' days off',
+      'You stopped for ' + rr.gapDays + ' days and started again on ' + fmt(rr.date) + ' (' + rr.daysSince + ' day' + (rr.daysSince === 1 ? '' : 's') + ' of it since). Since the break: ' + rr.since.neg + ' of ' + rr.since.tot + ' windows reacted' + (rr.since.rate != null ? ' (' + pc(rr.since.rate) + '%)' : '') + (rr.before.rate != null ? ', against ' + pc(rr.before.rate) + '% before it' : '') + '. A food coming back after a break behaves like a new food — judge it on what happened AFTER ' + fmt(rr.date) + ', not on the whole history above.');
+  }
+
+  const d = p.dose;
+  if (d) add('dose', 2, 80, d.gap > 0 ? 'bad' : 'good', 'DOSE',
+    d.gap > 0 ? 'How much matters more than whether' : 'Bigger days are not the problem',
+    'On the ' + d.oneDays + ' days you had it once it reacted ' + pc(d.b.rate) + '% of the time (' + d.b.neg + ' of ' + d.b.tot + ' windows). On the ' + d.manyDays + ' days you had it twice or more: ' + pc(d.a.rate) + '% (' + d.a.neg + ' of ' + d.a.tot + ').');
+
+  const bu = p.buildup;
+  if (bu) add('buildup', 2, 78, bu.gap > 0 ? 'bad' : 'good', 'LOAD',
+    bu.gap > 0 ? 'It builds up over back-to-back days' : 'Back-to-back days are not the problem',
+    'Servings on a day you had NOT eaten it the day before reacted ' + pc(bu.b.rate) + '% of the time (' + bu.b.neg + ' of ' + bu.b.tot + '). Servings on a day right after another: ' + pc(bu.a.rate) + '% (' + bu.a.neg + ' of ' + bu.a.tot + '). A single serving may be fine where a run of days is not.');
+
+  const sl = p.slot;
+  if (sl) add('slot', 2, 70, sl.gap > 0 ? 'bad' : 'good', 'WHEN',
+    (sl.gap > 0 ? 'Worse at ' : 'Better at ') + sl.slot,
+    'At ' + sl.slot + ' it reacted ' + pc(sl.a.rate) + '% of the time (' + sl.a.neg + ' of ' + sl.a.tot + ' windows). At your other meal times: ' + pc(sl.b.rate) + '% (' + sl.b.neg + ' of ' + sl.b.tot + '). Worth trying it only at the calmer time before giving it up.');
+
+  const st = p.streak;
+  if (st && st.scoredServings >= 4) {
+    if (!st.lastNeg)
+      add('streak', 2, 50, 'good', 'ZERO', 'It has never reacted',
+        'All ' + st.scoredServings + ' of its scored servings came back clear. Not proof it is safe — but nothing in the log is against it.');
+    else if (st.cleanServings >= 4)
+      add('streak', 2, 46, 'good', 'RUN', 'Clean for its last ' + st.cleanServings + ' servings',
+        'Its last reaction was ' + fmt(st.lastNeg) + ', ' + st.daysSinceNeg + ' days ago, and the ' + st.cleanServings + ' scored servings since have all come back clear.');
+  }
+
+  out.sort((a, b) => b.w - a.w || a.key.localeCompare(b.key));
+  return out;
+}
+
+// The one-paragraph summary at the top. Facts only, in the order a person asks
+// them: how much of it, what the gated verdict says, and the single biggest
+// reason not to trust that verdict yet.
+function fdHeadline(b, vrec, conf) {
+  const bits = [];
+  if (b.logs) {
+    const wk = b.perWeek >= 10 ? Math.round(b.perWeek) : b.perWeek.toFixed(1);
+    bits.push('You have logged it ' + b.logs + ' time' + (b.logs === 1 ? '' : 's') + ' across ' + b.days + ' day' + (b.days === 1 ? '' : 's') +
+      (b.spanDays > 13 ? ', about ' + wk + ' a week' : '') + ', last on ' + fmt(b.last) + '.');
+  } else {
+    bits.push('No servings of it in your log - this name is kept in your food list only.');
+  }
+  if (!vrec) bits.push('It has no scored reaction windows, so none of the engines can judge it yet.');
+  else if (vrec.verdict === 'suspect') bits.push('The engine names it a SUSPECT: it reacts more often than your typical food, and its own meals back that up.');
+  else if (vrec.verdict === 'gentler') bits.push('The engine rates it EASIER on you than your typical food.');
+  else if (vrec.verdict === 'unclear') bits.push('Too few of its windows are marked for any verdict - ' + vrec.scored + ' so far.');
+  else bits.push('The engine will not call it either way: on ' + vrec.scored + ' scored windows it runs ' + Math.round(vrec.neg / Math.max(1, vrec.scored) * 100) + '% reaction against a ' + Math.round((vrec.expRate || 0) * 100) + '% baseline for you.');
+  if (conf && conf.state === 'inseparable') bits.push('The biggest caveat: it almost never gets eaten apart from ' + (conf.row.mate || 'one companion') + ', so the two cannot be separated here.');
+  else if (conf && conf.state === 'nocontrast') bits.push('The biggest caveat: it is in every meal in range, so there is nothing to compare it against.');
+  else if (conf && (conf.state === 'passenger' || conf.state === 'calmer')) bits.push('The biggest caveat cuts the other way: once ' + (conf.row.cMate || conf.row.mate || 'its usual plate-mate') + ' is set aside, its own meals stop looking bad at all \u2014 read the first line below before you give this one up.');
+  if (vrec && vrec.staple) bits.push('It is a staple for you - eaten on most tracked days.');
+  return bits.join(' ');
+}
+
+// One concrete next step, never a menu. Reads the SAME gates evidenceGap reads,
+// so the advice cannot contradict the verdict printed above it.
+function fdNextAction(vrec, gap, conf, trialState, parts) {
+  // The CHEAPER alternative to cutting a food, when one of the descriptive
+  // splits found a genuinely clean arm. A lead never overrides the gated
+  // verdict - it rides alongside it, with its counts, as the thing to try first
+  // because it costs nothing and keeps the food.
+  const cheaper = () => {
+    const p = parts || {};
+    const d = p.dose;
+    if (d && d.gap > 0 && d.b.rate <= 0.15)
+      return ' Cheaper thing to try first: on the ' + d.oneDays + ' days you had it only once, ' + d.b.neg + ' of ' + d.b.tot + ' windows reacted — cap it at one serving a day before giving it up.';
+    const sl = p.slot;
+    if (sl && sl.gap > 0 && sl.b.rate <= 0.15)
+      return ' Cheaper thing to try first: away from ' + sl.slot + ', ' + sl.b.neg + ' of ' + sl.b.tot + ' windows reacted — move it off ' + sl.slot + ' before giving it up.';
+    return '';
+  };
+  if (trialState && trialState.s === 'active')
+    return { icon: 'RUN', text: 'A trial on it is running right now — finish it. That answer will beat everything on this page.' };
+  // The skin result outranks the window verdict when it clears the budget,
+  // because it IS the stronger evidence: the window test was measured to carry
+  // no per-food signal at all, and this one survived correction across every
+  // food tested. Leaving the two to disagree in adjacent cards is how a page
+  // stops being believed.
+  const skA = (parts || {}).skin || {};
+  if (skA.row && skA.row.q <= SKIN_FDR) {
+    const worse = skA.row.diff < 0, pts = Math.abs(skA.row.diff).toFixed(2);
+    const ap = skA.apart;
+    if (worse) {
+      const caveat = ap && !ap.thin && !(Math.sign(ap.diff) === Math.sign(skA.row.diff) && Math.abs(ap.diff) >= Math.abs(skA.row.diff) * 0.5)
+        ? ' One caution before you do: on the days you ate it without ' + ap.mate + ' the gap mostly disappears, so test ' + ap.mate + ' alongside it.'
+        : '';
+      return { icon: 'CUT', text: 'This is the strongest food signal in your whole log — your skin runs ' + pts + ' points worse on the days you eat it, and it is the only food that survives correction across every food tested. Drop it for two weeks and watch your skin scores. If anything in your diet is worth one clean experiment, it is this.' + caveat };
+    }
+    return { icon: 'DONE', text: 'Keep it. Your skin runs ' + pts + ' points BETTER on the days you eat it, and that holds up after correcting for every food tested — the only food-level good news your log currently supports.' };
+  }
+  // Checked BEFORE the verdict branches on purpose. An exonerated food must not
+  // be told to cut itself because its raw windows still look bad - that is the
+  // whole point of the conditional contrast, and the advice has to follow it.
+  if (conf && (conf.state === 'passenger' || conf.state === 'calmer'))
+    return { icon: 'TEST', text: 'Do not drop this one yet. Once ' + (conf.row.cMate || conf.row.mate) + ' is set aside, its own meals are no worse than your average — so test ' + (conf.row.cMate || conf.row.mate) + ' instead, or eat this food on its own once and mark it with the Solo flag to nail it down.' };
+  if (conf && (conf.state === 'inseparable'))
+    return { icon: 'EAT', text: 'Eat it ' + conf.apartNeeded + ' more time' + (conf.apartNeeded === 1 ? '' : 's') + ' WITHOUT ' + (conf.row.mate || 'its usual companion') + ' — mark the 0–4h and 5–8h windows each time. That is the cheapest thing that would move this.' };
+  if (conf && conf.state === 'nocontrast')
+    return { icon: 'SKIP', text: 'Skip it for 4-5 days and keep checking in. Nothing else can create the comparison this needs.' };
+  if (vrec && vrec.verdict === 'suspect')
+    return { icon: 'CUT', text: 'Cut it for a week and watch the window it reacts in. If that window stays clear without it, you have your answer.' + cheaper() };
+  if (gap && (gap.kind === 'windows' || gap.kind === 'apart'))
+    return { icon: 'MARK', text: gap.long };
+  if (skA.row && skA.row.periodic)
+    return { icon: 'EAT', text: 'Shift when you eat it. You have it on such a regular rhythm that the skin test cannot tell it apart from the calendar — eat it on different days of the week for a few weeks and it becomes answerable.' };
+  if (skA.row && skA.row.p <= SKIN_LEAD_P) {
+    const worse = skA.row.diff < 0;
+    return { icon: 'TEST', text: 'Its reaction windows say nothing, but your skin is ' + Math.abs(skA.row.diff).toFixed(2) + ' points ' + (worse ? 'worse' : 'better') + ' on the days you eat it — not enough to name it against ' + ((skA.scan && skA.scan.tested) || 0) + ' foods tested, but the best lead this food has. A two-week trial would settle it.' };
+  }
+  if (gap && gap.kind === 'settled')
+    return { icon: 'DONE', text: 'Nothing left to do on the reaction-window side — this is an ordinary food by that measure, and more servings will not change it.' };
+  if (gap && (gap.kind === 'trial' || gap.kind === 'conflict'))
+    return { icon: 'TRIAL', text: gap.long };
+  return { icon: 'MARK', text: 'Mark the reaction windows on its next few servings in Logs — that is what every number on this page is built from.' };
+}
+
+// === Skin-driven verdicts (v109) ===========================================
+// WHY THIS EXISTS. Measured on a real log before a line of it was written, with
+// the verdict engine's own extracted code (versions/_livefix): the reaction
+// -window outcome can carry no per-food information once the marking rate sits
+// near a coin flip. Stripped of every safeguard - no clustering haircut, no
+// family correction, no meal gate - an uncorrected exact binomial named foods
+// at almost exactly the rate pure chance predicts, and none survived a
+// multiple-comparison correction. The tell is that the gap between a food and
+// its baseline SHRANK as the number of scored windows grew: large gaps lived
+// only on the foods with a handful of marks. That is the signature of no
+// effect, and loosening a threshold against it does not find triggers, it
+// invents them. See markingHealth() below for the cause, which is a marking
+// habit and not a statistical one.
+//
+// The signal is at the DAY level instead. Against a composite skin score the
+// same foods produced two to three times the number of hits chance predicts,
+// and the strongest cleared Benjamini-Hochberg at FDR 10%. That held up under
+// the conservative null below, so this is a second, independent route to a
+// verdict rather than a reinterpretation of the dead one. The window engine is
+// deliberately UNTOUCHED.
+//
+// THREE THINGS THIS GETS RIGHT THAT THE OBVIOUS VERSION GETS WRONG:
+//  1. A plain Welch t on 1-5 data explodes on a constant arm. A food eaten on
+//     a handful of days that all happened to score the same gives SE ~ 0 and a
+//     p-value with thirty zeroes after the point - measured, not hypothetical.
+//     Every arm variance here is shrunk toward the metric's own global variance
+//     with the same +2 pseudo-observation weight foodMealLift's sVar() already
+//     uses, so a short run of identical days can no longer buy certainty.
+//  2. Skin persists across days and foods are eaten in runs. Shuffling day
+//     labels destroys both and makes the null too narrow, which manufactures
+//     small p-values out of pure timing. The null here is a CIRCULAR SHIFT of
+//     the eating pattern: both series keep their own autocorrelation and only
+//     their alignment is broken. It costs real hits against plain shuffling,
+//     and on the log it was built against every hit it removed was an artefact.
+//  3. One test per food, not one per metric per lag. The composite is averaged
+//     over the skin metrics, and only lag 0 is GATED - that is where the signal
+//     measured, with the later lags sitting at chance. Other lags are
+//     explorable on the Vitals card as description; they are deliberately not a
+//     second chance to name the same food.
+const SKIN_MIN_DAYS = 10;     // per arm; below this the contrast is noise
+const SKIN_MIN_METRICS = 3;   // skin metrics needed on a day for a composite
+const SKIN_PERMS = 999;       // fixed count AND fixed seed -> same answer every render
+const SKIN_FDR = 0.10;        // Benjamini-Hochberg; a named food is ~1-in-10 wrong
+const SKIN_LEAD_P = 0.05;     // below FDR but worth listing as a lead
+
+// Which check-in metrics count as skin. A name guess only DEFAULTS the set -
+// "Sinus Reactions" matches every sensible regex and is not skin - so the
+// choice is the user's and is stored. Returns keys present in the metric list.
+function skinDefaultKeys(syms) {
+  return (syms || []).filter(x => {
+    const t = ((x.name || '') + ' ' + (x.label || '') + ' ' + (x.key || '')).toLowerCase();
+    if (/sinus|phlegm|tongue|sleep|gas|diarrhea|mushy|bowel|constipat|focus|energy|daily score|day score|daily pain|bed pain/.test(t)) return false;
+    return /skin|damage|dmg|reaction|flare|cheek|chin|jaw|forehead|nose|neck|mustache|butt|acne|rash/.test(t);
+  }).map(x => x.key);
+}
+function loadSkinKeys() {
+  let stored = null;
+  try { stored = JSON.parse(localStorage.getItem('fst_skin_keys') || 'null'); } catch (e) {}
+  const syms = orderedCheckinSymptoms();
+  const valid = new Set(syms.map(x => x.key));
+  if (Array.isArray(stored)) {
+    const keep = stored.filter(k => valid.has(k));
+    if (keep.length) return keep;
+  }
+  return skinDefaultKeys(syms);
+}
+function saveSkinKeys(keys) {
+  try { localStorage.setItem('fst_skin_keys', JSON.stringify(keys)); } catch (e) {}
+  _skinScanMemo = null;
+}
+function skinToggleKey(k) {
+  const cur = new Set(loadSkinKeys());
+  if (cur.has(k)) cur.delete(k); else cur.add(k);
+  saveSkinKeys([...cur]);
+  renderFoodProfile();
+}
+
+// One composite number per day: the mean of whichever skin metrics were filled
+// in. Averaging is the point - the individual metrics correlate only 0.2-0.6,
+// so the mean is markedly more reliable than any one of them, and it costs one
+// test per food instead of eleven.
+function skinDayScores(checkins, keys) {
+  const out = {};
+  const ks = keys || [];
+  Object.keys(checkins || {}).forEach(d => {
+    const c = checkins[d];
+    if (!c) return;
+    let n = 0, sum = 0;
+    ks.forEach(k => { const v = c[k]; if (typeof v === 'number') { sum += v; n++; } });
+    if (n >= SKIN_MIN_METRICS) out[d] = sum / n;
+  });
+  return out;
+}
+
+// The shrunk-variance contrast. Takes SUFFICIENT STATISTICS so the permutation
+// loop can reuse it without rebuilding arrays 999 times per food.
+function skinStat(sumA, sqA, nA, totSum, totSq, totN, gVar) {
+  const nB = totN - nA, sumB = totSum - sumA, sqB = totSq - sqA;
+  if (nA < 2 || nB < 2) return null;
+  const ssA = Math.max(0, sqA - sumA * sumA / nA), ssB = Math.max(0, sqB - sumB * sumB / nB);
+  const vA = (ssA + 2 * gVar) / (nA + 1), vB = (ssB + 2 * gVar) / (nB + 1);
+  const se = Math.sqrt(vA / nA + vB / nB);
+  if (!(se > 0)) return null;
+  return { t: (sumA / nA - sumB / nB) / se, diff: sumA / nA - sumB / nB, nA: nA, nB: nB };
+}
+
+// The scan. PURE over (entries, checkins, keys) -> one row per testable food,
+// with a circular-shift permutation p and a Benjamini-Hochberg q.
+function skinScan(entries, checkins, keys, opts) {
+  const o = opts || {};
+  const minDays = o.minDays || SKIN_MIN_DAYS, perms = o.perms || SKIN_PERMS;
+  const day = skinDayScores(checkins, keys);
+  const dates = Object.keys(day).sort();
+  const empty = { rows: [], scoredDays: dates.length, metrics: (keys || []).slice(), tested: 0 };
+  if (dates.length < minDays * 2) return empty;
+
+  // A contiguous calendar axis: a circular shift must mean "slide by N days",
+  // not "slide by N check-ins", or the run structure it exists to preserve is
+  // silently destroyed by the gaps.
+  const axis = [];
+  for (let d = dates[0], guard = 0; d <= dates[dates.length - 1] && guard < 20000; d = addDays(d, 1), guard++) axis.push(d);
+  const N = axis.length;
+  const val = axis.map(d => (d in day ? day[d] : null));
+  const have = val.map(v => v !== null);
+
+  let totSum = 0, totSq = 0, totN = 0;
+  val.forEach(v => { if (v !== null) { totSum += v; totSq += v * v; totN++; } });
+  const gMu = totSum / totN;
+  const gVar = totN > 1 ? Math.max(1e-9, (totSq - totSum * totSum / totN) / (totN - 1)) : 1e-9;
+
+  // which calendar positions each food was eaten on
+  const idxByFood = {}, nameByKey = {};
+  (entries || []).forEach(e => {
+    if (!e || effectiveItemType(e) !== 'food') return;
+    const k = normFood(e.food || ''); if (!k) return;
+    if (!nameByKey[k]) nameByKey[k] = e.food;
+    (idxByFood[k] || (idxByFood[k] = new Set())).add(e.date);
+  });
+  const pos = {};
+  axis.forEach((d, i) => { pos[d] = i; });
+
+  // 999 fixed offsets, drawn once from a fixed seed and SHARED by every food,
+  // so the same log always produces the same answer and the foods are compared
+  // against one another on identical nulls.
+  let seed = 20261007;
+  const rnd = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+  const offs = [];
+  for (let p = 0; p < perms; p++) offs.push(1 + Math.floor(rnd() * Math.max(1, N - 2)));
+
+  const rows = [];
+  Object.keys(idxByFood).forEach(k => {
+    const src = [];
+    idxByFood[k].forEach(d => { if (d in pos) src.push(pos[d]); });
+    if (!src.length) return;
+    const acc = off => {
+      let sum = 0, sq = 0, n = 0;
+      for (let i = 0; i < src.length; i++) {
+        const jj = off === 0 ? src[i] : (src[i] + off) % N;
+        if (!have[jj]) continue;
+        const v = val[jj]; sum += v; sq += v * v; n++;
+      }
+      return [sum, sq, n];
+    };
+    const [s0, q0, n0] = acc(0);
+    if (n0 < minDays || totN - n0 < minDays) return;
+    const obs = skinStat(s0, q0, n0, totSum, totSq, totN, gVar);
+    if (!obs) return;
+    let ge = 0, tie = 0;
+    for (let p = 0; p < perms; p++) {
+      const [sp, qp, np] = acc(offs[p]);
+      const st = skinStat(sp, qp, np, totSum, totSq, totN, gVar);
+      if (!st) continue;
+      if (Math.abs(st.t) >= Math.abs(obs.t)) ge++;
+      // An EXACT tie means the shifted pattern landed back on the same days.
+      // That only happens when the eating is periodic, and it is the one way
+      // this null loses power: a food eaten every Sunday is reproduced by every
+      // shift of 7, so a large share of the null equals the observation and the
+      // p-value cannot go low however real the effect is. The honest response is
+      // to say so, not to doctor the null or to report a bare null result -
+      // a silent false negative is the worst outcome available here.
+      if (Math.abs(Math.abs(st.t) - Math.abs(obs.t)) < 1e-9) tie++;
+    }
+    rows.push({ food: nameByKey[k], key: k, t: obs.t, diff: obs.diff, nEaten: obs.nA, nOther: obs.nB,
+      p: (ge + 1) / (perms + 1), tieFrac: tie / perms, periodic: tie / perms >= 0.05, q: 1, rank: 0 });
+  });
+
+  // Benjamini-Hochberg over the foods actually tested. FDR, not Bonferroni:
+  // the question is "of the foods I name, how many are wrong", and 1-in-10 is
+  // the right budget for something that costs a week of avoiding one food.
+  rows.sort((a, b) => a.p - b.p || Math.abs(b.t) - Math.abs(a.t));
+  const m = rows.length;
+  let prev = 1;
+  for (let i = m - 1; i >= 0; i--) {
+    prev = Math.min(prev, rows[i].p * m / (i + 1));
+    rows[i].q = prev;
+    rows[i].rank = i + 1;
+  }
+  return { rows: rows, scoredDays: totN, spanDays: N, metrics: (keys || []).slice(), tested: m, gVar: gVar, gMean: gMu };
+}
+
+// Memoized on the exact stored strings, the same trick loadMigrated uses: the
+// scan is ~2M operations and must not run twice in one render, let alone once
+// per card.
+let _skinScanMemo = null, _skinScanRaw = '';
+function skinScanCached() {
+  const raw = (localStorage.getItem('fst_entries') || '') .length + '|'
+    + (localStorage.getItem('fst_checkins') || '').length + '|'
+    + (localStorage.getItem('fst_entries') || '').slice(-120)
+    + (localStorage.getItem('fst_checkins') || '').slice(-120)
+    + '|' + JSON.stringify(loadSkinKeys());
+  if (_skinScanMemo && raw === _skinScanRaw) return _skinScanMemo;
+  _skinScanMemo = skinScan(loadMigrated(), loadCheckins(), loadSkinKeys());
+  _skinScanRaw = raw;
+  return _skinScanMemo;
+}
+function skinRowFor(food) {
+  const sc = skinScanCached();
+  const k = normFood(food);
+  const row = sc.rows.find(r => r.key === k) || null;
+  return row ? { row: row, scan: sc } : { row: null, scan: sc };
+}
+
+// Day-level company check, the same question the meal engine asks: if this food
+// almost always shares a DAY with another, re-run the contrast on the days it
+// did not. No second p-value is claimed - a permutation on a restricted arm
+// this small would be its own multiplicity problem - only the effect and the
+// arm sizes, which is enough to say "it holds up" or "it does not".
+function skinApartCheck(entries, checkins, keys, food) {
+  const k = normFood(food);
+  const day = skinDayScores(checkins, keys);
+  const mine = new Set(), others = {};
+  (entries || []).forEach(e => {
+    if (!e || effectiveItemType(e) !== 'food' || !(e.date in day)) return;
+    if (normFood(e.food) === k) mine.add(e.date);
+  });
+  if (mine.size < SKIN_MIN_DAYS) return null;
+  (entries || []).forEach(e => {
+    if (!e || effectiveItemType(e) !== 'food' || !(e.date in day)) return;
+    const kk = normFood(e.food);
+    if (kk === k || !mine.has(e.date)) return;
+    (others[kk] || (others[kk] = { food: e.food, days: new Set() })).days.add(e.date);
+  });
+  const top = Object.values(others).sort((a, b) => b.days.size - a.days.size)[0];
+  if (!top || top.days.size < 0.55 * mine.size) return null;   // no dominant partner
+  const apart = [...mine].filter(d => !top.days.has(d));
+  const ctl = Object.keys(day).filter(d => !mine.has(d) && !top.days.has(d));
+  if (apart.length < 4 || ctl.length < SKIN_MIN_DAYS) {
+    return { mate: top.food, mateDays: top.days.size, mineDays: mine.size, apartDays: apart.length, thin: true };
+  }
+  const mean = a => a.reduce((x, y) => x + y, 0) / a.length;
+  const ma = mean(apart.map(d => day[d])), mc = mean(ctl.map(d => day[d]));
+  return { mate: top.food, mateDays: top.days.size, mineDays: mine.size,
+    apartDays: apart.length, ctlDays: ctl.length, diff: ma - mc, thin: false };
+}
+
+// === Marking health (v109, the other half) ==================================
+// The root cause the diagnosis found, stated to the person who can fix it. A
+// reaction-window mark only carries information if it is sometimes NOT set; at
+// a coin-flip hit rate it separates nothing, and nothing downstream can repair
+// that. PURE -> self-tested.
+function markingHealth(entries) {
+  let pos = 0, neg = 0, unmarked = 0;
+  (entries || []).forEach(e => {
+    if (!e || effectiveItemType(e) !== 'food') return;
+    WINDOWS.forEach(w => {
+      const v = e.windows ? e.windows[w.key] : undefined;
+      if (v === true) pos++; else if (v === false) neg++; else unmarked++;
+    });
+  });
+  const marked = pos + neg;
+  const rate = marked ? neg / marked : null;
+  // Bands, not a score. 0.5 is the worst possible value for a binary flag: it
+  // is where the mark and a coin are equally informative. Away from it in
+  // EITHER direction the mark starts to discriminate again.
+  const band = rate == null ? 'none'
+    : (rate >= 0.42 && rate <= 0.58) ? 'uninformative'
+    : (rate >= 0.3 && rate <= 0.7) ? 'weak'
+    : 'usable';
+  return { pos: pos, neg: neg, marked: marked, unmarked: unmarked, rate: rate, band: band,
+    coverage: marked + unmarked ? marked / (marked + unmarked) : 0 };
+}
+
 // ── Navigation ───────────────────────────────────────────────────────────────
 function openFoodProfile(food) {
   _fpFood = canonicalFoodName(String(food || '').trim());
   showTab('profile');
 }
-function fpOpen(food) { _fpFood = canonicalFoodName(String(food || '').trim()); renderFoodProfile(); }
+function fpOpen(food) { _fpFood = canonicalFoodName(String(food || '').trim()); _fpLag = 0; renderFoodProfile(); }
 function fpClear() { _fpFood = ''; renderFoodProfile(); }
 function fpGoFaceMap() { if (_fpFood) _fmFilter = canonicalFoodName(_fpFood); showTab('facemap'); }
 
@@ -20576,10 +21270,56 @@ function renderFoodProfile() {
     const chip = f => `<button class="fp-chip" data-food="${escAttr(f)}" onclick="fpOpen(this.dataset.food)">${esc(f)}<span class="fp-chip-n">${logsPer[normFood(f)] || 0}×</span></button>`;
     const seen = new Set(recent.map(normFood));
     const freq2 = frequent.filter(f => !seen.has(normFood(f)));
+    // The ONE thing worth keeping from the retired Verdicts tab: the shortlist
+    // of foods the engine will actually stand behind. The rest of that tab was
+    // every food in a long list, which is the part that made it unreadable.
+    const keepR = _verdictRange; let susp = [];
+    _verdictRange = 'all';
+    try {
+      susp = computeVerdicts().list
+        .filter(i => i.verdict === 'suspect' && i.logs >= 3)
+        .sort((a, b) => (b.worst ? b.worst.delta : 0) - (a.worst ? a.worst.delta : 0))
+        .slice(0, 8).map(i => i.food);
+    } finally { _verdictRange = keepR; }
+    // Skin shortlist: the only per-food claims this log can currently support,
+    // separated from the ones that merely look striking. Both counts are shown
+    // so the list cannot be read as more certain than it is.
+    const sc = skinScanCached();
+    const named = sc.rows.filter(r => r.q <= SKIN_FDR);
+    const leads = sc.rows.filter(r => r.q > SKIN_FDR && r.p <= SKIN_LEAD_P);
+    const skChip = r => `<button class="fp-chip" data-food="${escAttr(r.food)}" onclick="fpOpen(this.dataset.food)" title="${escAttr((r.diff < 0 ? 'Skin ' + Math.abs(r.diff).toFixed(2) + ' points worse' : 'Skin ' + r.diff.toFixed(2) + ' points better') + ' on ' + r.nEaten + ' days eaten vs ' + r.nOther + ' not')}">${r.diff < 0 ? '\u{1F534}' : '\u{1F49A}'} ${esc(r.food)}<span class="fp-chip-n">${r.diff < 0 ? '−' : '+'}${Math.abs(r.diff).toFixed(2)}</span></button>`;
+    const skinLanding = sc.tested ? `
+      <div class="fp-h">🔴 Skin — what your log can actually name</div>
+      ${named.length
+        ? `<div class="fp-chiprow">${named.map(skChip).join('')}</div>
+           <div class="fp-legend">${named.length === 1 ? 'This food survives' : 'These foods survive'} correction across all ${sc.tested} foods tested, at a 10% false-discovery budget — roughly 1 in 10 of what is named here is expected to be wrong.</div>`
+        : `<div class="fp-empty">No food clears the 10% false-discovery budget yet across the ${sc.tested} tested on ${sc.scoredDays} scored days.</div>`}
+      ${leads.length
+        ? `<div class="fd-tier2" style="margin-top:10px;">
+             <div class="fd-tier2-head">Skin leads — not yet findings</div>
+             <div class="fd-tier2-hint">These reach p &lt; ${SKIN_LEAD_P} on their own, but with ${sc.tested} foods tested about ${Math.round(sc.tested * SKIN_LEAD_P)} are expected to do that by chance. Worth a trial; not worth cutting on this alone.</div>
+             <div class="fp-chiprow">${leads.map(skChip).join('')}</div>
+           </div>`
+        : ''}` : '';
+
+    // The root cause, stated where it can be acted on. A window mark only
+    // carries information if it is sometimes NOT set; at a coin-flip rate it
+    // separates nothing, and nothing downstream can repair that.
+    const mh = markingHealth(entries);
+    const mhCard = (mh.band === 'uninformative' || mh.band === 'weak') ? `
+      <div class="card fp-card" style="border-left:4px solid var(--neg); border-radius:0 10px 10px 0; margin-top:14px;">
+        <div class="fp-h">⚠️ Your ✕ marks cannot separate your foods</div>
+        <div class="fd-ins-text">You have marked <b>${mh.marked.toLocaleString()}</b> reaction windows and <b>${Math.round(mh.rate * 100)}%</b> of them are ✕. That is the problem, not the amount of logging: when more than half of everything reacts, no single food can stand out from the rest, and every per-food verdict built on these marks is weak by construction. It is why so much of your log reads “Typical”.</div>
+        <div class="fd-ins-text" style="margin-top:8px;">Two things fix it, and neither needs more logging. <b>Raise the bar</b> — keep ✕ for a reaction you would actually act on, and leave the ordinary background out of it. Or <b>use the severity levels</b> so a bad window and a slightly-off window stop counting the same. The skin test above does not use these marks at all, which is why it can still name foods while this cannot.</div>
+      </div>` : '';
+
     host.innerHTML = searchBar + (recent.length
-      ? `<div class="fp-h">Recently eaten</div><div class="fp-chiprow">${recent.map(chip).join('')}</div>
-         ${freq2.length ? `<div class="fp-h">Most logged</div><div class="fp-chiprow">${freq2.map(chip).join('')}</div>` : ''}`
-      : `<div class="empty"><span>📇</span>Log some foods first — then search any of them here for the full story.</div>`);
+      ? `${susp.length ? `<div class="fp-h">🔺 Current suspects</div><div class="fp-chiprow">${susp.map(chip).join('')}</div>` : ''}
+         ${skinLanding}
+         <div class="fp-h">Recently eaten</div><div class="fp-chiprow">${recent.map(chip).join('')}</div>
+         ${freq2.length ? `<div class="fp-h">Most logged</div><div class="fp-chiprow">${freq2.map(chip).join('')}</div>` : ''}
+         ${mhCard}`
+      : `<div class="empty"><span>🔎</span>Log some foods first — then search any of them here for the full story.</div>`);
     fmWireAutocomplete(document.getElementById('fp-search'), document.getElementById('fp-drop'),
       fpSearchItems, f => fpOpen(f), v => { const m = fmKnownMatch(v); if (m) fpOpen(m); else toast(`“${v}” isn't in your food log`); });
     return;
@@ -20594,6 +21334,43 @@ function renderFoodProfile() {
   try { allVerdicts = computeVerdicts().list; } finally { _verdictRange = keepRange; }
   vrec = allVerdicts.find(x => normFood(x.food) === normFood(food)) || null;
   const vByFood = {}; allVerdicts.forEach(x => { vByFood[normFood(x.food)] = x; });
+
+  // -- the deep-dive synthesis layer (v108) --
+  // TIER 1 is read off the SAME engines the number cards below print, so the
+  // summary can never contradict the breakdown it summarises. TIER 2 is
+  // descriptive splits of this food's own servings, each gated on FD_MIN_ARM /
+  // FD_MIN_GAP and labelled a lead, not a result.
+  // Cost note: fdConfound runs foodMealLift a SECOND time (computeVerdicts
+  // above ran it once). Deliberate - the verdict row only exports nMeals/mate,
+  // not the conditional contrast this card is built on, and widening that
+  // return value would touch every engine that reads it. One extra pass on one
+  // tab beats that, and it is the only re-derivation on this page.
+  const fdConf = fdConfound(entries, food);
+  const fdParts = {
+    conf: fdConf,
+    trend: fdTrend(entries, food),
+    ret: fdReturn(entries, food),
+    dose: fdDose(entries, food),
+    buildup: fdBuildup(entries, food),
+    slot: fdSlot(entries, food),
+    streak: fdStreak(entries, food),
+    skin: (() => {
+      const r = skinRowFor(food);
+      return { row: r.row, scan: r.scan,
+        apart: r.row && r.row.p <= SKIN_LEAD_P ? skinApartCheck(entries, loadCheckins(), loadSkinKeys(), food) : null };
+    })()
+  };
+  const fdIns = fdInsights(fdParts);
+  const fdGap = vrec ? evidenceGap(vrec) : null;
+  const fdAct = fdNextAction(vrec, fdGap, fdConf, trialStateMap()[normFood(food)] || null, fdParts);
+  // The engine deals in short codes so its wording stays testable as plain
+  // text; the glyphs live here, in the renderer, where they belong.
+  const FD_ICO = { PASS:'🛡️', CALM:'🟢', HOLD:'🔺', TIED:'🔗',
+    ALL:'📌', WORSE:'🔺', EASY:'🟢', FLAT:'🟡', SOLO:'🔬',
+    DOWN:'📉', UP:'📈', BACK:'🔄', DOSE:'⚖️', LOAD:'🧱',
+    WHEN:'🕐', ZERO:'✨', RUN:'⏳', SKINBAD:'🔴', SKINGOOD:'💚', CYCLE:'🔁' };
+  const FD_ACT_ICO = { RUN:'⏳', EAT:'🍽️', SKIP:'🚫', CUT:'✂️',
+    TEST:'🔬', MARK:'✍️', DONE:'✅', TRIAL:'🧪' };
 
   // ── header ──
   const status = ciLookup(loadFoodStatus(), food);
@@ -20614,6 +21391,7 @@ function renderFoodProfile() {
     </div>
     <div class="fp-sub">First ${esc(fmt(b.first))} · ${mealTxt || 'no meal types'} · all-time data</div>`
     : `<div class="fp-sub">No log entries under this name — it lives in your preserved food list. History shown where it exists.</div>`}
+    <div class="fd-head">${esc(fdHeadline(b, vrec, fdConf))}</div>
   </div>`;
 
   // ── verdict hero (evidence lines reuse the Verdicts tab's vw-* look) ──
@@ -20638,22 +21416,79 @@ function renderFoodProfile() {
   };
   const vm = vrec ? VERDICT_META[vrec.verdict] : null;
   const verdictCard = vrec ? `<div class="card fp-card">
-    <div class="fp-h-row"><span class="fp-h">⚖️ Verdict</span><button class="fp-jump" onclick="showTab('verdicts')">open Verdicts →</button></div>
+    <div class="fp-h-row"><span class="fp-h">⚖️ Verdict — the gated call</span><span class="fp-legend" style="margin:0;">all-time</span></div>
     <div class="fp-verdict-row">
       <span class="fp-verdict-pill ${vrec.verdict}">${vm.icon} ${vm.label}</span>
       <span class="verdict-tag conf-neutral" title="Backed by ${vrec.scored} scored reaction windows">${vrec.conf.evidence}</span>
       <span class="fp-vcounts"><span class="vm-pill pos">${vrec.pos} ✓</span><span class="vm-pill neg">${vrec.neg} ✕</span></span>
     </div>
     <div class="verdict-evidence">${vrec.why.map(fpWhy).join('')}</div>
+    ${fdGap ? `<div class="fp-exp-hint">❓ <b>What would settle it:</b> ${esc(fdGap.long)}</div>` : ''}
     ${vrec.experiment ? `<div class="fp-exp-hint">🔬 ${vrec.experiment}</div>` : ''}
   </div>` : (foodBaseType(food) !== 'food'
     ? `<div class="card fp-card"><div class="fp-h">⚖️ Verdict</div><div class="fp-empty">Classified as <b>${esc(foodBaseType(food))}</b> — excluded from food verdicts on purpose (non-foods only inherit the meals they ride along with). Reclassify via 📋 Summary → 🏷️ Item types if that's wrong.</div></div>`
     : `<div class="card fp-card"><div class="fp-h">⚖️ Verdict</div><div class="fp-empty">No scored reaction windows yet — mark ✓/✕ on this food's entries in 📑 Logs.</div></div>`);
 
+  // -- skin: the one outcome with a measurable per-food signal --
+  const skR = fdParts.skin, skRow = skR.row, skScan = skR.scan;
+  const skSet = new Set(loadSkinKeys());
+  const skChips = orderedCheckinSymptoms().map(x =>
+    `<button class="tf-btn${skSet.has(x.key) ? ' active' : ''}" onclick="skinToggleKey(${escAttr(JSON.stringify(x.key))})" title="Count this metric in the combined skin score">${esc(x.label || x.name || x.key)}</button>`).join('');
+  const skBody = !skSet.size
+    ? `<div class="fp-empty">No metrics are counted as skin yet — pick some below.</div>`
+    : skScan.scoredDays < SKIN_MIN_DAYS * 2
+      ? `<div class="fp-empty">Only ${skScan.scoredDays} day${skScan.scoredDays === 1 ? '' : 's'} have enough skin metrics filled in. This needs around ${SKIN_MIN_DAYS * 2} before it can compare anything.</div>`
+      : !skRow
+        ? `<div class="fp-empty">Eaten on too few scored days to test — it needs ${SKIN_MIN_DAYS} days with a skin check-in and ${SKIN_MIN_DAYS} without.</div>`
+        : `<div class="fd-ins-text" style="margin:0 0 8px;">
+             <b>${skRow.diff < 0 ? '−' : '+'}${Math.abs(skRow.diff).toFixed(2)} points</b> on the ${skRow.nEaten} days you ate it, against the ${skRow.nOther} days you did not.
+             p = ${skRow.p.toFixed(3)} against a circular-shift null; q = ${skRow.q.toFixed(3)} once all ${skScan.tested} tested foods are corrected for.
+             ${skRow.q <= SKIN_FDR ? '<b>Clears the 10% false-discovery budget.</b>'
+               : skRow.periodic ? '<b>Cannot be separated from your calendar:</b> you eat it on too regular a rhythm, so sliding the pattern keeps landing on the same days and no p-value here can go low. Break the rhythm — eat it on different days of the week — and this test starts working on it.'
+               : 'Does not clear the 10% false-discovery budget — read it as a lead.'}
+           </div>`;
+  const skinCard = `<div class="card fp-card">
+    <div class="fp-h-row"><span class="fp-h">🔴 Skin — the day-level test</span><span class="fp-legend" style="margin:0;">${skScan.scoredDays} scored days</span></div>
+    ${skBody}
+    <details class="verdict-help" style="margin-top:2px;">
+      <summary>Which metrics count as skin</summary>
+      <div class="verdict-help-body">
+        <div class="time-filter-row" style="margin:0 0 8px;">${skChips}</div>
+        <p>The score is the average of the metrics you tick, over every day where at least ${SKIN_MIN_METRICS} of them were filled in. Averaging several is deliberate: yours agree with each other only about half the time, so the average is a steadier measure than any one of them — and it means one test per food instead of one per metric per lag.</p>
+        <p>Your reaction-window ✓/✕ marks are not used here at all. They were measured against this same question and carry no per-food signal; this is a separate route, not a re-reading of them.</p>
+      </div>
+    </details>
+  </div>`;
+
+  // -- next step, then the ranked read-out --
+  const nextCard = `<div class="card fp-card" style="border-left:4px solid var(--w1); border-radius:0 10px 10px 0;">
+    <div class="fp-h">🎯 Do this next</div>
+    <div class="fd-next"><span class="fd-next-ico">${FD_ACT_ICO[fdAct.icon] || '✍️'}</span><span class="fd-next-txt">${esc(fdAct.text)}</span></div>
+  </div>`;
+
+  const fdRow = x => `<div class="fd-ins-row${x.tier === 2 ? ' lead' : ''}">
+    <span class="fd-ins-ico">${FD_ICO[x.icon] || '•'}</span>
+    <span class="fd-ins-body"><span class="fd-ins-title ${x.tone}">${esc(x.title)}</span><div class="fd-ins-text">${esc(x.text)}</div></span>
+  </div>`;
+  const fdT1 = fdIns.filter(x => x.tier === 1), fdT2 = fdIns.filter(x => x.tier === 2);
+  const insightsCard = `<div class="card fp-card">
+    <div class="fp-h">🔎 What the data says</div>
+    ${fdT1.length ? `<div class="fd-ins">${fdT1.map(fdRow).join('')}</div>`
+      : `<div class="fp-empty">Nothing the engines will stand behind yet — it needs marked reaction windows, and a few meals without it to compare against.</div>`}
+    ${fdT2.length ? `<div class="fd-tier2">
+      <div class="fd-tier2-head">Leads — patterns, not proof</div>
+      <div class="fd-tier2-hint">Splits of this food's own servings: how much, how often, when, and whether it has changed. Running several splits on one food means one or two will look striking by luck, so each prints its raw counts — treat them as the next thing to test, not as a result.</div>
+      <div class="fd-ins">${fdT2.map(fdRow).join('')}</div></div>` : ''}
+  </div>`;
+  const breakCard = `<div class="fp-h fd-break">📊 The numbers behind it</div>`;
+
   // ── symptoms & vitals impact ──
   const syms = orderedCheckinSymptoms();
-  const imp0 = fpImpacts(entries, loadCheckins(), food, syms, 0);
-  const imp1 = fpImpacts(entries, loadCheckins(), food, syms, 1);
+  const _ci = loadCheckins();
+  const imp0 = fpImpacts(entries, _ci, food, syms, _fpLag);
+  // the NEXT day along still rides in the right-hand column, so moving one chip
+  // always shows you where the effect is heading rather than just where it is
+  const imp1 = _fpLag < FP_LAG_MAX ? fpImpacts(entries, _ci, food, syms, _fpLag + 1) : [];
   const i1By = {}; imp1.forEach(x => { i1By[x.key] = x; });
   const rows = imp0.filter(x => x.deltaPct != null).sort((a, b) => Math.abs(b.deltaPct) - Math.abs(a.deltaPct));
   const noData = imp0.filter(x => x.deltaPct == null).map(x => x.label);
@@ -20662,20 +21497,23 @@ function renderFoodProfile() {
     const n1 = i1By[x.key], d1 = n1 && n1.deltaPct != null ? Math.round(n1.deltaPct) : null;
     const cls = d <= -4 ? 'bad' : d >= 4 ? 'good' : 'flat';
     const w = Math.min(Math.abs(x.deltaPct), 25) / 25 * 50;
-    const tip = `Eaten days avg ${x.expAvg.toFixed(1)} (${x.expN}d) vs other days ${x.ctlAvg.toFixed(1)} (${x.ctlN}d)`;
+    const tip = `${_fpLag === 0 ? 'On days you ate it' : _fpLag + ' day' + (_fpLag === 1 ? '' : 's') + ' after eating it'}: avg ${x.expAvg.toFixed(1)} (${x.expN}d) vs other days ${x.ctlAvg.toFixed(1)} (${x.ctlN}d)`;
     return `<div class="fp-imp-row" title="${escAttr(tip)}">
       <span class="fp-imp-label">${x.label}</span>
       <span class="fp-imp-bar"><i class="${cls}" style="width:${w.toFixed(1)}%; ${d < 0 ? 'right:50%' : 'left:50%'};"></i></span>
       <span class="fp-imp-delta ${cls}">${d > 0 ? '+' : ''}${d}%</span>
-      <span class="fp-imp-next" title="Same comparison, the day AFTER eating">${d1 == null ? '' : `+1d ${d1 > 0 ? '+' : ''}${d1}%`}</span>
+      <span class="fp-imp-next" title="The same comparison one day further out">${d1 == null ? '' : `+${_fpLag + 1}d ${d1 > 0 ? '+' : ''}${d1}%`}</span>
       ${x.thin ? '<span class="fp-thin" title="Fewer than 5 days on one side — weak evidence">°</span>' : ''}
     </div>`;
   };
+  const lagChips = Array.from({ length: FP_LAG_MAX + 1 }, (_, n) =>
+    `<button class="tf-btn${n === _fpLag ? ' active' : ''}" onclick="fpSetLag(${n})" title="${n === 0 ? 'Compare the day you ate it' : 'Compare ' + n + ' day' + (n === 1 ? '' : 's') + ' after eating it'}">${n === 0 ? 'Same day' : '+' + n + 'd'}</button>`).join('');
   const impactCard = `<div class="card fp-card">
-    <div class="fp-h-row"><span class="fp-h">💓 Vitals &amp; symptoms on days you eat it</span><button class="fp-jump" onclick="showTab('insights')">more lags →</button></div>
-    ${rows.length ? `<div class="fp-imp-head"><span></span><span>worse ← · → better</span><span>same day</span><span>day after</span></div>${rows.map(impRow).join('')}
-      <div class="fp-legend">Score scale 1–5 (higher = better) · % of full scale · ° = thin data</div>`
-      : `<div class="fp-empty">No days with both a check-in and this food yet.</div>`}
+    <div class="fp-h-row"><span class="fp-h">💓 Vitals &amp; symptoms ${_fpLag === 0 ? 'on days you eat it' : esc(_fpLag + ' day' + (_fpLag === 1 ? '' : 's') + ' after you eat it')}</span><button class="fp-jump" onclick="showTab('insights')">all factors →</button></div>
+    <div class="time-filter-row" style="margin:0 0 10px;">${lagChips}</div>
+    ${rows.length ? `<div class="fp-imp-head"><span></span><span>worse ← · → better</span><span>${esc(fpLagLabel(_fpLag).toLowerCase())}</span><span>${_fpLag < FP_LAG_MAX ? '+' + (_fpLag + 1) + 'd' : ''}</span></div>${rows.map(impRow).join('')}
+      <div class="fp-legend">Score scale 1–5 (higher = better) · % of full scale · ° = thin data${_fpLag ? ' · comparing check-ins ' + _fpLag + ' day' + (_fpLag === 1 ? '' : 's') + ' after a serving' : ''}</div>`
+      : `<div class="fp-empty">No days with both a check-in and this food ${_fpLag === 0 ? '' : _fpLag + ' day' + (_fpLag === 1 ? '' : 's') + ' earlier '}yet.</div>`}
     ${noData.length && rows.length ? `<div class="fp-legend">No comparable days for: ${noData.map(esc).join(', ')}</div>` : ''}
   </div>`;
 
@@ -20773,7 +21611,10 @@ function renderFoodProfile() {
       : '<div class="fp-empty">No note yet — add one from 📋 Summary.</div>'}
   </div>`;
 
-  host.innerHTML = searchBar + headCard + verdictCard + impactCard + windowsCard + faceCard + trialCard + coCard + histCard + noteCard;
+  // Summary -> insights -> breakdown. The old order led with raw cards and left
+  // the reader to do the synthesis, which is the thing this rebuild replaces.
+  host.innerHTML = searchBar + headCard + nextCard + insightsCard
+    + breakCard + skinCard + verdictCard + impactCard + windowsCard + faceCard + trialCard + coCard + histCard + noteCard;
   fmWireAutocomplete(document.getElementById('fp-search'), document.getElementById('fp-drop'),
     fpSearchItems, f => fpOpen(f), v => { const m = fmKnownMatch(v); if (m) fpOpen(m); else toast(`“${v}” isn't in your food log`); });
 }
@@ -22410,6 +23251,298 @@ function runSelfTest() {
   t('food profile: weekly history buckets land in the newest week', () => {
     const h = fpWeeklyHistory(FX.entries, 'TestChili', 4);
     return eq([h[3].logs, h[3].neg, h[2].logs].join('|'), '4|4|0');
+  });
+
+  // -- food deep-dive engine (v108) --
+  // The fd* splits are PURE over an entries array, so each one is fed a purpose
+  // built log here rather than the shared fixtures: that keeps a new assertion
+  // from shifting every baseline in the suite, and lets each split be shown the
+  // exact shape it exists to catch.
+  const _fdMk = (date, food, windows, mealType) => migrate({ id: date + food + (mealType || ''),
+    date: date, food: food, logTime: '12:00', mealType: mealType || 'lunch', notes: '', windows: windows || {} });
+  const _FD_BAD = { w1: false, w2: false }, _FD_OK = { w1: true, w2: true };
+
+  t('deep dive: window count tallies marks and ignores the unmarked', () => {
+    const c = fdWinCount([_fdMk('2026-03-01', 'X', { w1: true, w2: false, w3: null }), _fdMk('2026-03-02', 'X', { w1: false })]);
+    return eq([c.neg, c.tot, c.rate].join('|'), '2|3|' + (2 / 3));
+  });
+  t('deep dive: a split refuses a thin arm', () => {
+    const a = [_fdMk('2026-03-01', 'X', _FD_BAD), _fdMk('2026-03-02', 'X', _FD_BAD), _fdMk('2026-03-03', 'X', _FD_BAD)];
+    const b = [_fdMk('2026-03-05', 'X', _FD_OK)];   // 2 windows, under FD_MIN_ARM
+    return eq(fdSplit(a, b), null);
+  });
+  t('deep dive: a split refuses a gap under the floor', () => {
+    const a = [1, 2, 3].map(i => _fdMk('2026-03-0' + i, 'X', { w1: false, w2: true }));  // 50%
+    const b = [5, 6, 7].map(i => _fdMk('2026-03-0' + i, 'X', { w1: false, w2: true }));  // 50%
+    return eq(fdSplit(a, b), null);
+  });
+  t('deep dive: dose separates one-serving days from two-plus days', () => {
+    const es = [];
+    ['2026-03-01', '2026-03-02', '2026-03-03'].forEach(d => { es.push(_fdMk(d, 'X', _FD_BAD, 'lunch')); es.push(_fdMk(d, 'X', _FD_BAD, 'dinner')); });
+    ['2026-03-10', '2026-03-12', '2026-03-14', '2026-03-16'].forEach(d => es.push(_fdMk(d, 'X', _FD_OK)));
+    const d = fdDose(es, 'X');
+    return d ? eq([d.manyDays, d.oneDays, d.a.tot, d.a.neg, d.b.tot, d.b.neg, d.gap].join('|'), '3|4|12|12|8|0|1')
+      : 'dose split came back null';
+  });
+  t('deep dive: build-up separates back-to-back days from isolated ones', () => {
+    const es = ['2026-03-01', '2026-03-03', '2026-03-05', '2026-03-10'].map(d => _fdMk(d, 'X', _FD_OK));
+    ['2026-03-11', '2026-03-12', '2026-03-13'].forEach(d => es.push(_fdMk(d, 'X', _FD_BAD)));
+    const b = fdBuildup(es, 'X');
+    return b ? eq([b.a.tot, b.a.neg, b.b.tot, b.b.neg].join('|'), '6|6|8|0') : 'build-up split came back null';
+  });
+  t('deep dive: trend compares the recent half and never overlaps the arms', () => {
+    // 7 scored servings: the MIDDLE one is marked across all four windows, so if
+    // either arm reached into it the arm totals would come out above 6.
+    const es = ['2026-03-01', '2026-03-02', '2026-03-03'].map(d => _fdMk(d, 'X', _FD_OK));
+    es.push(_fdMk('2026-03-04', 'X', { w1: false, w2: false, w3: false, w4: false }));
+    ['2026-03-05', '2026-03-06', '2026-03-07'].forEach(d => es.push(_fdMk(d, 'X', _FD_BAD)));
+    const r = fdTrend(es, 'X');
+    return r ? eq([r.a.tot, r.a.neg, r.b.tot, r.b.neg, r.earlyTo, r.lateFrom].join('|'), '6|6|6|0|2026-03-03|2026-03-05')
+      : 'trend split came back null';
+  });
+  t('deep dive: re-introduction picks the LAST long break', () => {
+    const es = ['2026-01-01', '2026-01-02', '2026-02-01', '2026-02-02', '2026-03-20', '2026-03-21'].map(d => _fdMk(d, 'X', _FD_OK));
+    const r = fdReturn(es, 'X');
+    return r ? eq([r.date, r.gapDays, r.daysSince].join('|'), '2026-03-20|46|2') : 'no break found';
+  });
+  t('deep dive: a break under the threshold is not a re-introduction', () =>
+    eq(fdReturn(['2026-03-01', '2026-03-10'].map(d => _fdMk(d, 'X', _FD_OK)), 'X'), null));
+  t('deep dive: meal slot names the WORSE slot on a two-slot tie', () => {
+    const es = [];
+    ['2026-03-01', '2026-03-02', '2026-03-03'].forEach(d => es.push(_fdMk(d, 'X', _FD_OK, 'lunch')));
+    ['2026-03-04', '2026-03-05', '2026-03-06'].forEach(d => es.push(_fdMk(d, 'X', _FD_BAD, 'dinner')));
+    const sl = fdSlot(es, 'X');
+    return sl ? eq([sl.slot, sl.gap > 0, sl.a.neg, sl.a.tot].join('|'), 'dinner|true|6|6') : 'slot split came back null';
+  });
+  t('deep dive: streak counts a clean run in servings, not just days', () => {
+    const s1 = fdStreak(FX.entries, 'Banana');
+    const s2 = fdStreak(FX.entries, 'TestChili');
+    return eq([s1.lastNeg, s1.scoredServings, s1.cleanServings, s2.lastNeg, s2.cleanServings].join('|'),
+      ['', '10', '10', D(1), '0'].join('|'));
+  });
+  t('deep dive: calm fixtures produce NO descriptive pattern at all', () => {
+    // The guard that matters most. Banana is 10 clean servings with nothing to
+    // find; every split must come back null rather than dress noise as a lead.
+    const nulls = [fdDose(FX.entries, 'Banana'), fdBuildup(FX.entries, 'Banana'),
+      fdTrend(FX.entries, 'Banana'), fdSlot(FX.entries, 'Banana'), fdReturn(FX.entries, 'Banana')];
+    return nulls.every(x => x === null) ? true : 'a split fired on calm data: ' + JSON.stringify(nulls);
+  });
+  t('deep dive: confound says TestChili cannot be told apart from Banana', () => {
+    const c = fdConfound(FX.entries, 'TestChili');
+    // every TestChili meal also holds Banana, so there is no Banana-free arm at
+    // all - the engine must say "tied", never pass it off as a clean result
+    return c ? eq([c.state, c.row.mate, c.row.mateN, c.apartN, c.apartNeeded].join('|'),
+      ['inseparable', 'Banana', '4', '0', String(STRAT_MIN_ARM)].join('|')) : 'no confound row';
+  });
+  t('deep dive: confound flags a food that is in every meal', () =>
+    eq(fdConfound(FX.entries, 'Banana').state, 'nocontrast'));
+  t('deep dive: insights lead with the tier-1 confound and invent nothing', () => {
+    const out = fdInsights({ conf: fdConfound(FX.entries, 'TestChili'), trend: null, ret: null,
+      dose: null, buildup: null, slot: null, streak: fdStreak(FX.entries, 'TestChili') });
+    return out.length === 1 && out[0].key === 'conf' && out[0].tier === 1
+      ? true : 'expected one tier-1 insight, got ' + JSON.stringify(out.map(x => x.key + '/' + x.tier));
+  });
+  t('deep dive: insights rank a worsening trend above a meal slot', () => {
+    const out = fdInsights({ conf: null,
+      trend: { a: { neg: 6, tot: 6, rate: 1 }, b: { neg: 0, tot: 6, rate: 0 }, gap: 1, earlyFrom: 'a', earlyTo: 'b', lateFrom: 'c', lateTo: 'd' },
+      slot: { a: { neg: 6, tot: 6, rate: 1 }, b: { neg: 0, tot: 6, rate: 0 }, gap: 1, slot: 'dinner' } });
+    return eq(out.map(x => x.key).join(','), 'trend,slot');
+  });
+  t('deep dive: headline states the verdict and the honest caveat', () => {
+    const keep = _verdictRange; _verdictRange = 'all';
+    let vrec; try { vrec = computeVerdicts().list.find(x => x.food === 'TestChili'); } finally { _verdictRange = keep; }
+    const h = fdHeadline(fpBasics(FX.entries, 'TestChili'), vrec, fdConfound(FX.entries, 'TestChili'));
+    return h.includes('SUSPECT') && h.includes('apart from Banana')
+      ? true : 'headline lost the verdict or the caveat: ' + h;
+  });
+  t('deep dive: next action is the cheapest move, not a menu', () => {
+    const a = fdNextAction(null, null, fdConfound(FX.entries, 'TestChili'), null);
+    return a.icon === 'EAT' && a.text.includes('WITHOUT Banana') ? true : 'got ' + JSON.stringify(a);
+  });
+  t('deep dive: a running trial outranks every other suggestion', () =>
+    eq(fdNextAction(null, null, fdConfound(FX.entries, 'TestChili'), { s: 'active' }).icon, 'RUN'));
+  t('deep dive: an exonerated food is never told to cut itself', () => {
+    // the regression this exists for: Tier 1 said "its own meals run calmer" while
+    // Do-this-next still said "run a trial", because the gated verdict was read
+    // before the confound result that overturns it
+    const conf = { state: 'calmer', row: { cMate: 'Fixturelle', mate: 'Fixturelle', cApartN: 11 }, apartN: 11, apartNeeded: 0 };
+    const a = fdNextAction({ verdict: 'suspect' }, { kind: 'conflict', long: 'x' }, conf, null, {});
+    return a.icon === 'TEST' && a.text.includes('test Fixturelle instead') ? true : 'got ' + JSON.stringify(a);
+  });
+  t('deep dive: cutting a suspect offers the cheaper dose cap first', () => {
+    const a = fdNextAction({ verdict: 'suspect' }, null, null, null,
+      { dose: { gap: 1, oneDays: 8, a: { neg: 24, tot: 24, rate: 1 }, b: { neg: 0, tot: 16, rate: 0 } } });
+    return a.icon === 'CUT' && a.text.includes('cap it at one serving') ? true : 'got ' + JSON.stringify(a);
+  });
+  t('deep dive: a re-introduction swallows the duplicate trend row', () => {
+    const ret = { date: '2026-09-07', gapDays: 20, daysSince: 8,
+      since: { neg: 16, tot: 16, rate: 1 }, before: { neg: 0, tot: 16, rate: 0 } };
+    const trend = { a: { neg: 16, tot: 16, rate: 1 }, b: { neg: 0, tot: 16, rate: 0 }, gap: 1,
+      earlyFrom: 'a', earlyTo: 'b', lateFrom: 'c', lateTo: 'd' };
+    const both = fdInsights({ conf: null, ret: ret, trend: trend }).map(x => x.key);
+    // the same trend with NO re-introduction behind it still gets its own row
+    const alone = fdInsights({ conf: null, ret: null, trend: trend }).map(x => x.key);
+    return eq([both.join(','), alone.join(',')].join('|'), 'ret|trend');
+  });
+  t('deep dive: a trend that improved survives a re-introduction row', () => {
+    const ret = { date: '2026-09-07', gapDays: 20, daysSince: 8,
+      since: { neg: 16, tot: 16, rate: 1 }, before: { neg: 0, tot: 16, rate: 0 } };
+    const trend = { a: { neg: 0, tot: 16, rate: 0 }, b: { neg: 16, tot: 16, rate: 1 }, gap: -1,
+      earlyFrom: 'a', earlyTo: 'b', lateFrom: 'c', lateTo: 'd' };
+    return eq(fdInsights({ conf: null, ret: ret, trend: trend }).map(x => x.key).sort().join(','), 'ret,trend');
+  });
+
+  // -- skin-driven verdicts (v109) --
+  // These are the guards on the engine that replaced the dead window test. The
+  // first one is the REGRESSION that motivated the whole design: a plain Welch
+  // on 1-5 data divides by a near-zero SE when one arm happens to be constant,
+  // which turns a handful of identical days into near-certainty.
+  t('skin: a constant arm cannot buy infinite confidence', () => {
+    // arm A = seven days that all scored exactly 3 -> its own variance is 0
+    const r = skinStat(21, 63, 7, 220, 540, 100, 0.52);
+    if (!r) return 'no statistic';
+    // shrinkage toward the global variance keeps this finite and sane; without
+    // it the SE is 0 and |t| is Infinity
+    return (Math.abs(r.t) > 4 && Math.abs(r.t) < 7) ? true : 'got t=' + r.t;
+  });
+  t('skin: the composite needs enough metrics on a day to count', () => {
+    const ci = { '2026-01-01': { a: 1, b: 2, c: 3 }, '2026-01-02': { a: 4, b: 5 } };
+    const d = skinDayScores(ci, ['a', 'b', 'c']);
+    return eq([Object.keys(d).length, d['2026-01-01']].join('|'), '1|2');
+  });
+  t('skin: the default metric guess keeps skin and drops sinus', () => {
+    const syms = [
+      { key: 'skinReaction', name: 'Skin Reactions', label: 'Skin Reactions' },
+      { key: 'ci_cheeks_reactions', name: 'Cheeks Reactions', label: 'Cheeks Reactions' },
+      { key: 'ci_sinus_reactions', name: 'Sinus Reactions', label: 'Sinus Reactions' },
+      { key: 'ci_daily_gas', name: 'Daily Gas', label: 'Daily Gas' },
+      { key: 'ci_day_score', name: 'Overall Daily Score', label: 'Overall Daily Score' },
+    ];
+    return eq(skinDefaultKeys(syms).join(','), 'skinReaction,ci_cheeks_reactions');
+  });
+
+  // a purpose-built 120-day log: one food planted with a real skin effect, the
+  // rest eaten on days that have nothing to do with the score
+  const _skFix = (plantEffect) => {
+    let seed = 42;
+    const rnd = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+    const dates = [];
+    for (let i = 0; i < 120; i++) dates.push(addDays('2026-01-01', i));
+    // Deliberately IRREGULAR. An every-Nth-day pattern is reproduced exactly by
+    // every circular shift of N, which saturates the null - that is a real
+    // property of this test and gets its own case below, not a quiet pass here.
+    const bad = new Set();
+    dates.forEach((d, i) => { if ((i * 7 + ((i * i) % 11)) % 13 < 4) bad.add(d); });
+    const checkins = {}, entries = [];
+    dates.forEach(d => {
+      const base = 3 + (rnd() < 0.5 ? 0 : 1) - (rnd() < 0.5 ? 1 : 0);
+      const hit = plantEffect && bad.has(d) ? -1.5 : 0;
+      const v = Math.max(1, Math.min(5, base + hit));
+      checkins[d] = { sk_a: v, sk_b: v, sk_c: v };
+    });
+    dates.forEach((d, i) => {
+      if (bad.has(d)) entries.push(migrate({ id: 'p' + i, date: d, food: 'PlantedFood', logTime: '12:00', mealType: 'lunch', notes: '', windows: {} }));
+      for (let f = 0; f < 6; f++) if ((i * 7 + f * 13) % 5 === 0) entries.push(migrate({ id: 'o' + i + '_' + f, date: d, food: 'Other' + f, logTime: '12:00', mealType: 'lunch', notes: '', windows: {} }));
+    });
+    return { entries, checkins };
+  };
+  const _SKK = ['sk_a', 'sk_b', 'sk_c'];
+
+  t('skin: a planted effect is found and clears the FDR budget', () => {
+    const fx = _skFix(true);
+    const sc = skinScan(fx.entries, fx.checkins, _SKK, { perms: 199 });
+    const hit = sc.rows.find(r => r.key === 'plantedfood');
+    if (!hit) return 'planted food was not even tested';
+    return (hit.diff < -0.5 && hit.q <= SKIN_FDR)
+      ? true : 'diff=' + hit.diff.toFixed(2) + ' p=' + hit.p + ' q=' + hit.q.toFixed(3);
+  });
+  t('skin: a strictly periodic eater is flagged, not silently nulled', () => {
+    // every 4th day: a circular shift of 4 puts it back exactly where it was,
+    // so roughly a quarter of the null ties the observation and p cannot drop
+    let seed = 7;
+    const rnd = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+    const checkins = {}, entries = [];
+    for (let i = 0; i < 120; i++) {
+      const d = addDays('2026-01-01', i), hit = i % 4 === 0;
+      const v = Math.max(1, Math.min(5, 3 + (rnd() < 0.5 ? 0 : 1) - (hit ? 2 : 0)));
+      checkins[d] = { sk_a: v, sk_b: v, sk_c: v };
+      if (hit) entries.push(migrate({ id: 'q' + i, date: d, food: 'ClockworkFood', logTime: '12:00', mealType: 'lunch', notes: '', windows: {} }));
+    }
+    const r = skinScan(entries, checkins, _SKK, { perms: 199 }).rows.find(x => x.key === 'clockworkfood');
+    return r && r.periodic && r.diff < -0.5
+      ? true : 'expected a flagged periodic row, got ' + JSON.stringify(r && { d: +r.diff.toFixed(2), p: r.p, tie: r.tieFrac, per: r.periodic });
+  });
+  t('skin: an irregular eater is NOT flagged as periodic', () => {
+    const fx = _skFix(true);
+    const r = skinScan(fx.entries, fx.checkins, _SKK, { perms: 199 }).rows.find(x => x.key === 'plantedfood');
+    return r && !r.periodic ? true : 'irregular pattern wrongly flagged periodic';
+  });
+  t('skin: with NO planted effect nothing clears the FDR budget', () => {
+    const fx = _skFix(false);
+    const sc = skinScan(fx.entries, fx.checkins, _SKK, { perms: 199 });
+    const named = sc.rows.filter(r => r.q <= SKIN_FDR);
+    return named.length === 0 ? true : 'named ' + named.length + ' food(s) out of noise';
+  });
+  t('skin: the innocent co-eaten foods are not dragged in with the culprit', () => {
+    const fx = _skFix(true);
+    const sc = skinScan(fx.entries, fx.checkins, _SKK, { perms: 199 });
+    const wrong = sc.rows.filter(r => r.q <= SKIN_FDR && r.key !== 'plantedfood');
+    return wrong.length === 0 ? true : 'also named ' + wrong.length + ' innocent food(s)';
+  });
+  t('skin: q never falls as p rises (Benjamini-Hochberg is monotone)', () => {
+    const sc = skinScan(_skFix(true).entries, _skFix(true).checkins, _SKK, { perms: 199 });
+    for (let i = 1; i < sc.rows.length; i++) if (sc.rows[i].q < sc.rows[i - 1].q - 1e-12) return 'q dropped at rank ' + i;
+    return sc.rows.length > 1 ? true : 'not enough rows to check';
+  });
+  t('skin: too few eaten days and the food is not tested at all', () => {
+    const fx = _skFix(true);
+    fx.entries.push(migrate({ id: 'rare', date: '2026-01-05', food: 'RareThing', logTime: '12:00', mealType: 'lunch', notes: '', windows: {} }));
+    const sc = skinScan(fx.entries, fx.checkins, _SKK, { perms: 99 });
+    return eq(sc.rows.some(r => r.key === 'rarething'), false);
+  });
+  t('skin: the day-level company check names the dominant partner', () => {
+    const fx = _skFix(true);
+    // a passenger on every planted day, plus a handful of days of its own
+    let n = 0;
+    fx.entries.slice().forEach(e => {
+      if (e.food === 'PlantedFood') fx.entries.push(migrate({ id: 'pass' + (n++), date: e.date, food: 'Passenger', logTime: '12:00', mealType: 'lunch', notes: '', windows: {} }));
+    });
+    const ap = skinApartCheck(fx.entries, fx.checkins, _SKK, 'Passenger');
+    return ap && ap.mate === 'PlantedFood' ? true : 'got ' + JSON.stringify(ap);
+  });
+
+  t('skin: an FDR-clearing finding overrides a settled window verdict', () => {
+    // the regression: the one food that clears the budget was told "nothing
+    // left to do here" by the card directly above the finding
+    const parts = { skin: { row: { diff: -0.22, q: 0.07, p: 0.001, nEaten: 101, nOther: 75 }, scan: { tested: 73 }, apart: null } };
+    const a = fdNextAction({ verdict: 'typical' }, { kind: 'settled', long: 'x' }, null, null, parts);
+    return a.icon === 'CUT' && a.text.includes('strongest food signal') ? true : 'got ' + JSON.stringify(a);
+  });
+  t('skin: a food that clears the budget the GOOD way is not told to cut it', () => {
+    const parts = { skin: { row: { diff: 0.3, q: 0.05, p: 0.001, nEaten: 40, nOther: 120 }, scan: { tested: 73 }, apart: null } };
+    return eq(fdNextAction({ verdict: 'typical' }, null, null, null, parts).icon, 'DONE');
+  });
+  t('skin: a mere lead beats "nothing to do" but never a gated verdict', () => {
+    const parts = { skin: { row: { diff: -0.3, q: 0.4, p: 0.02, nEaten: 40, nOther: 120 }, scan: { tested: 73 }, apart: null } };
+    const lead = fdNextAction({ verdict: 'typical' }, { kind: 'settled', long: 'x' }, null, null, parts);
+    const gated = fdNextAction({ verdict: 'suspect' }, null, null, null, parts);
+    return eq([lead.icon, gated.icon].join('|'), 'TEST|CUT');
+  });
+  t('skin: a periodic eater is told to break the rhythm, not to cut the food', () => {
+    const parts = { skin: { row: { diff: -0.4, q: 0.9, p: 0.3, periodic: true, nEaten: 30, nOther: 140 }, scan: { tested: 73 }, apart: null } };
+    return eq(fdNextAction({ verdict: 'typical' }, { kind: 'settled', long: 'x' }, null, null, parts).icon, 'EAT');
+  });
+  t('marking health: a coin-flip rate is called uninformative', () => {
+    const mk = (w) => migrate({ id: 'm' + Math.random(), date: '2026-01-01', food: 'X', logTime: '12:00', mealType: 'lunch', notes: '', windows: w });
+    const half = [mk({ w1: true, w2: false }), mk({ w1: true, w2: false })];
+    const h = markingHealth(half);
+    const clear = markingHealth([mk({ w1: true, w2: true, w3: true, w4: false })]);
+    return eq([h.band, h.marked, h.neg, clear.band].join('|'), 'uninformative|4|2|usable');
+  });
+  t('marking health: unmarked windows count as coverage, not as calm', () => {
+    const e = migrate({ id: 'c1', date: '2026-01-01', food: 'X', logTime: '12:00', mealType: 'lunch', notes: '', windows: { w1: true } });
+    const h = markingHealth([e]);
+    return eq([h.marked, h.unmarked, h.pos, h.neg].join('|'), '1|3|1|0');
   });
 
   // ── note scope: item-level vs exact-name notes (v73) ──
