@@ -3519,17 +3519,12 @@ body.dark .fp-verdict-pill.gentler { background:rgba(30,132,73,0.15); color:#7DD
 /* v110: a comparison built on a handful of days must not render as a solid,
    confident bar. 23 metrics drawn off 3 days read as a discovery; hollowing the
    bar and printing the day count is what tells the reader otherwise. */
-/* v110: a thin comparison keeps its FULL colour and gains a diagonal hatch, so
-   it reads as provisional rather than merely dim. Fading was the first attempt
-   and it failed the ordinary case: when every row is thin the whole table
-   washes out and reads as broken, with nothing solid left to contrast against.
-   A stripe survives that, because the texture is legible without a neighbour to
-   compare it to. The stripe colour is the track colour, so it follows the theme
-   and looks like the bar is perforated rather than tinted. */
-.fp-imp-row.thin .fp-imp-bar i {
-  background-image: repeating-linear-gradient(135deg,
-    rgba(0,0,0,0) 0 4px, var(--bg) 4px 7px);
-}
+/* v111.1: the BAR is left alone. Two attempts at marking a thin row through the
+   bar itself both failed in use - fading washed the whole table out when every
+   row is thin, and a diagonal hatch was simply painful to read across 23 rows.
+   The warning lives entirely outside the data now: an amber day count on each
+   row, a banner above the table, and the test verdict below it. That is three
+   places saying "this is N days", none of which costs legibility. */
 .fp-imp-days { flex:0 0 32px; font-size:10px; color:var(--muted); text-align:right; font-weight:700; }
 /* the day count carries the warning instead of the data being dimmed */
 .fp-imp-row.thin .fp-imp-days { color:var(--warn, #C98A12); }
@@ -4740,7 +4735,7 @@ try {
   </div>
 
   <div style="margin-left: auto; display: flex; align-items: center; gap: 4px;">
-    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v111</span>
+    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v112</span>
   </div>
 
   <div id="nav-more-tray" style="display:none; flex-basis:100%; flex-wrap:wrap; gap:4px; padding-top:6px; margin-top:4px; border-top:1px dashed rgba(255,255,255,0.18);">
@@ -14110,6 +14105,10 @@ function foodFamilyMatch(a, b) {
 // once and it visibly reacted" is the classic smoking gun and must outrank
 // what either factor earns alone (a lone single-supplement dose sat at ~50%).
 const DET_LOOKBACK_DEFAULT = 3;
+// The worst third of days, by the day's own average score. Not a 1-5 cut: the
+// cut moves with the log, so it still means "a rough day for you" after a run of
+// good weeks or bad ones.
+const DET_BAD_QUANTILE = 1 / 3;
 function computeDetective(dateStr, symKey, lookback) {
   lookback = lookback || DET_LOOKBACK_DEFAULT;
   const entries = loadMigrated();
@@ -14117,12 +14116,35 @@ function computeDetective(dateStr, symKey, lookback) {
   const symList = allCheckinSymptoms();
   const from = addDays(dateStr, -lookback);
 
+  // v112: "any symptom" used to mean "the WORST of the day's metrics was <= 2".
+  // With a couple of dozen metrics filled in daily, SOMETHING is nearly always
+  // <= 2 - measured on a real log, 99% of scored days qualified. The baseline
+  // for the track-record factor then sits at 1.0, every food's lift computes to
+  // exactly 1.0, the >= 1.5 gate never fires, and the most informative signal in
+  // this engine silently awards zero points to every food forever. Ranking was
+  // left to "how many windows did it have marked in the span", which is mostly a
+  // measure of how often you eat something.
+  //
+  // "Any" now means the day's AVERAGE across the metrics actually filled in,
+  // landing in the worst third of your days. Self-calibrating (it follows your
+  // own distribution rather than a fixed 1-5 cut), it uses every metric instead
+  // of the single worst one, and it leaves a base rate a lift can actually move
+  // against. A SPECIFIC symptom is unchanged: that one is a direct <= 2.
+  const dayMeanOf = d => {
+    const day = checkins[d];
+    if (!day) return null;
+    const v = symList.map(x => day[x.key]).filter(x => typeof x === 'number');
+    return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null;
+  };
+  const _detMeans = Object.keys(checkins).map(dayMeanOf).filter(x => x != null).sort((a, b) => a - b);
+  const _detBadCut = _detMeans.length
+    ? _detMeans[Math.max(0, Math.floor(DET_BAD_QUANTILE * (_detMeans.length - 1)))] : null;
   const isBad = d => {
     const day = checkins[d];
     if (!day) return null;
     if (symKey === 'any') {
-      const vals = symList.map(s => day[s.key]).filter(v => v != null);
-      return vals.length ? Math.min(...vals) <= 2 : null;
+      const m = dayMeanOf(d);
+      return (m == null || _detBadCut == null) ? null : m <= _detBadCut;
     }
     const v = day[symKey];
     return v == null ? null : v <= 2;
@@ -14137,14 +14159,26 @@ function computeDetective(dateStr, symKey, lookback) {
   const pairBase = pairKnown.length ? pairKnown.filter(d => pairOutcome(d) === true).length / pairKnown.length : 0;
 
   // all-time exposure dates per food (for lift + novelty)
-  const expo = {};
-  entries.forEach(e => { (expo[e.food] = expo[e.food] || new Set()).add(e.date); });
+  // v112: ALSO pooled by base name. A food logged at four portion sizes was four
+  // separate suspects, each with a handful of exposures: the track record could
+  // never reach its 3-exposure minimum, and a simple change of gram level was
+  // being paid a "new variant" novelty bonus for looking unfamiliar. Measured on
+  // a real log, one food sat at 1 recorded exposure where it had actually been
+  // eaten 14 times. The candidate still carries the NAME as logged - the table
+  // must show what was really eaten - but its history is read from the pool.
+  const expo = {}, expoPooled = {};
+  entries.forEach(e => {
+    (expo[e.food] = expo[e.food] || new Set()).add(e.date);
+    const pk = poolKeyOf(e.food);
+    (expoPooled[pk] = expoPooled[pk] || new Set()).add(e.date);
+  });
+  const pooledDates = f => [...(expoPooled[poolKeyOf(f)] || [])].sort();
 
   // this case's candidates
   const cand = {};
   entries.forEach(e => {
     if (e.date < from || e.date > dateStr) return;
-    const c = cand[e.food] || (cand[e.food] = { food: e.food, hits: [], directNeg: 0, directPos: 0, minLag: 99 });
+    const c = cand[e.food] || (cand[e.food] = { food: e.food, type: e.type, hits: [], directNeg: 0, directPos: 0, minLag: 99 });
     const lag = Math.round((parseYMD(dateStr) - parseYMD(e.date)) / 86400000);
     c.hits.push({ date: e.date, lag, mealType: e.mealType || '', anyNeg: WINDOWS.some(w => e.windows[w.key] === false) });
     c.minLag = Math.min(c.minLag, lag);
@@ -14177,29 +14211,41 @@ function computeDetective(dateStr, symKey, lookback) {
   // was logged, stopping at 2 — novelty only needs "one" vs "more than one".
   // Close variants count too, so a new portion of a food eaten on other days
   // is never mistaken for a single try.
+  // v112: reads the POOLED history, so "only one earlier try" can no longer be
+  // claimed for a food eaten many times at other portion sizes.
   const daysBefore = food => {
     const myPx = pxOf(food);
     const days = new Set();
+    pooledDates(food).forEach(d => { if (d < from) days.add(d); });
     for (const e of entries) {
+      if (days.size > 1) break;
       if (e.date >= from) continue;
       if (e.food !== food && !foodFamilyMatch(myPx, pxOf(e.food))) continue;
       days.add(e.date);
-      if (days.size > 1) break;
     }
-    return [...days];
+    return [...days].slice(0, 2);
   };
   const suspects = Object.values(cand).map(c => {
     const factors = [];
     let score = 0;
 
     if (c.directNeg > 0) {
-      const pts = 30 + Math.min(15, (c.directNeg - 1) * 8);
-      factors.push({ label: `${c.directNeg} reaction window${c.directNeg === 1 ? '' : 's'} marked ✕ in this span`, pts, kind: 'direct' });
+      // v112: the RATE, not the count. Scoring the raw number of ✕ windows meant
+      // a food eaten four times in the span out-scored one eaten once, whatever
+      // either actually did - so the line-up was partly a ranking of how often
+      // you eat things. Measured on a real log, a daily topical with 8 ✕ of 16
+      // windows (50%) sat three places above a food running 7 of 8 (88%).
+      // Smoothed +1/+2, the same shrink the window baselines use, so a single
+      // marked window cannot hit 100% and leapfrog a food that reacted on eight.
+      const marked = c.directNeg + c.directPos;
+      const shrunk = (c.directNeg + 1) / (marked + 2);
+      const pts = Math.round(14 + 34 * shrunk);
+      factors.push({ label: `${c.directNeg} of ${marked} marked reaction window${marked === 1 ? '' : 's'} came back ✕ in this span (${Math.round(c.directNeg / marked * 100)}%)`, pts, kind: 'direct' });
       score += pts;
     }
 
     // track record: share of exposures followed by a bad day, vs baseline
-    const dates = [...(expo[c.food] || [])].sort();
+    const dates = pooledDates(c.food);
     let liftN = 0, liftBad = 0;
     dates.forEach(d => {
       const o = pairOutcome(d);
@@ -14237,7 +14283,7 @@ function computeDetective(dateStr, symKey, lookback) {
     else {
       const firstHit = c.hits.map(h => h.date).sort()[0];
       const myPx = pxOf(c.food);
-      let lastTouch = dates.filter(d => d < from).pop() || null;
+      let lastTouch = dates.filter(d => d < from).pop() || null;   // dates are pooled (v112)
       entries.forEach(e => {
         if (e.date >= firstHit || e.food === c.food) return;
         if (!foodFamilyMatch(myPx, pxOf(e.food))) return;
@@ -14265,18 +14311,32 @@ function computeDetective(dateStr, symKey, lookback) {
       score += 12;
     }
 
+    const _pooledNames = [...new Set(entries.filter(e => poolKeyOf(e.food) === poolKeyOf(c.food)).map(e => e.food))];
+    if (_pooledNames.length > 1) factors.push({ kind: 'note', pts: 0,
+      label: `track record pooled across ${_pooledNames.length} portion sizes (${dates.length} exposures in all)` });
     score = Math.max(2, Math.min(97, Math.round(score)));
     const info = { first: firstEver, last: lastEver, count: dates.length };
     return { food: c.food, score, factors, hits: c.hits, directNeg: c.directNeg, lift, liftN,
              firstDaysAgo: dayGap(firstEver, today()), lastDaysAgo: dayGap(lastEver, today()),
-             exposures: info.count, brandNew, oneTry, verdict: v ? v.verdict : null, minLag: c.minLag };
+             exposures: info.count, brandNew, oneTry, verdict: v ? v.verdict : null, minLag: c.minLag,
+             pooledFrom: _pooledNames.length > 1 ? _pooledNames.length : 0,
+             isFood: effectiveItemType({ food: c.food, type: c.type }) === 'food' };
   }).sort((a, b) => b.score - a.score);
 
   const dayScores = {};
   const day = checkins[dateStr] || {};
   symList.forEach(s => { if (day[s.key] != null) dayScores[s.key] = day[s.key]; });
 
+  // v112: every other analysis surface is foods-only by default (computeVerdicts
+  // filters outright, Summary ships the chip on). Here a daily topical and a
+  // foot bath were out-scoring actual foods, because something applied every day
+  // accumulates marked windows in every span. They stay available behind the
+  // chip - a non-food genuinely can be the cause - but they no longer crowd the
+  // line-up by default.
+  const nonFood = suspects.filter(x => !x.isFood).length;
   return { date: dateStr, from, symKey, suspects, dayScores, pairBase,
+           nonFoodCount: nonFood, badDayCut: _detBadCut,
+           badDayShare: knownDays.length ? knownDays.filter(d => isBad(d) === true).length / knownDays.length : 0,
            knownDays: knownDays.length, hasCheckin: Object.keys(dayScores).length > 0 };
 }
 
@@ -14284,6 +14344,10 @@ function computeDetective(dateStr, symKey, lookback) {
 let _detDate = null;
 let _detSym = 'any';
 let _detLookback = DET_LOOKBACK_DEFAULT;
+// Default ON, like every other analysis surface. A non-food can still be the
+// cause, so it stays one tap away rather than gone.
+let _detFoodsOnly = true;
+function toggleDetFoodsOnly() { _detFoodsOnly = !_detFoodsOnly; renderDetective(); }
 function setDetectiveDate(v) { if (v) { _detDate = v; renderDetective(); } }
 function setDetectiveSym(v) { _detSym = v || 'any'; renderDetective(); }
 function setDetectiveLookback(n) { _detLookback = Math.max(1, Math.min(7, Number(n) || DET_LOOKBACK_DEFAULT)); renderDetective(); }
@@ -14302,6 +14366,7 @@ function renderDetective() {
   if (_detDate === null) _detDate = roughDays[0] || today();
 
   const D = computeDetective(_detDate, _detSym, _detLookback);
+  if (_detFoodsOnly) D.suspects = D.suspects.filter(x => x.isFood);
 
   // ── controls: rough-day quick picks + date + symptom ──
   const picks = roughDays.map(d => {
@@ -14324,6 +14389,12 @@ function renderDetective() {
           <span style="font-size:11px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.5px;" title="How many days before the bad day count as 'in play' — widen it for slow gut→skin reactions">Look back</span>
           ${[2, 3, 4, 5].map(n => `<button class="tf-btn${_detLookback === n ? ' active' : ''}" onclick="setDetectiveLookback(${n})">${n}d</button>`).join('')}
         </div>
+        <button class="tf-btn${_detFoodsOnly ? ' active' : ''}" onclick="toggleDetFoodsOnly()" title="Supplements, topicals and activities collect marked windows in every span simply by being daily. Hidden by default so they stop crowding out foods — tap to include them.">🍽️ Foods only${D.nonFoodCount ? ' (' + D.nonFoodCount + ' hidden)' : ''}</button>
+      </div>
+      <div style="font-size:11px; color:var(--muted); margin-top:8px; line-height:1.5;">
+        ${_detSym === 'any'
+          ? `A <b>rough day</b> here means your average across every metric you filled in landed in your worst third — ${Math.round(D.badDayShare * 100)}% of your scored days. Pick one symptom above to switch to that metric scoring 1–2 instead.`
+          : `A <b>rough day</b> here means this one metric scored 1–2.`}
       </div>
     </div>`;
 
@@ -22357,7 +22428,10 @@ function runSelfTest() {
   const DET = computeDetective(D(2), 'c_overall');
   t('detective: both span foods in the line-up', () => eq(DET.suspects.length, 2));
   t('detective: TestChili is prime suspect', () => eq(DET.suspects[0].food, 'TestChili'));
-  t('detective: prime suspect scores 85 (variant-aware)', () => eq(DET.suspects[0].score, 85));
+  // 85 under the old count-based direct score (30 + 8 per extra ✕ window); 81
+  // under the v112 rate-based one. The number is pinned to catch drift, not
+  // because 81 means anything on its own - the cases below pin the BEHAVIOUR.
+  t('detective: prime suspect scores 81 (rate-based direct evidence)', () => eq(DET.suspects[0].score, 81));
   t('detective: chili flagged as first-ever exposure of its NAME', () => eq(DET.suspects[0].brandNew, true));
   t('detective: novelty demoted to name-variant (wrap precedent)', () =>
     eq(DET.suspects[0].factors.some(f => f.label.indexOf('new variant') === 0), true));
@@ -22365,6 +22439,73 @@ function runSelfTest() {
     eq(DET.suspects[0].factors.some(f => f.label.indexOf('smoking gun') === 0), false));
   t('detective: Banana floors at 2 (counter-evidence)', () => eq(DET.suspects[1].food + ':' + DET.suspects[1].score, 'Banana:2'));
   t('detective: the case day has check-in scores', () => eq(DET.hasCheckin, true));
+
+  // -- v112: the three defects that let a known culprit rank 32nd of 46 --
+  {
+    const keepL = loadMigrated, keepC = loadCheckins;
+    const D0 = '2026-05-20';
+    const ent = [], chk = {};
+    // 60 days of check-ins spanning the full 1-5 range, so a "worst third" cut
+    // is meaningful. Under the OLD rule - min across all metrics <= 2 - almost
+    // every day here is "bad" and no lift can ever exceed 1.
+    for (let i = 0; i < 60; i++) {
+      const d = addDays('2026-04-01', i);
+      const lo = (i % 3 === 0) ? 1 : 4;          // a third of days carry a 1
+      chk[d] = { c_overall: (i % 3 === 0) ? 2 : 4, skinReaction: lo, energy: 4 };
+    }
+    const mk = (id, date, food, time, win) => migrate({ id: id, date: date, food: food,
+      logTime: time || '12:00', mealType: 'lunch', notes: '', windows: win || {} });
+    // one food at THREE portion sizes, eaten on 12 days before the span
+    for (let i = 0; i < 12; i++) {
+      ent.push(mk('pz' + i, addDays('2026-05-04', i), ['Blorpnut 10-20g', 'Blorpnut 21-40g', 'Blorpnut 41-60g'][i % 3], '12:00', {}));
+    }
+    ent.push(mk('pzS', addDays(D0, -2), 'Blorpnut 21-40g', '12:00', { w1: false, w2: false, w3: true, w4: true }));
+    // a staple: eaten 4x in the span, half its windows ✕ - high COUNT, mid rate
+    for (let k = 0; k < 4; k++) ent.push(mk('st' + k, addDays(D0, -(k % 3)), 'Stapleoid', '0' + (8 + k) + ':00', { w1: false, w2: false, w3: true, w4: true }));
+    // a sharp reactor: one serving in the span, nearly every window ✕
+    ent.push(mk('sh1', addDays(D0, -1), 'Sharpium', '13:00', { w1: false, w2: false, w3: false, w4: true }));
+    for (let i = 0; i < 10; i++) ent.push(mk('sh0' + i, addDays('2026-04-03', i * 2), 'Sharpium', '13:00', {}));
+    // a non-food that is applied daily
+    for (let i = 0; i < 20; i++) ent.push(mk('tp' + i, addDays('2026-04-20', i), '\u{1F48A}Vitamin capsule', '07:00', { w1: false, w2: true }));
+    ent.push(mk('tpS', addDays(D0, -1), '\u{1F48A}Vitamin capsule', '07:00', { w1: false, w2: false, w3: true, w4: true }));
+    loadMigrated = () => ent;
+    loadCheckins = () => chk;
+    let DD;
+    try { DD = computeDetective(D0, 'any', 3); } finally { loadMigrated = keepL; loadCheckins = keepC; }
+    const of = n => DD.suspects.find(x => x.food.indexOf(n) >= 0);
+
+    t('detective: a rough day is the worst third, not "any metric <= 2"', () =>
+      (DD.badDayShare > 0.2 && DD.badDayShare < 0.5)
+        ? true : 'bad-day share is ' + Math.round(DD.badDayShare * 100) + '% — the old min-based rule gave ~99%');
+    t('detective: the baseline leaves room for a lift to exist', () =>
+      (DD.pairBase > 0.05 && DD.pairBase < 0.95) ? true : 'pairBase=' + DD.pairBase + ' (at 1.0 no food can ever be above baseline)');
+    t('detective: portion sizes share one track record', () => {
+      const b = of('Blorpnut');
+      return (b && b.exposures >= 12 && b.pooledFrom === 3)
+        ? true : 'got exposures=' + (b && b.exposures) + ' pooledFrom=' + (b && b.pooledFrom);
+    });
+    t('detective: a gram change is not paid a novelty bonus', () => {
+      // eaten daily right up to the span, so there is no real break to credit:
+      // any novelty here would be the engine mistaking a new PORTION for a new
+      // food, which is what it used to do (+8 "new variant")
+      const b = of('Blorpnut');
+      return (b && !b.brandNew && !b.oneTry && !b.factors.some(f => f.kind === 'novel'))
+        ? true : 'novelty factors: ' + JSON.stringify(b && b.factors.filter(f => f.kind === 'novel').map(f => f.label));
+    });
+    t('detective: a high ✕ RATE outranks a high ✕ count', () => {
+      const sharp = of('Sharpium'), staple = of('Stapleoid');
+      if (!sharp || !staple) return 'missing candidate';
+      const sd = sharp.factors.find(f => f.kind === 'direct'), st = staple.factors.find(f => f.kind === 'direct');
+      // 3 of 4 (75%) must beat 8 of 16 (50%), though the staple has twice the count
+      return sd.pts > st.pts ? true : 'sharp ' + sd.pts + 'pts (' + sharp.directNeg + ' of ' + (sharp.directNeg + sharp.directPos) + ') vs staple ' + st.pts + 'pts (' + staple.directNeg + ' of ' + (staple.directNeg + staple.directPos) + ')';
+    });
+    t('detective: a supplement is marked as a non-food so it can be filtered', () => {
+      const v = of('Vitamin');
+      return (v && v.isFood === false && DD.nonFoodCount >= 1)
+        ? true : 'isFood=' + (v && v.isFood) + ' nonFoodCount=' + DD.nonFoodCount;
+    });
+    t('detective: the swapped-in log was restored', () => eq(loadMigrated === keepL, true));
+  }
   // v94: the same NAME tried on one earlier day, then back in the span, counts
   // as new (+18) and can earn the smoking gun; two earlier days, or a variant
   // eaten on another day, cannot. Invented names on a swapped-in log, so the
