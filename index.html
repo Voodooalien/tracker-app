@@ -3490,6 +3490,9 @@ body.dark .fp-verdict-pill.gentler { background:rgba(30,132,73,0.15); color:#7DD
 .fp-trial-phase { color:var(--muted); font-size:11px; }
 .fp-trial-v { margin-left:auto; font-weight:800; font-size:11.5px; }
 .fp-hist { width:100%; height:auto; display:block; }
+/* v111: a long logged name (brand + prep + grams) pushed this button past the
+   viewport on a phone. The name is a label, not the content - clip it. */
+.fm-filterbar .fm-clear-btn { max-width:45vw; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 /* Food deep-dive (v108). The synthesis layer above the number cards: a plain
    headline, one next step, then the ranked read-out. Tier-2 "leads" carry a
    left rule so a descriptive split can never be mistaken at a glance for a
@@ -4737,7 +4740,7 @@ try {
   </div>
 
   <div style="margin-left: auto; display: flex; align-items: center; gap: 4px;">
-    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v110.1</span>
+    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v111</span>
   </div>
 
   <div id="nav-more-tray" style="display:none; flex-basis:100%; flex-wrap:wrap; gap:4px; padding-top:6px; margin-top:4px; border-top:1px dashed rgba(255,255,255,0.18);">
@@ -20817,6 +20820,26 @@ function fdInsights(parts) {
   // for trust: when the card LOOKS dramatic but the test says it is not, saying
   // nothing leaves the reader to believe their own eyes. An unexplained silence
   // is read as the tool missing something, so the silence is explained.
+  // Symptoms judged on solo meals only. Tier 1 when it clears the budget;
+  // otherwise a lead with its counts, because this is the channel the user can
+  // most easily over-read - a raw count like "11 of 13" feels damning until the
+  // baseline sits at 69% and the lift is 1.2.
+  const ss = p.solo;
+  if (ss && ss.best) {
+    const b = ss.best, pct = x => Math.round(x * 100);
+    const pooled = ss.names && ss.names.length > 1
+      ? ' Judged as one sample across the ' + ss.names.length + ' portion sizes you log it at \u2014 separately, none of them has enough servings to say anything.'
+      : '';
+    if (ss.state === 'named')
+      add('solosym', 1, 99, 'bad', 'TAG',
+        b.label + ' follows it ' + b.lift.toFixed(1) + 'x more than usual',
+        'On the ' + b.n + ' occasions you ate it ALONE, ' + b.label + ' came with it ' + b.c + ' times (' + pct(b.rate) + '%), against ' + pct(b.base) + '% on everything else you eat alone. That survives correction across all ' + ss.tested + ' food-and-symptom pairs tested. Only solo meals count here, because when you mark a mixed plate the same tags land on every item and nothing can be attributed.' + pooled);
+    else if (ss.state === 'lead')
+      add('solosym', 2, 84, 'bad', 'TAG',
+        'Symptom lead: ' + b.label + ' follows it ' + b.lift.toFixed(1) + 'x more than usual',
+        'Eaten ALONE ' + b.n + ' times, ' + b.label + ' came with it ' + b.c + ' of those (' + pct(b.rate) + '%) against a ' + pct(b.base) + '% baseline \u2014 a 1-in-' + Math.max(2, Math.round(1 / b.p)) + ' result on its own. But ' + ss.tested + ' food-and-symptom pairs were tested, so it does not clear the ' + Math.round(SOLO_FDR * 100) + '% budget. This is the strongest honest signal this food has, and a trial would settle it.' + pooled);
+  }
+
   const pf = p.profile;
   if (pf && pf.best) {
     const b = pf.best;
@@ -20991,6 +21014,159 @@ function fdNextAction(vrec, gap, conf, trialState, parts) {
   if (gap && (gap.kind === 'trial' || gap.kind === 'conflict'))
     return { icon: 'TRIAL', text: gap.long };
   return { icon: 'MARK', text: 'Mark the reaction windows on its next few servings in Logs — that is what every number on this page is built from.' };
+}
+
+// === Solo-meal symptom channel (v111) ======================================
+// "I KNOW that food did it - why does nothing tag it?"
+//
+// Because the two things the engines judge on both say nothing about it. Its
+// reaction windows sit on the baseline, and the baseline is a coin flip. And
+// its meal-tag symptoms were never allowed to promote anything: computeVerdicts
+// computes a symptom lift, prints it as prose, and the only verdict it can move
+// is demoting Easier-on-you to Typical. A food can carry a 3x symptom lift and
+// still be filed as ordinary.
+//
+// WHY THIS IS RESTRICTED TO SOLO MEALS, which is the whole design. Measured on
+// a real log: of the multi-item meals carrying any symptom, 96.9% have the
+// IDENTICAL symptom set stamped on every item - Bulk Edit writes one mark
+// across the whole plate, which is the right thing for logging and fatal for
+// attribution. A per-food symptom lift computed over those meals is the MEAL
+// talking, and would be company bleed wearing a new hat. On a single-item meal
+// the symptom can only belong to the one food on the plate, and about two
+// thirds of meals qualify, so the clean subset is big enough to use.
+//
+// AND POOLED BY BASE NAME, because a food logged at four portion sizes is four
+// underpowered samples. poolKeyOf() drops the grams; the gram levels are
+// reported so a pooled row can never quietly hide that it combined things.
+//
+// Expect FEW names. Measured, this channel runs about 1.6x the hit rate chance
+// predicts and clears FDR for a handful of foods. That is the honest ceiling,
+// and it is still more than the window channel has ever produced.
+const SOLO_MIN_MEALS = 5;    // solo meals of one food before it can be tested
+const SOLO_MIN_COUNT = 3;    // times a symptom must appear before it is tested
+const SOLO_FDR = 0.10;
+const SOLO_LEAD_P = 0.05;
+
+// Food-typed entries that were the ONLY item in their meal.
+function soloMealEntries(entries) {
+  const byMeal = {};
+  (entries || []).forEach(e => {
+    if (!e || effectiveItemType(e) !== 'food') return;
+    const k = mealKeyOf(e);
+    (byMeal[k] || (byMeal[k] = [])).push(e);
+  });
+  const out = [];
+  Object.keys(byMeal).forEach(k => { if (byMeal[k].length === 1) out.push(byMeal[k][0]); });
+  return out;
+}
+
+// One row per (pooled food, negative symptom): how often it rode along, against
+// the same symptom's rate on every OTHER solo meal, with the food's own entries
+// removed from that baseline (the self-inclusion guard computeVerdicts uses).
+function soloSymptomScan(entries, opts) {
+  const o = opts || {};
+  const minMeals = o.minMeals || SOLO_MIN_MEALS, minCount = o.minCount || SOLO_MIN_COUNT;
+  const solo = soloMealEntries(entries);
+  const negKeys = allSymptoms().filter(x => !isPositiveLabel(x.label)).map(x => x.key);
+  const labelOf = {}; allSymptoms().forEach(x => { labelOf[x.key] = x.label; });
+
+  const per = {}, symTot = {};
+  let N = 0;
+  solo.forEach(e => {
+    N++;
+    const k = poolKeyOf(e.food);
+    const f = per[k] || (per[k] = { key: k, names: {}, n: 0, syms: {} });
+    f.n++;
+    f.names[e.food] = (f.names[e.food] || 0) + 1;
+    negKeys.forEach(sk => {
+      if (!(e.symptoms && e.symptoms[sk])) return;
+      f.syms[sk] = (f.syms[sk] || 0) + 1;
+      symTot[sk] = (symTot[sk] || 0) + 1;
+    });
+  });
+
+  const rows = [];
+  Object.keys(per).forEach(k => {
+    const f = per[k];
+    if (f.n < minMeals) return;
+    negKeys.forEach(sk => {
+      const c = f.syms[sk] || 0;
+      if (c < minCount) return;
+      const rest = N - f.n;
+      if (rest < 10) return;
+      const base = Math.max(1e-6, ((symTot[sk] || 0) - c) / rest);
+      if (base >= 1) return;
+      rows.push({ key: k, sym: sk, label: labelOf[sk] || sk, c: c, n: f.n,
+        rate: c / f.n, base: base, lift: (c / f.n) / base,
+        p: binomTailGE(c, f.n, base), q: 1 });
+    });
+  });
+
+  rows.sort((a, b) => a.p - b.p || b.lift - a.lift);
+  const m = rows.length;
+  let prev = 1;
+  for (let i = m - 1; i >= 0; i--) { prev = Math.min(prev, rows[i].p * m / (i + 1)); rows[i].q = prev; }
+
+  const byFood = {};
+  rows.forEach(r => { (byFood[r.key] || (byFood[r.key] = [])).push(r); });
+  const namesByKey = {};
+  Object.keys(per).forEach(k => { namesByKey[k] = Object.keys(per[k].names).sort((a, b) => per[k].names[b] - per[k].names[a]); });
+  const nByKey = {};
+  Object.keys(per).forEach(k => { nByKey[k] = per[k].n; });
+  return { rows: rows, byFood: byFood, names: namesByKey, soloCount: nByKey,
+    soloMeals: N, tested: m, named: rows.filter(r => r.q <= SOLO_FDR).length };
+}
+
+let _soloMemo = null, _soloRaw = '';
+function soloSymptomScanCached() {
+  const e = localStorage.getItem('fst_entries') || '';
+  const raw = e.length + '|' + e.slice(-160);
+  if (_soloMemo && raw === _soloRaw) return _soloMemo;
+  _soloMemo = soloSymptomScan(loadMigrated());
+  _soloRaw = raw;
+  return _soloMemo;
+}
+
+// What to say about ONE food. Reports the pooled gram levels too, because a row
+// that silently merged four portion sizes is not a row the reader can check.
+function soloSymptomFor(food, scan) {
+  const k = poolKeyOf(food);
+  const rows = (scan && scan.byFood && scan.byFood[k]) || [];
+  const names = (scan && scan.names && scan.names[k]) || [];
+  const soloN = (scan && scan.soloCount && scan.soloCount[k]) || 0;
+  if (!rows.length) {
+    return { rows: [], best: null, names: names, soloN: soloN, tested: scan ? scan.tested : 0,
+      state: soloN >= SOLO_MIN_MEALS ? 'quiet' : 'thin' };
+  }
+  const best = rows[0];
+  return { rows: rows, best: best, names: names, soloN: soloN, tested: scan.tested,
+    state: best.q <= SOLO_FDR ? 'named' : best.p <= SOLO_LEAD_P ? 'lead' : 'quiet' };
+}
+
+// v111 (C): start a trial that actually covers the food. foodMatchesTrial needs
+// EVERY token of the target present in an entry, so trialling the name as
+// logged - grams and all - would avoid one portion size and call it a test.
+// The pooled label has the grams stripped, so it matches every size.
+function soloTrialName(food, scan) {
+  const k = poolKeyOf(food);
+  const names = (scan && scan.names && scan.names[k]) || [];
+  if (names.length < 2) return food;        // nothing was pooled; the name is fine
+  // NOT poolLabel(). poolKeyOf() splits on punctuation and normFood() does not,
+  // so a brand like "Mori-Nu" becomes `mori nu` in the pool key and `morinu` in
+  // the entry - and foodMatchesTrial, which works on normFood tokens, then
+  // matched NONE of the servings. Measured on the real log before this was
+  // fixed: 0 of 13. Build the target from the tokens every logged variant
+  // actually shares under normFood, so matching all of them is true by
+  // construction rather than by hoping two normalisers agree.
+  const sets = names.map(n => normFood(n).split(' ').filter(Boolean));
+  const common = sets[0].filter(t => sets.every(ts => ts.includes(t)));
+  // too little left to identify anything - better the exact name than a trial
+  // that silently avoids half the pantry
+  if (common.join('').length < 4) return food;
+  return common.join(' ');
+}
+function startPooledTrial(food) {
+  startExperiment(soloTrialName(food, soloSymptomScanCached()));
 }
 
 // === Whole-profile lag scan (v110) =========================================
@@ -21596,6 +21772,7 @@ function renderFoodProfile() {
     slot: fdSlot(entries, food),
     streak: fdStreak(entries, food),
     profile: profileVerdictFor(food, profileScanCached()),
+    solo: soloSymptomFor(food, soloSymptomScanCached()),
     skin: (() => {
       const r = skinRowFor(food);
       return { row: r.row, scan: r.scan,
@@ -21611,7 +21788,7 @@ function renderFoodProfile() {
     ALL:'📌', WORSE:'🔺', EASY:'🟢', FLAT:'🟡', SOLO:'🔬',
     DOWN:'📉', UP:'📈', BACK:'🔄', DOSE:'⚖️', LOAD:'🧱',
     WHEN:'🕐', ZERO:'✨', RUN:'⏳', SKINBAD:'🔴', SKINGOOD:'💚', CYCLE:'🔁',
-    PROFBAD:'📊', PROFGOOD:'📊', MIRAGE:'🌫️' };
+    PROFBAD:'📊', PROFGOOD:'📊', MIRAGE:'🌫️', TAG:'🏷️' };
   const FD_ACT_ICO = { RUN:'⏳', EAT:'🍽️', SKIP:'🚫', CUT:'✂️',
     TEST:'🔬', MARK:'✍️', DONE:'✅', TRIAL:'🧪' };
 
@@ -21671,6 +21848,32 @@ function renderFoodProfile() {
   </div>` : (foodBaseType(food) !== 'food'
     ? `<div class="card fp-card"><div class="fp-h">⚖️ Verdict</div><div class="fp-empty">Classified as <b>${esc(foodBaseType(food))}</b> — excluded from food verdicts on purpose (non-foods only inherit the meals they ride along with). Reclassify via 📋 Summary → 🏷️ Item types if that's wrong.</div></div>`
     : `<div class="card fp-card"><div class="fp-h">⚖️ Verdict</div><div class="fp-empty">No scored reaction windows yet — mark ✓/✕ on this food's entries in 📑 Logs.</div></div>`);
+
+  // -- symptoms, judged where they can actually be attributed --
+  const ssv = fdParts.solo;
+  const ssRow = r => `<div class="vw-row">
+    <span class="vw-chip ${r.q <= SOLO_FDR ? 'w2' : 'all'}">${esc(r.label)}</span>
+    <span class="vw-count">${r.c} of ${r.n}</span>
+    <span class="vw-main"><b class="${r.lift >= 1.5 ? 'bad' : 'flat'}">${Math.round(r.rate * 100)}%</b><span class="vw-vs">vs</span><span class="vw-base">${Math.round(r.base * 100)}% baseline</span></span>
+    <span class="vw-count">${r.lift.toFixed(1)}\u00d7${r.q <= SOLO_FDR ? ' \u2713' : ''}</span>
+  </div>`;
+  const ssPooled = ssv.names && ssv.names.length > 1
+    ? `<div class="fp-legend">Pooled across ${ssv.names.length} portion sizes \u2014 apart they are ${ssv.names.length} samples too small to judge. ${ssv.names.map(esc).join(' \u00b7 ')}</div>` : '';
+  const ssBody = ssv.state === 'thin'
+    ? `<div class="fp-empty">Eaten alone ${ssv.soloN} time${ssv.soloN === 1 ? '' : 's'} \u2014 it needs ${SOLO_MIN_MEALS} before its symptom tags can be told apart from the rest of your log.</div>`
+    : !ssv.rows.length
+      ? `<div class="fp-empty">Eaten alone ${ssv.soloN} times, with no symptom appearing on ${SOLO_MIN_COUNT}+ of them. Nothing to test.</div>`
+      : ssv.rows.map(ssRow).join('') +
+        `<div class="fp-legend">From the ${ssv.soloN} times you ate it ALONE, against the same tag's rate on everything else eaten alone. Mixed plates are excluded on purpose: marking one stamps the same tags on every item, so nothing on them can be attributed to a single food.</div>`;
+  const soloCard = `<div class="card fp-card">
+    <div class="fp-h-row"><span class="fp-h">\u{1F3F7}\uFE0F Symptoms when eaten alone</span><span class="fp-legend" style="margin:0;">${ssv.soloN} solo meal${ssv.soloN === 1 ? '' : 's'}</span></div>
+    ${ssBody}
+    ${ssPooled}
+    ${(ssv.state === 'named' || ssv.state === 'lead') && !(trialStateMap()[normFood(food)] || {}).s
+      ? `<div class="fp-exp-hint">\u{1F9EA} <b>This is the kind of thing a trial settles.</b> Avoiding it for ${typeof EXP_ELIM_DAYS === 'number' ? EXP_ELIM_DAYS : 5} days and reintroducing gives a cleaner answer than any amount of back-analysis.
+           <button class="verdict-test-btn" style="margin-left:6px;" onclick="startPooledTrial(${escAttr(JSON.stringify(food))})">\u{1F9EA} Start a trial${ssv.names && ssv.names.length > 1 ? ' (all sizes)' : ''}</button></div>`
+      : ''}
+  </div>`;
 
   // -- skin: the one outcome with a measurable per-food signal --
   const skR = fdParts.skin, skRow = skR.row, skScan = skR.scan;
@@ -21885,7 +22088,7 @@ function renderFoodProfile() {
   // Summary -> insights -> breakdown. The old order led with raw cards and left
   // the reader to do the synthesis, which is the thing this rebuild replaces.
   host.innerHTML = searchBar + headCard + nextCard + insightsCard
-    + breakCard + skinCard + verdictCard + impactCard + windowsCard + faceCard + trialCard + coCard + histCard + noteCard;
+    + breakCard + soloCard + skinCard + verdictCard + impactCard + windowsCard + faceCard + trialCard + coCard + histCard + noteCard;
   fmWireAutocomplete(document.getElementById('fp-search'), document.getElementById('fp-drop'),
     fpSearchItems, f => fpOpen(f), v => { const m = fmKnownMatch(v); if (m) fpOpen(m); else toast(`“${v}” isn't in your food log`); });
 }
@@ -23912,6 +24115,125 @@ function runSelfTest() {
       state: 'nothing', tested: 430,
       best: { lag: 2, diff: 0.1, nEaten: 3, nOther: 170, p: 0.8, q: 1 }, rows: [] } });
     return eq(out.some(x => x.key === 'profile'), false);
+  });
+
+  // -- solo-meal symptom channel (v111) --
+  // Built after a food the user KNEW was a culprit stayed silent: its windows
+  // sat on the baseline, its servings were split across four portion sizes, and
+  // symptom tags could never promote anything. The guards below are the three
+  // ways this could go wrong.
+  const _ssMk = (id, date, food, time, syms) => migrate({ id: id, date: date, food: food,
+    logTime: time, mealType: 'dinner', notes: '', windows: {}, symptoms: syms || {} });
+
+  t('solo symptoms: a mixed plate is excluded, a single-item meal is not', () => {
+    const es = [
+      _ssMk('a1', '2026-03-01', 'Alone', '19:00', { gas: true }),
+      _ssMk('b1', '2026-03-02', 'WithMate', '20:00', { gas: true }),
+      _ssMk('b2', '2026-03-02', 'TheMate', '20:00', { gas: true }),   // same meal key
+    ];
+    const solo = soloMealEntries(es).map(e => e.food);
+    return eq(solo.join(','), 'Alone');
+  });
+
+  // one food, logged at three portion sizes, eaten alone, dragging one symptom
+  // NOTE two traps this fixture exists to avoid, both found by writing it wrong:
+  //  - the suite's symptom list is the BUILT-INS only, so a custom tag key like
+  //    c_burns is simply absent and every row silently vanishes;
+  //  - stripCosmetic() drops digits, so Filler1..Filler7 pool into ONE food.
+  const _SS_FILL = ['Alfa', 'Bravo', 'Charlie', 'Delta', 'Echo', 'Foxtrot', 'Golf', 'Hotel'];
+  const _ssFix = (withSignal) => {
+    const es = [];
+    const sizes = ['Zogfruit raw 10-20g', 'Zogfruit raw 21-40g', 'Zogfruit raw 41-60g'];
+    for (let i = 0; i < 9; i++) {
+      es.push(_ssMk('z' + i, addDays('2026-03-01', i * 2), sizes[i % 3], '19:00',
+        withSignal ? { bloating: true } : (i % 5 === 0 ? { bloating: true } : {})));
+    }
+    // 40 other solo meals across 8 distinct foods, where the tag is rare
+    for (let i = 0; i < 40; i++) {
+      es.push(_ssMk('o' + i, addDays('2026-03-02', i * 2), _SS_FILL[i % 8], '12:00',
+        i % 10 === 0 ? { bloating: true } : {}));
+    }
+    return es;
+  };
+
+  t('solo symptoms: portion sizes are pooled into one testable sample', () => {
+    const sc = soloSymptomScan(_ssFix(true));
+    const v = soloSymptomFor('Zogfruit raw 21-40g', sc);
+    return (v.soloN === 9 && v.names.length === 3)
+      ? true : 'got soloN=' + v.soloN + ' names=' + JSON.stringify(v.names);
+  });
+  t('solo symptoms: a real tag-following-food is named', () => {
+    const sc = soloSymptomScan(_ssFix(true));
+    const v = soloSymptomFor('Zogfruit raw 10-20g', sc);
+    return (v.best && v.best.sym === 'bloating' && v.state === 'named' && v.best.lift > 2)
+      ? true : 'got ' + JSON.stringify(v.best && { s: v.best.sym, st: v.state, lift: +v.best.lift.toFixed(1), q: +v.best.q.toFixed(3) });
+  });
+  t('solo symptoms: a tag at the ordinary rate names nothing', () => {
+    const sc = soloSymptomScan(_ssFix(false));
+    return eq(sc.named, 0);
+  });
+  t('solo symptoms: a food eaten alone too rarely is not tested', () => {
+    const es = _ssFix(true);
+    es.push(_ssMk('r1', '2026-06-01', 'Rareitem', '19:00', { bloating: true }));
+    es.push(_ssMk('r2', '2026-06-03', 'Rareitem', '19:00', { bloating: true }));
+    es.push(_ssMk('r3', '2026-06-05', 'Rareitem', '19:00', { bloating: true }));
+    const v = soloSymptomFor('Rareitem', soloSymptomScan(es));
+    return (v.state === 'thin' && v.soloN === 3) ? true : 'got ' + JSON.stringify({ s: v.state, n: v.soloN });
+  });
+  t('solo symptoms: the baseline excludes the food being judged', () => {
+    // every solo meal carries the tag, so the food cannot be "above" a baseline
+    // that it is itself responsible for
+    const es = [];
+    for (let i = 0; i < 30; i++) es.push(_ssMk('u' + i, addDays('2026-03-01', i), i < 10 ? 'Everyone' : 'Other' + i, '19:00', { gas: true }));
+    const sc = soloSymptomScan(es);
+    const v = soloSymptomFor('Everyone', sc);
+    return (!v.best || v.best.q > SOLO_FDR) ? true : 'named a food on a universal symptom: ' + JSON.stringify(v.best);
+  });
+  t('solo symptoms: a positive tag is never treated as a complaint', () => {
+    const es = [];
+    for (let i = 0; i < 9; i++) es.push(_ssMk('g' + i, addDays('2026-03-01', i * 2), 'Goodstuff', '19:00', { goodSleep: true, energetic: true }));
+    for (let i = 0; i < 40; i++) es.push(_ssMk('h' + i, addDays('2026-03-02', i * 2), _SS_FILL[i % 8], '12:00', {}));
+    const sc = soloSymptomScan(es);
+    return eq(sc.rows.some(r => /goodsleep|energetic/i.test(r.sym)), false);
+  });
+  t('solo symptoms: a pooled trial targets every portion size', () => {
+    const sc = soloSymptomScan(_ssFix(true));
+    const name = soloTrialName('Zogfruit raw 21-40g', sc);
+    const tn = normFood(name);
+    // foodMatchesTrial needs EVERY target token present, so the trial name must
+    // carry no gram range or it would avoid one size and call that a test
+    const hits = ['Zogfruit raw 10-20g', 'Zogfruit raw 21-40g', 'Zogfruit raw 41-60g']
+      .filter(f => foodMatchesTrial(f, tn)).length;
+    return hits === 3 ? true : 'trial name "' + name + '" matched only ' + hits + ' of 3 sizes';
+  });
+  t('solo symptoms: a hyphenated brand still matches every serving', () => {
+    // THE regression: poolKeyOf splits "Mori-Nu" into two tokens while normFood
+    // collapses it to one, so a trial built from the pool label matched NONE of
+    // the servings on the real log. Matching must not depend on two normalisers
+    // happening to agree.
+    const es = [];
+    for (let i = 0; i < 9; i++) {
+      const g = ['10-20g', '21-40g', '41-60g'][i % 3];
+      es.push(_ssMk('m' + i, addDays('2026-03-01', i * 2),
+        'Quorvex Thing Heated ' + g + ' "Zor-Qix" [Firm Blue]', '19:00', { bloating: true }));
+    }
+    for (let i = 0; i < 40; i++) es.push(_ssMk('n' + i, addDays('2026-03-02', i * 2), _SS_FILL[i % 8], '12:00', i % 10 === 0 ? { bloating: true } : {}));
+    const sc = soloSymptomScan(es);
+    const tn = normFood(soloTrialName('Quorvex Thing Heated 21-40g "Zor-Qix" [Firm Blue]', sc));
+    const all = [...new Set(es.filter(e => /quorvex thing/i.test(e.food)).map(e => e.food))];
+    const hit = all.filter(f => foodMatchesTrial(f, tn)).length;
+    return hit === all.length ? true : 'trial target "' + tn + '" matched ' + hit + ' of ' + all.length + ' servings';
+  });
+  t('solo symptoms: an unpooled food keeps its own name for a trial', () => {
+    const sc = soloSymptomScan(_ssFix(true));
+    return eq(soloTrialName('Bravo', sc), 'Bravo');
+  });
+  t('solo symptoms: a named finding leads the insights, a lead does not', () => {
+    const named = fdInsights({ conf: null, solo: { state: 'named', tested: 500, names: [],
+      best: { sym: 'c_burns', label: 'Burns', c: 9, n: 9, rate: 1, base: 0.1, lift: 10, p: 0.0001, q: 0.02 } } });
+    const lead = fdInsights({ conf: null, solo: { state: 'lead', tested: 500, names: [],
+      best: { sym: 'c_burns', label: 'Burns', c: 5, n: 9, rate: 0.55, base: 0.2, lift: 2.8, p: 0.03, q: 0.4 } } });
+    return eq([named[0].tier, named[0].icon, lead[0].tier].join('|'), '1|TAG|2');
   });
 
   t('marking health: a coin-flip rate is called uninformative', () => {
