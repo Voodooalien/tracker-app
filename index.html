@@ -4735,7 +4735,7 @@ try {
   </div>
 
   <div style="margin-left: auto; display: flex; align-items: center; gap: 4px;">
-    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v112</span>
+    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v114</span>
   </div>
 
   <div id="nav-more-tray" style="display:none; flex-basis:100%; flex-wrap:wrap; gap:4px; padding-top:6px; margin-top:4px; border-top:1px dashed rgba(255,255,255,0.18);">
@@ -5638,12 +5638,12 @@ html body select.status-badge-select.status-toxic {
   </div>
 </div>
 
-<!-- ═══ Copy meal → another meal of the same day (v69) ═══ -->
+<!-- ═══ Copy meal → another meal (v69; v113 review sheet: items, date, time) ═══ -->
 <div id="mealcopy-modal-bg" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:10000; align-items:center; justify-content:center; padding:16px;" onclick="if(event.target===this)closeMealCopy()">
   <div style="background:var(--card); color:var(--text); border-radius:14px; max-width:420px; width:100%; max-height:82vh; display:flex; flex-direction:column; padding:20px; box-shadow:0 20px 60px rgba(0,0,0,0.45);">
-    <h3 style="margin:0 0 10px;">📋 Copy meal to…</h3>
+    <h3 id="mealcopy-title" style="margin:0 0 10px;">📋 Copy meal to…</h3>
     <div id="mealcopy-body" style="overflow-y:auto; flex:1;"></div>
-    <div style="margin-top:14px; text-align:right;"><button onclick="closeMealCopy()" style="padding:8px 16px; border-radius:8px; border:1px solid var(--border); background:var(--card); color:var(--text); cursor:pointer;">Cancel</button></div>
+    <div id="mealcopy-foot" style="margin-top:14px; display:flex; gap:8px; justify-content:flex-end; align-items:center; flex-wrap:wrap;"></div>
   </div>
 </div>
 
@@ -11712,6 +11712,14 @@ function renderHeatmap() {
         }));
 
         // Build the overview header
+        // v114: this is the "any meal, any day" entry point — one button per
+        // meal that day, straight into the copy review sheet.
+        const copyBtns = MEAL_PICK
+          .filter(([k]) => sortedEntries.some(e => (e.mealType || '') === k))
+          .map(([k, lbl]) => {
+            const n = sortedEntries.filter(e => (e.mealType || '') === k).length;
+            return `<button onclick="openMealCopyDay(${escAttr(JSON.stringify(dateStr))}, ${escAttr(JSON.stringify(k))})" title="Copy this meal into another meal — pick the items, date and time" style="text-transform:none; letter-spacing:0; font-size:11px; font-weight:700; padding:4px 9px; border-radius:6px; border:1px solid var(--border); background:var(--card); color:var(--muted); cursor:pointer;">📋 ${lbl} · ${n}</button>`;
+          }).join('');
         const headerHtml = `
           <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; padding-bottom:12px; border-bottom:1px dashed var(--border);">
             <div style="font-size:11px; font-weight:800; color:var(--muted); letter-spacing:0.5px;">DAILY LOGS (${sortedEntries.length})</div>
@@ -11721,6 +11729,7 @@ function renderHeatmap() {
               <span class="digest-pill pending" style="font-size:10px;">? ${pending}</span>
             </div>
           </div>
+          ${copyBtns ? `<div style="display:flex; gap:6px; flex-wrap:wrap; margin:-6px 0 16px;"><span style="font-size:11px; font-weight:800; color:var(--muted); letter-spacing:0.5px; align-self:center;">COPY A MEAL</span>${copyBtns}</div>` : ''}
         `;
 
         // Build the rich digest entries
@@ -12476,59 +12485,221 @@ function mealEntriesToday(mealKey) {
   const t = today();
   return loadMigrated().filter(e => e.date === t && (e.mealType || '') === mealKey);
 }
-// PURE: which source items still need copying (target already has the rest)
-function mealCopyPlan(srcEntries, targetEntries) {
+// PURE: one row per distinct source food, flagged when the chosen target meal
+// already holds that food on the chosen date. Flagged rows are locked out of
+// the copy, so a copy can never duplicate a food inside a single meal.
+function mealCopyRows(srcEntries, targetEntries) {
   const already = new Set((targetEntries || []).map(e => e.food));
   const seen = new Set();
-  return (srcEntries || []).filter(e => {
-    if (already.has(e.food) || seen.has(e.food)) return false;   // no dupes within the copy either
+  const rows = [];
+  (srcEntries || []).forEach(e => {
+    if (seen.has(e.food)) return;            // no dupes within the copy either
     seen.add(e.food);
-    return true;
+    rows.push({ food: e.food, type: e.type || '', already: already.has(e.food) });
   });
+  return rows;
 }
-let _mealCopyFrom = null;
+// PURE: what a copy would actually write — ticked rows that are not already there
+function mealCopyKept(rows, dropped) {
+  const drop = dropped || new Set();
+  return (rows || []).filter(r => !r.already && !drop.has(r.food));
+}
+
+// v113: copying a meal is a review step, not a blind tap. You pick the target
+// meal, untick whatever you did not actually eat again, and set the date and
+// time BEFORE anything is written — a copy silently stamped "now" while you log
+// at 22:00 shifts every reaction window of that meal to the wrong hours.
+// PURE: the whole sitting an entry belongs to, computed over EVERY entry of that
+// day and meal — not just the ones still waiting for marks. The Logs list is
+// filtered to pending items, so sourcing a copy from what it draws would quietly
+// drop the half of the meal you had already marked.
+function occasionEntriesOf(entries, entry) {
+  if (!entry) return [];
+  const sameMeal = (entries || [])
+    .filter(e => e.date === entry.date && (e.mealType || '') === (entry.mealType || ''))
+    .sort((a, b) => (entryStampMin(a) || 0) - (entryStampMin(b) || 0));
+  const occ = splitIntoOccasions(sameMeal);
+  return occ.find(items => items.some(e => e.id === entry.id)) || [entry];
+}
+
+let _mealCopy = null;   // { srcIds, fromLabel, srcDate, srcMeal, to, date, time, dropped:Set<food> }
+
+// v114: every copy starts here. The source is a list of entry ids — today's
+// meal, one sitting from any day, or a whole meal picked off the calendar — so
+// the review sheet below never had to learn where they came from.
+function openMealCopyIds(srcIds, fromLabel, srcDate, srcMeal) {
+  if (!srcIds || !srcIds.length) { toast('Nothing logged in that meal'); return; }
+  const n = new Date();
+  _mealCopy = {
+    srcIds: srcIds.slice(), fromLabel: fromLabel, srcDate: srcDate, srcMeal: srcMeal || '',
+    to: null, date: today(),
+    time: `${String(n.getHours()).padStart(2, '0')}:${String(n.getMinutes()).padStart(2, '0')}`,
+    dropped: new Set()
+  };
+  const bg = document.getElementById('mealcopy-modal-bg');
+  if (!bg) return;
+  bg.style.display = 'flex';
+  renderMealCopy();
+}
+// The meal-section header in Logs: today's items of that meal type.
 function openMealCopy(mealKey) {
   const src = mealEntriesToday(mealKey);
   if (!src.length) { toast('Nothing logged in that meal today'); return; }
-  _mealCopyFrom = mealKey;
-  const bg = document.getElementById('mealcopy-modal-bg');
-  const body = document.getElementById('mealcopy-body');
-  if (!bg || !body) return;
-  const foods = [...new Set(src.map(e => e.food))];
-  body.innerHTML = `<div style="font-size:12px;color:var(--muted);margin-bottom:10px;">Copying <b>${foods.length}</b> item${foods.length === 1 ? '' : 's'} from <b>${esc(mealLabelOf(mealKey))}</b> (today):<br>${foods.map(f => esc(f)).join('<br>')}</div>`
-    + MEAL_PICK.filter(([k]) => k !== mealKey).map(([k, lbl]) =>
-      `<button onclick="copyMealTo(${escAttr(JSON.stringify(mealKey))}, ${escAttr(JSON.stringify(k))})" style="display:block; width:100%; text-align:left; margin-bottom:6px; padding:10px 12px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text); font-size:13px; font-weight:700; cursor:pointer;">${lbl}</button>`).join('');
-  bg.style.display = 'flex';
+  openMealCopyIds(src.map(e => e.id), `${mealLabelOf(mealKey)} (today)`, today(), mealKey);
+}
+// A row in Logs or History, or a 🕐 sitting heading: the whole sitting it belongs to.
+function openMealCopyFromEntry(id) {
+  const entries = loadMigrated();
+  const entry = entries.find(e => e.id === id);
+  if (!entry) { toast('That entry is gone'); return; }
+  const items = occasionEntriesOf(entries, entry);
+  const when = entry.date === today() ? '(today)' : fmt(entry.date);
+  openMealCopyIds(items.map(e => e.id),
+    `${mealLabelOf(entry.mealType || '')} ${when} · ${occasionLabel(items)}`,
+    entry.date, entry.mealType || '');
+}
+// A whole meal of any day — the calendar day popup.
+function openMealCopyDay(date, mealKey) {
+  const src = loadMigrated().filter(e => e.date === date && (e.mealType || '') === mealKey);
+  if (!src.length) { toast('Nothing logged in that meal'); return; }
+  const when = date === today() ? '(today)' : fmt(date);
+  openMealCopyIds(src.map(e => e.id), `${mealLabelOf(mealKey)} ${when}`, date, mealKey);
 }
 function closeMealCopy() {
   const bg = document.getElementById('mealcopy-modal-bg');
   if (bg) bg.style.display = 'none';
-  _mealCopyFrom = null;
+  _mealCopy = null;
 }
-function copyMealTo(fromMeal, toMeal) {
-  const src = mealEntriesToday(fromMeal);
-  if (!src.length) { toast('Nothing logged in that meal today'); closeMealCopy(); return; }
+function mealCopyPickTarget(toMeal) { if (_mealCopy) { _mealCopy.to = toMeal; renderMealCopy(); } }
+function mealCopyBack() { if (_mealCopy) { _mealCopy.to = null; _mealCopy.dropped = new Set(); renderMealCopy(); } }
+function mealCopyToggle(food) {
+  if (!_mealCopy) return;
+  if (_mealCopy.dropped.has(food)) _mealCopy.dropped.delete(food);
+  else _mealCopy.dropped.add(food);
+  renderMealCopy();
+}
+function mealCopySetAll(keepAll) {
+  if (!_mealCopy) return;
+  _mealCopy.dropped = new Set();
+  if (!keepAll) mealCopySourceRows().forEach(r => { if (!r.already) _mealCopy.dropped.add(r.food); });
+  renderMealCopy();
+}
+// Date changes move the goalposts: a different day has a different target meal,
+// so what counts as "already there" is recomputed and the list redrawn.
+function mealCopySetDate(v) { if (_mealCopy) { _mealCopy.date = v; renderMealCopy(); } }
+function mealCopySetTime(v) { if (_mealCopy) { _mealCopy.time = v; renderMealCopyFoot(); } }
+
+function mealCopySourceRows() {
+  if (!_mealCopy) return [];
   const entries = loadMigrated();
-  const t = today();
-  // a food already in the target meal today is skipped — double-tap is harmless
-  const fresh = mealCopyPlan(src, entries.filter(e => e.date === t && (e.mealType || '') === toMeal));
-  if (!fresh.length) { toast(`Already in ${mealLabelOf(toMeal)} ✓`); closeMealCopy(); return; }
-  const n = new Date();
-  const nowTime = `${String(n.getHours()).padStart(2, '0')}:${String(n.getMinutes()).padStart(2, '0')}`;
+  const ids = new Set(_mealCopy.srcIds);
+  const src = entries.filter(e => ids.has(e.id))
+    .sort((a, b) => (entryStampMin(a) || 0) - (entryStampMin(b) || 0));
+  const tgt = _mealCopy.to
+    ? entries.filter(e => e.date === _mealCopy.date && (e.mealType || '') === _mealCopy.to)
+    : [];
+  return mealCopyRows(src, tgt);
+}
+
+function renderMealCopy() {
+  const body = document.getElementById('mealcopy-body');
+  const title = document.getElementById('mealcopy-title');
+  if (!body || !_mealCopy) return;
+  // Step 1 — where is it going?
+  if (!_mealCopy.to) {
+    if (title) title.textContent = '📋 Copy meal to…';
+    const foods = [...new Set(mealCopySourceRows().map(r => r.food))];
+    // The same meal of the SAME day is the only pointless target — copying an
+    // older sitting onto today's meal of that same name is the whole point of C.
+    const sameDay = _mealCopy.date === _mealCopy.srcDate;
+    body.innerHTML = `<div style="font-size:12px; color:var(--muted); margin-bottom:10px; text-transform:none; letter-spacing:0;">`
+      + `<b>${esc(_mealCopy.fromLabel)}</b> — ${foods.length} item${foods.length === 1 ? '' : 's'}:<br>${foods.map(f => esc(f)).join('<br>')}`
+      + `</div><div style="font-size:11.5px; color:var(--muted); margin-bottom:8px; font-weight:700;">Copy into…</div>`
+      + MEAL_PICK.filter(([k]) => !(sameDay && k === _mealCopy.srcMeal)).map(([k, lbl]) =>
+        `<button onclick="mealCopyPickTarget(${escAttr(JSON.stringify(k))})" style="display:block; width:100%; text-align:left; margin-bottom:6px; padding:10px 12px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text); font-size:13px; font-weight:700; cursor:pointer;">${lbl}</button>`).join('');
+    renderMealCopyFoot();
+    return;
+  }
+  // Step 2 — which items, what date, what time?
+  if (title) title.textContent = '📋 Review the copy';
+  const rows = mealCopySourceRows();
+  const keepable = rows.filter(r => !r.already).length;
+  const list = rows.map(r => {
+    const kept = !r.already && !_mealCopy.dropped.has(r.food);
+    const meta = r.already
+      ? `already in ${esc(mealLabelOf(_mealCopy.to))}`
+      : (r.type ? esc(r.type) : '');
+    // text-transform:none — the app's global label style shouts in caps, and a
+    // food name has to read exactly as it was logged.
+    return `<label style="display:flex; gap:10px; align-items:center; padding:9px 10px; border-radius:8px; border:1px solid var(--border); margin-bottom:6px; background:var(--bg); text-transform:none; letter-spacing:0; cursor:${r.already ? 'default' : 'pointer'}; opacity:${r.already ? '0.5' : '1'};">
+      <input type="checkbox" ${kept ? 'checked' : ''} ${r.already ? 'disabled' : ''} onchange="mealCopyToggle(${escAttr(JSON.stringify(r.food))})" style="width:18px; height:18px; flex:0 0 auto;">
+      <span style="flex:1; min-width:0;">
+        <span style="display:block; font-size:13px; font-weight:700; ${kept || r.already ? '' : 'text-decoration:line-through; color:var(--muted);'}">${esc(r.food)}</span>
+        ${meta ? `<span style="display:block; font-size:11px; color:var(--muted);">${meta}</span>` : ''}
+      </span>
+    </label>`;
+  }).join('');
+  body.innerHTML = `
+    <div style="font-size:12px; color:var(--muted); margin-bottom:10px; text-transform:none; letter-spacing:0;">
+      <b>${esc(_mealCopy.fromLabel)}</b> → <b>${esc(mealLabelOf(_mealCopy.to))}</b>
+    </div>
+    <div style="display:flex; gap:8px; align-items:flex-end; margin-bottom:12px; flex-wrap:wrap;">
+      <label style="font-size:11px; font-weight:700; color:var(--muted);">Date<br>
+        <input type="date" value="${escAttr(_mealCopy.date)}" onchange="mealCopySetDate(this.value)" style="margin-top:3px; padding:8px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text); font-size:12px; font-weight:600;">
+      </label>
+      <label style="font-size:11px; font-weight:700; color:var(--muted);">Time<br>
+        <input type="time" value="${escAttr(_mealCopy.time)}" onchange="mealCopySetTime(this.value)" style="margin-top:3px; padding:8px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text); font-size:12px; font-weight:600;">
+      </label>
+    </div>
+    ${keepable > 1 ? `<div style="display:flex; gap:6px; margin-bottom:8px;">
+      <button onclick="mealCopySetAll(true)" style="font-size:11px; font-weight:700; padding:4px 9px; border-radius:6px; border:1px solid var(--border); background:var(--card); color:var(--muted); cursor:pointer;">Keep all</button>
+      <button onclick="mealCopySetAll(false)" style="font-size:11px; font-weight:700; padding:4px 9px; border-radius:6px; border:1px solid var(--border); background:var(--card); color:var(--muted); cursor:pointer;">Drop all</button>
+    </div>` : ''}
+    ${list}`;
+  renderMealCopyFoot();
+}
+
+function renderMealCopyFoot() {
+  const foot = document.getElementById('mealcopy-foot');
+  if (!foot || !_mealCopy) return;
+  const cancel = `<button onclick="closeMealCopy()" style="padding:8px 16px; border-radius:8px; border:1px solid var(--border); background:var(--card); color:var(--text); cursor:pointer;">Cancel</button>`;
+  if (!_mealCopy.to) { foot.innerHTML = cancel; return; }
+  const n = mealCopyKept(mealCopySourceRows(), _mealCopy.dropped).length;
+  foot.innerHTML = `<button onclick="mealCopyBack()" style="margin-right:auto; padding:8px 14px; border-radius:8px; border:1px solid var(--border); background:var(--card); color:var(--muted); cursor:pointer; font-weight:700;">← Back</button>`
+    + cancel
+    + `<button onclick="commitMealCopy()" ${n ? '' : 'disabled'} style="padding:8px 18px; border-radius:8px; border:none; background:${n ? 'var(--navy)' : 'var(--border)'}; color:#fff; font-weight:700; cursor:${n ? 'pointer' : 'default'};">Copy ${n} item${n === 1 ? '' : 's'}</button>`;
+}
+
+function commitMealCopy() {
+  if (!_mealCopy || !_mealCopy.to) return;
+  const to = _mealCopy.to, date = _mealCopy.date, time = _mealCopy.time;
+  // Same guard as addEntry(): an entry with no date stays visible in the log
+  // and travels in every backup while being invisible to EVERY engine.
+  if (!date) { toast('Pick a date first — an entry without one is invisible to every analysis'); return; }
+  if (!/^[0-9]{2}:[0-9]{2}$/.test(String(time))) { toast('Set a time for the copy'); return; }
+  const keep = mealCopyKept(mealCopySourceRows(), _mealCopy.dropped);
+  if (!keep.length) { toast('Nothing ticked to copy'); return; }
+  const entries = loadMigrated();
   const mealId = uid();   // the copy is ONE meal for meal-aware analysis
-  for (let i = fresh.length - 1; i >= 0; i--) {
-    const s = fresh[i];
-    const ne = { id: uid(), date: t, mealType: toMeal, food: s.food, logTime: nowTime, mealId,
+  for (let i = keep.length - 1; i >= 0; i--) {
+    const ne = { id: uid(), date, mealType: to, food: keep[i].food, logTime: time, mealId,
                  windows: { w1: null, w2: null, w3: null, w4: null }, symptoms: blankSymptoms() };
-    if (s.type) ne.type = s.type;   // type describes the item; solo/age belong to the original occasion
+    if (keep[i].type) ne.type = keep[i].type;   // type describes the item; solo/age belong to the original occasion
     entries.unshift(ne);
   }
   save(entries);
+  const label = mealLabelOf(to) + (date !== today() ? ' · ' + fmt(date) : '');
   closeMealCopy();
-  toast(`${fresh.length} item${fresh.length === 1 ? '' : 's'} copied to ${mealLabelOf(toMeal)} ✓`);
+  // A copy started from a calendar day leaves that day's digest open behind the
+  // sheet — and it was built before the copy, so it would show a day missing the
+  // items just added to it. Close it rather than lie.
+  const hm = document.getElementById('heatmap-popup-bg');
+  if (hm && hm.style.display === 'flex' && typeof closeHeatmapPopup === 'function') closeHeatmapPopup();
+  toast(`${keep.length} item${keep.length === 1 ? '' : 's'} copied to ${label} ✓`);
   hapticTick();
   render();
 }
+
 // Reuses the existing bundle modal (its name-dedupe + validation) pre-filled
 // from the meal, so there's only ever one bundle-creation path.
 function bundleFromMealToday(mealKey) {
@@ -17176,6 +17347,7 @@ function lvActionsHTML(e) {
       <button class="edit-btn" onclick="deleteEntry('${e.id}')">❌ Remove</button>
       <button class="edit-btn" onclick="openEditModal('${e.id}')">✏️ Edit</button>
       <button class="edit-btn" onclick="relogEntryNow('${e.id}')">🔁 Again</button>
+      <button class="edit-btn" onclick="openMealCopyFromEntry('${e.id}')" title="Copy this whole sitting into another meal">🍽️ Copy meal</button>
       <button class="edit-btn" onclick="jumpToSummaryRow(${escAttr(JSON.stringify(e.food))})">📋 Summary</button>
     </div>
     <div class="lv-symptoms">${symptomsHTML(e)}</div>
@@ -17188,7 +17360,7 @@ function denseListHTML(mealOrder, groups, mealLabels, suspectFoods) {
   return head + mealOrder.filter(m => groups[m].length).map(mealKey => `
     <div class="lv-group">
       <div class="lv-group-head">${mealLabels[mealKey]} · ${groups[mealKey].length}</div>
-      <div class="lv-card">${(occ => { const need = occasionsNeedingHeadings(occ); return occ.map((items, oi) => `${need.has(oi) ? `<div class="lv-sub">🕐 ${esc(occasionLabel(items))} · ${items.length}</div>` : ''}${items.map(e => {
+      <div class="lv-card">${(occ => { const need = occasionsNeedingHeadings(occ); return occ.map((items, oi) => `${need.has(oi) ? `<div class="lv-sub">🕐 ${esc(occasionLabel(items))} · ${items.length}<button onclick="openMealCopyFromEntry('${items[0].id}')" title="Copy this sitting into another meal" style="margin-left:8px; text-transform:none; letter-spacing:0; font-size:10.5px; font-weight:700; padding:2px 7px; border-radius:6px; border:1px solid var(--border); background:var(--card); color:var(--muted); cursor:pointer;">📋 Copy</button></div>` : ''}${items.map(e => {
         const ago = hoursAgoLabel(e.date, e.logTime);
         const nSym = e.symptoms ? Object.keys(e.symptoms).filter(k => e.symptoms[k]).length : 0;
         const meta = [e.date !== today() ? '📅 ' + fmt(e.date) : '', e.logTime ? '🕐 ' + e.logTime : '', ago].filter(Boolean).join(' · ');
@@ -17451,14 +17623,14 @@ function renderPending() {
     firstSection = false;
     // v69: meal actions — only when that meal has items logged TODAY
     const mealActs = mealEntriesToday(mealKey).length ? `
-      <button onclick="openMealCopy(${escAttr(JSON.stringify(mealKey))})" title="Copy today's items of this meal into another meal of today" style="text-transform:none; letter-spacing:0; font-size:11px; font-weight:700; padding:3px 9px; border-radius:6px; border:1px solid var(--border); background:var(--card); color:var(--muted); cursor:pointer;">📋 Copy to…</button>
+      <button onclick="openMealCopy(${escAttr(JSON.stringify(mealKey))})" title="Copy today's items of this meal into another meal — pick the items, date and time first" style="text-transform:none; letter-spacing:0; font-size:11px; font-weight:700; padding:3px 9px; border-radius:6px; border:1px solid var(--border); background:var(--card); color:var(--muted); cursor:pointer;">📋 Copy to…</button>
       <button onclick="bundleFromMealToday(${escAttr(JSON.stringify(mealKey))})" title="Save today's items of this meal as a reusable bundle" style="text-transform:none; letter-spacing:0; font-size:11px; font-weight:700; padding:3px 9px; border-radius:6px; border:1px solid var(--border); background:var(--card); color:var(--muted); cursor:pointer;">🍱 Bundle</button>` : '';
     html += `<div class="meal-section-header">${mealLabels[mealKey]}${mealActs}</div>`;
     // v103: same occasion split as the Dense view — a snack group spanning the
     // afternoon and the evening is not one sitting. Silent on a one-sitting meal.
     const _occ = splitIntoOccasions(group);
     const _occNeed = occasionsNeedingHeadings(_occ);
-    html += _occ.map((items, _oi) => (_occNeed.has(_oi) ? `<div class="meal-subsection">🕐 ${esc(occasionLabel(items))} · ${items.length}</div>` : '') + items.map(e => {
+    html += _occ.map((items, _oi) => (_occNeed.has(_oi) ? `<div class="meal-subsection">🕐 ${esc(occasionLabel(items))} · ${items.length}<button onclick="openMealCopyFromEntry('${items[0].id}')" title="Copy this sitting into another meal" style="margin-left:8px; text-transform:none; letter-spacing:0; font-size:10.5px; font-weight:700; padding:2px 7px; border-radius:6px; border:1px solid var(--border); background:var(--card); color:var(--muted); cursor:pointer;">📋 Copy</button></div>` : '') + items.map(e => {
       const agoTag = hoursAgoLabel(e.date, e.logTime);
       const suspectTag = suspectFoods.has(e.food) ? `<span class="suspect-flag" style="margin:0;" title="${(s => s ? `${s.neg} of ${s.total} rated windows reacted (50%+) — all-time history` : '')(suspectFoods.get(e.food))}">⚠️</span>` : '';
       
@@ -17471,6 +17643,7 @@ return `
             <button class="edit-btn" onclick="deleteEntry('${e.id}')">❌ Remove</button>
             <button class="edit-btn" onclick="openEditModal('${e.id}')">✏️ Edit</button>
             <button class="edit-btn" onclick="relogEntryNow('${e.id}')" title="Log this food again, right now">🔁 Again</button>
+            <button class="edit-btn" onclick="openMealCopyFromEntry('${e.id}')" title="Copy this whole sitting into another meal — pick the items, date and time">🍽️ Copy meal</button>
             <button class="edit-btn" onclick="jumpToSummaryRow(${escAttr(JSON.stringify(e.food))})" title="Open this food's row in 📋 Summary — its label, notes and reaction history">📋 Summary</button>
           </div>
 
@@ -17538,6 +17711,7 @@ function renderHistory() {
             <button class="edit-btn" onclick="deleteEntry('${e.id}')">❌ Remove</button>
             <button class="edit-btn" onclick="openEditModal('${e.id}')">✏️ Edit</button>
             <button class="edit-btn" onclick="relogEntryNow('${e.id}')" title="Log this food again, right now">🔁 Again</button>
+            <button class="edit-btn" onclick="openMealCopyFromEntry('${e.id}')" title="Copy this whole sitting into another meal — pick the items, date and time">🍽️ Copy meal</button>
             <button class="edit-btn" onclick="jumpToSummaryRow(${escAttr(JSON.stringify(e.food))})" title="Open this food's row in 📋 Summary — its label, notes and reaction history">📋 Summary</button>
           </div>
 
@@ -23257,14 +23431,47 @@ function runSelfTest() {
       ? true : JSON.stringify([n1.trialMetrics, n2.trialMetrics]);
   });
 
-  // ── meal copy (v69) ──
-  t('meal copy: skips foods already in the target meal and de-dupes within the copy', () => {
+  // ── meal copy (v69; review sheet v113) ──
+  t('meal copy: one row per food, de-duped, with the target-meal clash flagged', () => {
     const src = [{ food: 'Rice' }, { food: 'Lettuce' }, { food: 'Rice' }];
-    const plan = mealCopyPlan(src, [{ food: 'Lettuce' }]);
-    return (plan.length === 1 && plan[0].food === 'Rice') ? true : JSON.stringify(plan.map(x => x.food));
+    const rows = mealCopyRows(src, [{ food: 'Lettuce' }]);
+    return (rows.length === 2 && rows[0].food === 'Rice' && rows[0].already === false
+      && rows[1].food === 'Lettuce' && rows[1].already === true)
+      ? true : JSON.stringify(rows);
   });
   t('meal copy: an empty target copies everything once', () =>
-    mealCopyPlan([{ food: 'A' }, { food: 'B' }], []).length === 2 ? true : 'expected 2');
+    mealCopyKept(mealCopyRows([{ food: 'A' }, { food: 'B' }], []), new Set()).length === 2 ? true : 'expected 2');
+  t('meal copy: unticked items are dropped and clashes can never be written', () => {
+    const rows = mealCopyRows([{ food: 'A' }, { food: 'B' }, { food: 'C' }], [{ food: 'C' }]);
+    const kept = mealCopyKept(rows, new Set(['B', 'C'])).map(r => r.food);
+    return JSON.stringify(kept) === '["A"]' ? true : JSON.stringify(kept);
+  });
+  t('meal copy: a sitting is taken from the WHOLE meal, not just its pending items', () => {
+    // The Logs list only draws entries still waiting for marks. Sourcing a copy
+    // from what it draws would silently drop the ones already marked.
+    const all = [
+      { id: 'a', date: '2026-10-10', mealType: 'breakfast', logTime: '08:00', food: 'Eggs' },
+      { id: 'b', date: '2026-10-10', mealType: 'breakfast', logTime: '08:05', food: 'Toast' },
+      { id: 'c', date: '2026-10-10', mealType: 'breakfast', logTime: '19:30', food: 'LateSnack' },
+      { id: 'd', date: '2026-10-11', mealType: 'breakfast', logTime: '08:00', food: 'OtherDay' }
+    ];
+    const got = occasionEntriesOf(all, all[1]).map(e => e.id);
+    return JSON.stringify(got) === '["a","b"]' ? true : JSON.stringify(got);
+  });
+  t('meal copy: a sitting stops at the occasion gap and at the day boundary', () => {
+    const all = [
+      { id: 'a', date: '2026-10-10', mealType: 'snack', logTime: '14:00', food: 'A' },
+      { id: 'b', date: '2026-10-10', mealType: 'snack', logTime: '21:00', food: 'B' },
+      { id: 'c', date: '2026-10-10', mealType: 'snack', logTime: '21:20', food: 'C' }
+    ];
+    const got = occasionEntriesOf(all, all[2]).map(e => e.id);
+    return JSON.stringify(got) === '["b","c"]' ? true : JSON.stringify(got);
+  });
+  t('meal copy: the item type rides along, the occasion flags do not', () => {
+    const rows = mealCopyRows([{ food: 'Rice', type: 'grain', solo: true, age: 'leftover' }], []);
+    return (rows[0].type === 'grain' && rows[0].solo === undefined && rows[0].age === undefined)
+      ? true : JSON.stringify(rows[0]);
+  });
 
   // ── backup safety (v68 audit-2, batch A) ──
   t('backup: absent bundles/archives are null (live kept); present ones are arrays', () => {
