@@ -3542,6 +3542,50 @@ body.dark .fp-verdict-pill.gentler { background:rgba(30,132,73,0.15); color:#7DD
   .fp-imp-next { flex-basis:52px; }
 }
 
+/* ═══ Meal markers ═══════════════════════════════════════════════════════════
+   Each meal type carries one colour so a glance tells breakfast from dinner:
+   a tinted pill on the group heading and a matching stripe down the card.
+   .meal-tag-<type> sets --meal-c; everything below reads only that.  Themes
+   re-tune the five --meal-* tokens, never these rules. */
+:root {
+  --meal-breakfast: #D9900B;   /* sunrise amber */
+  --meal-lunch:     #2389C9;   /* midday sky */
+  --meal-snack:     #2E9B5F;   /* fresh green */
+  --meal-dinner:    #6B5CC4;   /* evening indigo */
+  --meal-other:     #8A97A6;
+}
+body.dark {
+  --meal-breakfast: #F0B44C;
+  --meal-lunch:     #5AB0E6;
+  --meal-snack:     #5CC28A;
+  --meal-dinner:    #9D90EC;
+  --meal-other:     #8A97A6;
+}
+.meal-tag-breakfast { --meal-c: var(--meal-breakfast); }
+.meal-tag-lunch     { --meal-c: var(--meal-lunch); }
+.meal-tag-snack     { --meal-c: var(--meal-snack); }
+.meal-tag-dinner    { --meal-c: var(--meal-dinner); }
+.meal-tag-other     { --meal-c: var(--meal-other); }
+.meal-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 10px; border-radius: 999px;
+  color: var(--meal-c);
+  background: color-mix(in srgb, var(--meal-c) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--meal-c) 32%, transparent);
+  letter-spacing: .08em;
+}
+/* Dense / Two-pane */
+.lv-group[class*="meal-tag-"] .lv-group-head { padding: 0 0 8px; }
+.lv-group[class*="meal-tag-"] .lv-card { border-left: 4px solid var(--meal-c); }
+/* Classic list + History cards (the ids out-rank the older !important accents) */
+#pending-list .meal-section-header[class*="meal-tag-"] { color: var(--meal-c) !important; }
+#pending-list .meal-section-header[class*="meal-tag-"]::before,
+#pending-list .meal-section-header[class*="meal-tag-"]::after { background: color-mix(in srgb, var(--meal-c) 35%, var(--border)) !important; }
+#pending-list .pending-entry[class*="meal-tag-"],
+#history-list .history-entry[class*="meal-tag-"] { border-left: 4px solid var(--meal-c) !important; }
+body.visual-theme-warm #pending-list .pending-entry[class*="meal-tag-"],
+body.visual-theme-warm #history-list .history-entry[class*="meal-tag-"] { border-left: 5px solid var(--meal-c) !important; }
+
 /* ═══════════════════════════════════════════════════════════════════════════
    v71 — OPT-IN LOOKS.  Everything from here to the end of this stylesheet is
    inert until the user picks something in the 🎨 Appearance picker — with ONE
@@ -3564,404 +3608,372 @@ body.dark .fp-verdict-pill.gentler { background:rgba(30,132,73,0.15); color:#7DD
    See versions/_livefix/THEME-INTEGRATION.md for the wiring.
    ========================================================================== */
 
-/* Graphite · dark · Violet accent */
+/* ── v108 dark themes ────────────────────────────────────────────────────────
+   Six dark looks built on one layered model — page (--bg) < chrome (--navy /
+   --surface-1) < card (--card) < raised controls (--surface-3) — with the
+   window, severity and meal ramps softened for dark grounds and tinted onto
+   each theme's own card.  Generated, with every ink/ground pair verified
+   (text >= 7:1, muted and coloured inks >= 4.5:1), by
+       python3 tools/gen-dark-palettes.py
+   Edit the theme table there and paste its output here rather than hand-tuning
+   a hex.  They replace the v71 dark set (graphite/midnight/ember/dim/eclipse/
+   evergreen/carbon); stored keys of the retired ones are mapped in
+   PALETTE_LEGACY so nobody is dropped back to the light look. */
+
+/* Slate · dark — cool blue-grey, the default dark */
+body.visual-theme-slate {
+  --bg: #14181e;
+  --card: #1c222a;
+  --border: #2d3540;
+  --text: #e7ebf0;
+  --muted: #8f99a6;
+  --navy: #1a1f27;
+  --pos: #4fc48b;
+  --neg: #f07b74;
+  --warn: #e2b44c;
+  --w1: #6aa7ef;
+  --w2: #45bdb2;
+  --w3: #e2a15a;
+  --w4: #b398ec;
+  --sev1: #f2867e;
+  --sev2: #f0a679;
+  --sev3: #e5c565;
+  --sev4: #9fcf86;
+  --sev5: #56c78c;
+  --on-fill: #0d1014;
+  --on-navy: #e7ebf0;
+  --pos-tint: #243c3a;
+  --neg-tint: #3e3036;
+  --warn-tint: #3c392f;
+  --sev1-bg: #403338;
+  --sev2-bg: #403837;
+  --sev3-bg: #3e3e34;
+  --sev4-bg: #323f3a;
+  --sev5-bg: #263e3b;
+  --w1-bg: #29394b;
+  --w2-bg: #233c41;
+  --w3-bg: #3e3832;
+  --w4-bg: #36364b;
+  --surface-1: #1a1f27;
+  --surface-2: #1c222a;
+  --surface-3: #252c36;
+  --text-2: #c4ccd6;
+  --text-4: #646c76;
+  --hairline: rgba(255,255,255,0.06);
+  --border-strong: #5c626c;
+  --accent: #76a9fa;
+  --accent-hover: #8bb6fb;
+  --accent-tint: #2a384b;
+  --on-accent: #0d1014;
+  --focus: #76a9fa;
+  --selection-bg: #3c5173;
+  --selection-fg: #e7ebf0;
+  --scrim: rgba(0,0,0,0.62);
+  --meal-breakfast: #f0b44c;
+  --meal-lunch: #5ab0e6;
+  --meal-snack: #5cc28a;
+  --meal-dinner: #a394ee;
+  --meal-other: #8e99a8;
+  --ui-card-shadow: 0 1px 2px rgba(0,0,0,0.30), 0 0 0 1px var(--hairline);
+  --ui-btn-shadow: none;
+  color-scheme: dark;
+}
+
+/* Navy · dark — deep navy — the app's own brand colour, at night */
+body.visual-theme-navy {
+  --bg: #0e1525;
+  --card: #162139;
+  --border: #283754;
+  --text: #e3eaf6;
+  --muted: #8d9bb6;
+  --navy: #131d33;
+  --pos: #4fc48b;
+  --neg: #f07b74;
+  --warn: #e2b44c;
+  --w1: #6aa7ef;
+  --w2: #45bdb2;
+  --w3: #e2a15a;
+  --w4: #b398ec;
+  --sev1: #f2867e;
+  --sev2: #f0a679;
+  --sev3: #e5c565;
+  --sev4: #9fcf86;
+  --sev5: #56c78c;
+  --on-fill: #090e18;
+  --on-navy: #e3eaf6;
+  --pos-tint: #1f3b46;
+  --neg-tint: #392f42;
+  --warn-tint: #37393c;
+  --sev1-bg: #3b3245;
+  --sev2-bg: #3b3844;
+  --sev3-bg: #393d40;
+  --sev4-bg: #2d3f46;
+  --sev5-bg: #213d47;
+  --w1-bg: #243858;
+  --w2-bg: #1e3c4e;
+  --w3-bg: #39373f;
+  --w4-bg: #313557;
+  --surface-1: #131d33;
+  --surface-2: #162139;
+  --surface-3: #1e2b47;
+  --text-2: #bfcbe0;
+  --text-4: #616c83;
+  --hairline: rgba(255,255,255,0.06);
+  --border-strong: #57647c;
+  --accent: #7fb2ff;
+  --accent-hover: #92beff;
+  --accent-tint: #273859;
+  --on-accent: #090e18;
+  --focus: #7fb2ff;
+  --selection-bg: #3b547e;
+  --selection-fg: #e3eaf6;
+  --scrim: rgba(0,0,0,0.62);
+  --meal-breakfast: #f0b44c;
+  --meal-lunch: #5ab0e6;
+  --meal-snack: #5cc28a;
+  --meal-dinner: #a394ee;
+  --meal-other: #8e99a8;
+  --ui-card-shadow: 0 1px 2px rgba(0,0,0,0.30), 0 0 0 1px var(--hairline);
+  --ui-btn-shadow: none;
+  color-scheme: dark;
+}
+
+/* Graphite · dark — neutral grey, no tint */
 body.visual-theme-graphite {
-  /* ── tokens Tracker.html already reads ───────────────────────────── */
-  --bg: #08090a;
-  --card: #191a1b;                 /* = --surface-2 */
-  --border: #2e3031;
-  --text: #f7f8f8;
-  --muted: #8e9398;               /* = --text-3, a TEXT step */
-  --navy: #0f1011;                 /* header/nav/table-head ground */
-  --pos: #2caf61;
-  --neg: #f37267;
-  --w1: #579afb;
-  --w2: #04aab7;
-  --w3: #e77e24;
-  --w4: #cb7bdd;
-  --sev1: #ff9e93;
-  --sev2: #fe945d;
-  --sev3: #cda111;
-  --sev4: #7aaf35;
-  --sev5: #16b066;
-  --ui-card-shadow: 0 4px 16px rgba(0,0,0,0.55);
-  --ui-btn-shadow: 0 1px 2px rgba(0,0,0,0.45);
-  /* ── new tokens: the fill/ink patch below reads these ─────────────── */
-  --on-fill: #08090a;           /* ink for solid --wN / --pos / --neg fills */
-  --on-navy: #f7f8f8;
-  --pos-tint: #1f3325;
-  --neg-tint: #3f2927;
-  --warn: #dd9c10;
-  --warn-tint: #3d311f;
-  --sev1-bg: #432c2a;
-  --sev2-bg: #422e24;
-  --sev3-bg: #3a321f;
-  --sev4-bg: #2d3724;
-  --sev5-bg: #1f3327;
-  --w1-bg: #232f41;
-  --w2-bg: #163337;
-  --w3-bg: #3d2a1e;
-  --w4-bg: #372a3b;
-  /* ── new tokens: headroom, nothing reads them yet ─────────────────── */
-  --surface-1: #0f1011;
-  --surface-2: #191a1b;
-  --surface-3: #282828;
-  --text-2: #d0d6e0;
-  --text-4: #5d6267;             /* DECORATIVE ONLY — never body copy */
-  --hairline: rgba(255,255,255,0.055);
-  --border-strong: #747677;
-  --accent: #8884fe;
-  --accent-hover: #9fa0fe;
-  --accent-tint: #26263c;
-  --on-accent: #08090a;
-  --focus: #9fa0fe;
-  --selection-bg: #353659;
-  --selection-fg: #f7f8f8;
-  --scrim: rgba(0,0,0,0.66);
+  --bg: #161617;
+  --card: #1f1f22;
+  --border: #333338;
+  --text: #ececee;
+  --muted: #98989f;
+  --navy: #1c1c1e;
+  --pos: #4fc48b;
+  --neg: #f07b74;
+  --warn: #e2b44c;
+  --w1: #6aa7ef;
+  --w2: #45bdb2;
+  --w3: #e2a15a;
+  --w4: #b398ec;
+  --sev1: #f2867e;
+  --sev2: #f0a679;
+  --sev3: #e5c565;
+  --sev4: #9fcf86;
+  --sev5: #56c78c;
+  --on-fill: #0e0e0f;
+  --on-navy: #ececee;
+  --pos-tint: #273933;
+  --neg-tint: #402e2f;
+  --warn-tint: #3e3729;
+  --sev1-bg: #433132;
+  --sev2-bg: #433631;
+  --sev3-bg: #413b2d;
+  --sev4-bg: #353d33;
+  --sev5-bg: #283c34;
+  --w1-bg: #2c3645;
+  --w2-bg: #253a3a;
+  --w3-bg: #40352c;
+  --w4-bg: #383444;
+  --surface-1: #1c1c1e;
+  --surface-2: #1f1f22;
+  --surface-3: #29292d;
+  --text-2: #c9c9ce;
+  --text-4: #6a6a6f;
+  --hairline: rgba(255,255,255,0.06);
+  --border-strong: #616166;
+  --accent: #64a2ff;
+  --accent-hover: #7bb0ff;
+  --accent-tint: #2a3445;
+  --on-accent: #0e0e0f;
+  --focus: #64a2ff;
+  --selection-bg: #374d6f;
+  --selection-fg: #ececee;
+  --scrim: rgba(0,0,0,0.62);
+  --meal-breakfast: #f0b44c;
+  --meal-lunch: #5ab0e6;
+  --meal-snack: #5cc28a;
+  --meal-dinner: #a394ee;
+  --meal-other: #8e99a8;
+  --ui-card-shadow: 0 1px 2px rgba(0,0,0,0.30), 0 0 0 1px var(--hairline);
+  --ui-btn-shadow: none;
   color-scheme: dark;
 }
 
-/* Midnight · dark · Azure accent */
-body.visual-theme-midnight {
-  /* ── tokens Tracker.html already reads ───────────────────────────── */
-  --bg: #070b12;
-  --card: #171b23;                 /* = --surface-2 */
-  --border: #2d3138;
-  --text: #dfeef7;
-  --muted: #88969e;               /* = --text-3, a TEXT step */
-  --navy: #0d1119;                 /* header/nav/table-head ground */
-  --pos: #2eb162;
-  --neg: #f57469;
-  --w1: #599cfd;
-  --w2: #0cacb9;
-  --w3: #e98026;
-  --w4: #cc7dde;
-  --sev1: #ffa196;
-  --sev2: #fe9762;
-  --sev3: #cfa316;
-  --sev4: #7cb138;
-  --sev5: #1ab268;
-  --ui-card-shadow: 0 4px 16px rgba(0,0,0,0.55);
-  --ui-btn-shadow: 0 1px 2px rgba(0,0,0,0.45);
-  /* ── new tokens: the fill/ink patch below reads these ─────────────── */
-  --on-fill: #070b12;           /* ink for solid --wN / --pos / --neg fills */
-  --on-navy: #dfeef7;
-  --pos-tint: #20342a;
-  --neg-tint: #402a2a;
-  --warn: #df9e16;
-  --warn-tint: #3d3223;
-  --sev1-bg: #432d2d;
-  --sev2-bg: #422f28;
-  --sev3-bg: #3a3322;
-  --sev4-bg: #2d3828;
-  --sev5-bg: #1f352b;
-  --w1-bg: #233145;
-  --w2-bg: #16343a;
-  --w3-bg: #3d2c22;
-  --w4-bg: #382b3f;
-  /* ── new tokens: headroom, nothing reads them yet ─────────────────── */
-  --surface-1: #0d1119;
-  --surface-2: #171b23;
-  --surface-3: #242a32;
-  --text-2: #b7c6ce;
-  --text-4: #57646c;             /* DECORATIVE ONLY — never body copy */
-  --hairline: rgba(255,255,255,0.055);
-  --border-strong: #71777f;
-  --accent: #7dbdfe;
-  --accent-hover: #a9d2fe;
-  --accent-tint: #233649;
-  --on-accent: #070b12;
-  --focus: #a9d2fe;
-  --selection-bg: #1f3d5b;
-  --selection-fg: #dfeef7;
-  --scrim: rgba(0,0,0,0.66);
+/* Mocha · dark — warm espresso brown */
+body.visual-theme-mocha {
+  --bg: #191512;
+  --card: #241d19;
+  --border: #3a3029;
+  --text: #efe6dc;
+  --muted: #a6988a;
+  --navy: #211b17;
+  --pos: #4fc48b;
+  --neg: #f07b74;
+  --warn: #e2b44c;
+  --w1: #6aa7ef;
+  --w2: #45bdb2;
+  --w3: #e2a15a;
+  --w4: #b398ec;
+  --sev1: #f2867e;
+  --sev2: #f0a679;
+  --sev3: #e5c565;
+  --sev4: #9fcf86;
+  --sev5: #56c78c;
+  --on-fill: #100e0c;
+  --on-navy: #efe6dc;
+  --pos-tint: #2b382b;
+  --neg-tint: #452c28;
+  --warn-tint: #423521;
+  --sev1-bg: #472f2a;
+  --sev2-bg: #473429;
+  --sev3-bg: #453a26;
+  --sev4-bg: #393b2c;
+  --sev5-bg: #2c3a2d;
+  --w1-bg: #30343d;
+  --w2-bg: #2a3833;
+  --w3-bg: #443324;
+  --w4-bg: #3c323d;
+  --surface-1: #211b17;
+  --surface-2: #241d19;
+  --surface-3: #2e2620;
+  --text-2: #d4c8bb;
+  --text-4: #756a60;
+  --hairline: rgba(255,255,255,0.06);
+  --border-strong: #675e56;
+  --accent: #e3aa6c;
+  --accent-hover: #e7b782;
+  --accent-tint: #433426;
+  --on-accent: #100e0c;
+  --focus: #e3aa6c;
+  --selection-bg: #674e36;
+  --selection-fg: #efe6dc;
+  --scrim: rgba(0,0,0,0.62);
+  --meal-breakfast: #f0b44c;
+  --meal-lunch: #5ab0e6;
+  --meal-snack: #5cc28a;
+  --meal-dinner: #a394ee;
+  --meal-other: #8e99a8;
+  --ui-card-shadow: 0 1px 2px rgba(0,0,0,0.30), 0 0 0 1px var(--hairline);
+  --ui-btn-shadow: none;
   color-scheme: dark;
 }
 
-/* Ember · dark · Amber accent */
-body.visual-theme-ember {
-  /* ── tokens Tracker.html already reads ───────────────────────────── */
-  --bg: #100c0a;
-  --card: #201b19;                 /* = --surface-2 */
-  --border: #36312f;
-  --text: #f1e8de;
-  --muted: #9c948b;               /* = --text-3, a TEXT step */
-  --navy: #16120f;                 /* header/nav/table-head ground */
-  --pos: #3db167;
-  --neg: #f1796d;
-  --w1: #609ef9;
-  --w2: #12adba;
-  --w3: #e68436;
-  --w4: #cb81db;
-  --sev1: #ffa398;
-  --sev2: #ff9863;
-  --sev3: #d2a407;
-  --sev4: #7fb143;
-  --sev5: #31b26d;
-  --ui-card-shadow: 0 4px 16px rgba(0,0,0,0.55);
-  --ui-btn-shadow: 0 1px 2px rgba(0,0,0,0.45);
-  /* ── new tokens: the fill/ink patch below reads these ─────────────── */
-  --on-fill: #100c0a;           /* ink for solid --wN / --pos / --neg fills */
-  --on-navy: #f1e8de;
-  --pos-tint: #253527;
-  --neg-tint: #432b28;
-  --warn: #e1a01c;
-  --warn-tint: #40321f;
-  --sev1-bg: #462d2a;
-  --sev2-bg: #452f24;
-  --sev3-bg: #3d331e;
-  --sev4-bg: #303824;
-  --sev5-bg: #243528;
-  --w1-bg: #283243;
-  --w2-bg: #1b3537;
-  --w3-bg: #412d20;
-  --w4-bg: #3b2c3d;
-  /* ── new tokens: headroom, nothing reads them yet ─────────────────── */
-  --surface-1: #16120f;
-  --surface-2: #201b19;
-  --surface-3: #2e2a27;
-  --text-2: #cdc4bb;
-  --text-4: #696159;             /* DECORATIVE ONLY — never body copy */
-  --hairline: rgba(255,255,255,0.055);
-  --border-strong: #7c7774;
-  --accent: #f2c744;
-  --accent-hover: #ffe08d;
-  --accent-tint: #3d331c;
-  --on-accent: #100c0a;
-  --focus: #ffe08d;
-  --selection-bg: #493a10;
-  --selection-fg: #f1e8de;
-  --scrim: rgba(0,0,0,0.66);
+/* Forest · dark — deep green-grey */
+body.visual-theme-forest {
+  --bg: #111715;
+  --card: #19231f;
+  --border: #2b3833;
+  --text: #e2ede7;
+  --muted: #8ea299;
+  --navy: #161f1c;
+  --pos: #4fc48b;
+  --neg: #f07b74;
+  --warn: #e2b44c;
+  --w1: #6aa7ef;
+  --w2: #45bdb2;
+  --w3: #e2a15a;
+  --w4: #b398ec;
+  --sev1: #f2867e;
+  --sev2: #f0a679;
+  --sev3: #e5c565;
+  --sev4: #9fcf86;
+  --sev5: #56c78c;
+  --on-fill: #0b0f0e;
+  --on-navy: #e2ede7;
+  --pos-tint: #223d30;
+  --neg-tint: #3b312d;
+  --warn-tint: #393a26;
+  --sev1-bg: #3e342f;
+  --sev2-bg: #3e392e;
+  --sev3-bg: #3c3f2b;
+  --sev4-bg: #304031;
+  --sev5-bg: #233f32;
+  --w1-bg: #273942;
+  --w2-bg: #203d38;
+  --w3-bg: #3b3829;
+  --w4-bg: #333742;
+  --surface-1: #161f1c;
+  --surface-2: #19231f;
+  --surface-3: #212d28;
+  --text-2: #c0d0c7;
+  --text-4: #62716b;
+  --hairline: rgba(255,255,255,0.06);
+  --border-strong: #596560;
+  --accent: #5fc79a;
+  --accent-hover: #77cfa9;
+  --accent-tint: #243d33;
+  --on-accent: #0b0f0e;
+  --focus: #5fc79a;
+  --selection-bg: #325c4a;
+  --selection-fg: #e2ede7;
+  --scrim: rgba(0,0,0,0.62);
+  --meal-breakfast: #f0b44c;
+  --meal-lunch: #5ab0e6;
+  --meal-snack: #5cc28a;
+  --meal-dinner: #a394ee;
+  --meal-other: #8e99a8;
+  --ui-card-shadow: 0 1px 2px rgba(0,0,0,0.30), 0 0 0 1px var(--hairline);
+  --ui-btn-shadow: none;
   color-scheme: dark;
 }
 
-/* Dim Room · dark · Dusty Rose accent */
-body.visual-theme-dim {
-  /* ── tokens Tracker.html already reads ───────────────────────────── */
-  --bg: #14171b;
-  --card: #1f2327;                 /* = --surface-2 */
-  --border: #36393e;
-  --text: #d5dde3;
-  --muted: #929a9f;               /* = --text-3, a TEXT step */
-  --navy: #171b1f;                 /* header/nav/table-head ground */
-  --pos: #68b07c;
-  --neg: #de8a80;
-  --w1: #77a2e1;
-  --w2: #36afbc;
-  --w3: #d59161;
-  --w4: #c18ecd;
-  --sev1: #feaa9f;
-  --sev2: #f1a47e;
-  --sev3: #caaa5b;
-  --sev4: #8eb169;
-  --sev5: #63b080;
-  --ui-card-shadow: 0 4px 16px rgba(0,0,0,0.55);
-  --ui-btn-shadow: 0 1px 2px rgba(0,0,0,0.45);
-  /* ── new tokens: the fill/ink patch below reads these ─────────────── */
-  --on-fill: #14171b;           /* ink for solid --wN / --pos / --neg fills */
-  --on-navy: #d5dde3;
-  --pos-tint: #25392d;
-  --neg-tint: #452e2d;
-  --warn: #d5a85f;
-  --warn-tint: #423625;
-  --sev1-bg: #483130;
-  --sev2-bg: #47332a;
-  --sev3-bg: #3f3725;
-  --sev4-bg: #313c2a;
-  --sev5-bg: #23392d;
-  --w1-bg: #283547;
-  --w2-bg: #1a383d;
-  --w3-bg: #423025;
-  --w4-bg: #3c2f42;
-  /* ── new tokens: headroom, nothing reads them yet ─────────────────── */
-  --surface-1: #171b1f;
-  --surface-2: #1f2327;
-  --surface-3: #2b2e33;
-  --text-2: #adb5bb;
-  --text-4: #62696e;             /* DECORATIVE ONLY — never body copy */
-  --hairline: rgba(255,255,255,0.055);
-  --border-strong: #787c81;
-  --accent: #d28290;
-  --accent-hover: #ea98a5;
-  --accent-tint: #3f272d;
-  --on-accent: #14171b;
-  --focus: #ea98a5;
-  --selection-bg: #59323b;
-  --selection-fg: #d5dde3;
-  --scrim: rgba(0,0,0,0.66);
+/* OLED Black · dark — true black for OLED phones, with lifted cards so it still reads in layers */
+body.visual-theme-oled {
+  --bg: #000000;
+  --card: #121315;
+  --border: #26282c;
+  --text: #ededed;
+  --muted: #8e9196;
+  --navy: #0a0a0b;
+  --pos: #4fc48b;
+  --neg: #f07b74;
+  --warn: #e2b44c;
+  --w1: #6aa7ef;
+  --w2: #45bdb2;
+  --w3: #e2a15a;
+  --w4: #b398ec;
+  --sev1: #f2867e;
+  --sev2: #f0a679;
+  --sev3: #e5c565;
+  --sev4: #9fcf86;
+  --sev5: #56c78c;
+  --on-fill: #0b0c0e;
+  --on-navy: #ededed;
+  --pos-tint: #1c2f28;
+  --neg-tint: #362424;
+  --warn-tint: #332d1e;
+  --sev1-bg: #382727;
+  --sev2-bg: #382c26;
+  --sev3-bg: #363123;
+  --sev4-bg: #2a3328;
+  --sev5-bg: #1e3229;
+  --w1-bg: #212c3a;
+  --w2-bg: #1b3030;
+  --w3-bg: #352b21;
+  --w4-bg: #2d2a3a;
+  --surface-1: #0a0a0b;
+  --surface-2: #121315;
+  --surface-3: #1b1c1f;
+  --text-2: #c8c9cc;
+  --text-4: #5c5e62;
+  --hairline: rgba(255,255,255,0.06);
+  --border-strong: #58595c;
+  --accent: #7aa7ff;
+  --accent-hover: #8eb4ff;
+  --accent-tint: #232b3a;
+  --on-accent: #0b0c0e;
+  --focus: #7aa7ff;
+  --selection-bg: #364767;
+  --selection-fg: #ededed;
+  --scrim: rgba(0,0,0,0.62);
+  --meal-breakfast: #f0b44c;
+  --meal-lunch: #5ab0e6;
+  --meal-snack: #5cc28a;
+  --meal-dinner: #a394ee;
+  --meal-other: #8e99a8;
+  --ui-card-shadow: 0 1px 2px rgba(0,0,0,0.30), 0 0 0 1px var(--hairline);
+  --ui-btn-shadow: none;
   color-scheme: dark;
 }
 
-/* Eclipse · dark · Ice Cyan accent */
-body.visual-theme-eclipse {
-  /* ── tokens Tracker.html already reads ───────────────────────────── */
-  --bg: #060708;
-  --card: #141517;                 /* = --surface-2 */
-  --border: #4a4c4e;
-  --text: #f5f9fc;
-  --muted: #aaadb0;               /* = --text-3, a TEXT step */
-  --navy: #0c0d0f;                 /* header/nav/table-head ground */
-  --pos: #5ac17b;
-  --neg: #ff8d81;
-  --w1: #79affe;
-  --w2: #0cbfce;
-  --w3: #f49652;
-  --w4: #d994e9;
-  --sev1: #feb4ab;
-  --sev2: #fead85;
-  --sev3: #deb23c;
-  --sev4: #8fbf5a;
-  --sev5: #52c281;
-  --ui-card-shadow: 0 4px 16px rgba(0,0,0,0.55);
-  --ui-btn-shadow: 0 1px 2px rgba(0,0,0,0.45);
-  /* ── new tokens: the fill/ink patch below reads these ─────────────── */
-  --on-fill: #060708;           /* ink for solid --wN / --pos / --neg fills */
-  --on-navy: #f5f9fc;
-  --pos-tint: #112418;
-  --neg-tint: #301a19;
-  --warn: #dea233;
-  --warn-tint: #291e0c;
-  --sev1-bg: #422c29;
-  --sev2-bg: #3f2b22;
-  --sev3-bg: #302915;
-  --sev4-bg: #1d2614;
-  --sev5-bg: #102419;
-  --w1-bg: #152031;
-  --w2-bg: #062428;
-  --w3-bg: #2d1c11;
-  --w4-bg: #281b2b;
-  /* ── new tokens: headroom, nothing reads them yet ─────────────────── */
-  --surface-1: #0c0d0f;
-  --surface-2: #141517;
-  --surface-3: #1e2021;
-  --text-2: #c9cdd0;
-  --text-4: #616467;             /* DECORATIVE ONLY — never body copy */
-  --hairline: rgba(255,255,255,0.055);
-  --border-strong: #858788;
-  --accent: #3ae1e6;
-  --accent-hover: #5bf9fd;
-  --accent-tint: #17393a;
-  --on-accent: #060708;
-  --focus: #5bf9fd;
-  --selection-bg: #0c3f42;
-  --selection-fg: #f5f9fc;
-  --scrim: rgba(0,0,0,0.66);
-  color-scheme: dark;
-}
-
-/* Evergreen · dark · Jade accent */
-body.visual-theme-evergreen {
-  /* ── tokens Tracker.html already reads ───────────────────────────── */
-  --bg: #08110e;
-  --card: #161f1c;                 /* = --surface-2 */
-  --border: #2c3532;
-  --text: #e2eee8;
-  --muted: #8f9a94;               /* = --text-3, a TEXT step */
-  --navy: #0d1713;                 /* header/nav/table-head ground */
-  --pos: #40b46a;
-  --neg: #f47b70;
-  --w1: #61a0fc;
-  --w2: #02b0be;
-  --w3: #e88638;
-  --w4: #cd83de;
-  --sev1: #fea79d;
-  --sev2: #fe9d6c;
-  --sev3: #d4a60f;
-  --sev4: #82b446;
-  --sev5: #34b46f;
-  --ui-card-shadow: 0 4px 16px rgba(0,0,0,0.55);
-  --ui-btn-shadow: 0 1px 2px rgba(0,0,0,0.45);
-  /* ── new tokens: the fill/ink patch below reads these ─────────────── */
-  --on-fill: #08110e;           /* ink for solid --wN / --pos / --neg fills */
-  --on-navy: #e2eee8;
-  --pos-tint: #223829;
-  --neg-tint: #432e2a;
-  --warn: #e3a220;
-  --warn-tint: #3e3420;
-  --sev1-bg: #442f2b;
-  --sev2-bg: #433125;
-  --sev3-bg: #3b3520;
-  --sev4-bg: #2d3a26;
-  --sev5-bg: #21382a;
-  --w1-bg: #253444;
-  --w2-bg: #18383b;
-  --w3-bg: #402f22;
-  --w4-bg: #3a2f3f;
-  /* ── new tokens: headroom, nothing reads them yet ─────────────────── */
-  --surface-1: #0d1713;
-  --surface-2: #161f1c;
-  --surface-3: #242f2b;
-  --text-2: #bec9c3;
-  --text-4: #5c6661;             /* DECORATIVE ONLY — never body copy */
-  --hairline: rgba(255,255,255,0.055);
-  --border-strong: #717c78;
-  --accent: #62d493;
-  --accent-hover: #7aeba9;
-  --accent-tint: #223c2d;
-  --on-accent: #08110e;
-  --focus: #7aeba9;
-  --selection-bg: #1b462f;
-  --selection-fg: #e2eee8;
-  --scrim: rgba(0,0,0,0.66);
-  color-scheme: dark;
-}
-
-/* Carbon · dark · Bone accent */
-body.visual-theme-carbon {
-  /* ── tokens Tracker.html already reads ───────────────────────────── */
-  --bg: #0a0a0b;
-  --card: #1a1b1c;                 /* = --surface-2 */
-  --border: #303032;
-  --text: #eeeeee;
-  --muted: #949494;               /* = --text-3, a TEXT step */
-  --navy: #101112;                 /* header/nav/table-head ground */
-  --pos: #62aa77;
-  --neg: #d8857b;
-  --w1: #729ddc;
-  --w2: #2daab6;
-  --w3: #d08b5c;
-  --w4: #bb89c7;
-  --sev1: #faa399;
-  --sev2: #eb9e79;
-  --sev3: #c4a556;
-  --sev4: #89ac64;
-  --sev5: #5eab7b;
-  --ui-card-shadow: 0 4px 16px rgba(0,0,0,0.55);
-  --ui-btn-shadow: 0 1px 2px rgba(0,0,0,0.45);
-  /* ── new tokens: the fill/ink patch below reads these ─────────────── */
-  --on-fill: #0a0a0b;           /* ink for solid --wN / --pos / --neg fills */
-  --on-navy: #eeeeee;
-  --pos-tint: #1a241d;
-  --neg-tint: #2a1d1c;
-  --warn: #cfa259;
-  --warn-tint: #262017;
-  --sev1-bg: #2a1d1c;
-  --sev2-bg: #291e19;
-  --sev3-bg: #252017;
-  --sev4-bg: #1e2319;
-  --sev5-bg: #19241d;
-  --w1-bg: #1b212b;
-  --w2-bg: #152426;
-  --w3-bg: #291e18;
-  --w4-bg: #251e28;
-  /* ── new tokens: headroom, nothing reads them yet ─────────────────── */
-  --surface-1: #101112;
-  --surface-2: #1a1b1c;
-  --surface-3: #29292a;
-  --text-2: #c7c7c7;
-  --text-4: #626262;             /* DECORATIVE ONLY — never body copy */
-  --hairline: rgba(255,255,255,0.055);
-  --border-strong: #767677;
-  --accent: #d9d9d9;
-  --accent-hover: #f0f0f0;
-  --accent-tint: #212122;
-  --on-accent: #0a0a0b;
-  --focus: #f0f0f0;
-  --selection-bg: #242425;
-  --selection-fg: #eeeeee;
-  --scrim: rgba(0,0,0,0.66);
-  color-scheme: dark;
-}
 
 /* Daylight · light · Plum accent */
 body.visual-theme-daylight {
@@ -4384,6 +4396,141 @@ body[data-palette="v2"] .today-hero,
 body[data-palette="v2"] .log-new-card { background: linear-gradient(135deg, var(--navy) 0%, var(--w1) 260%); }
 
 /* ═══════════════════════════════════════════════════════════════════════════
+   PART 3b (v108) — the dark finish.  One component layer shared by every dark
+   palette, reading only tokens, so a theme is just its token block.  What it
+   fixes: chrome that was the same black as the page, inputs that were black
+   wells, the white "Add Entry" slab, and buttons with no hover/focus story.
+   Gated on .dark AND [data-palette], so light palettes and the shipped looks
+   never see it.
+   ═══════════════════════════════════════════════════════════════════════════ */
+body.dark[data-palette="v2"] { background: var(--bg) !important; color: var(--text); }
+body.dark[data-palette="v2"] ::selection { background: var(--selection-bg); color: var(--selection-fg); }
+
+/* chrome: one elevation above the page, separated by a hairline, not a slab */
+body.dark[data-palette="v2"] header,
+body.dark[data-palette="v2"] nav { background: var(--surface-1) !important; box-shadow: none; }
+body.dark[data-palette="v2"] header { border-bottom: 1px solid var(--hairline); }
+body.dark[data-palette="v2"] nav { border-bottom: 1px solid var(--border); }
+body.dark[data-palette="v2"] #bottom-nav { background: var(--surface-1) !important; border-top: 1px solid var(--border); box-shadow: 0 -6px 18px rgba(0,0,0,0.28); }
+body.dark[data-palette="v2"] .bnav-btn:not(.active) { color: var(--muted); }
+body.dark[data-palette="v2"] .bnav-btn.active { color: var(--accent); background: var(--accent-tint); }
+body.dark[data-palette="v2"] .btn-theme,
+body.dark[data-palette="v2"] .btn-export,
+body.dark[data-palette="v2"] .theme-select { background: var(--surface-3) !important; border: 1px solid var(--border) !important; color: var(--text) !important; }
+body.dark[data-palette="v2"] .btn-theme:hover,
+body.dark[data-palette="v2"] .btn-export:hover,
+body.dark[data-palette="v2"] .theme-select:hover { border-color: var(--border-strong) !important; }
+
+/* surfaces */
+body.dark[data-palette="v2"] .card,
+body.dark[data-palette="v2"] .lv-card,
+body.dark[data-palette="v2"] .pending-entry,
+body.dark[data-palette="v2"] .history-entry { background: var(--card) !important; border-color: var(--border) !important; box-shadow: var(--ui-card-shadow) !important; }
+body.dark[data-palette="v2"] .pending-entry:hover,
+body.dark[data-palette="v2"] .history-entry:hover { box-shadow: 0 6px 20px rgba(0,0,0,0.35), 0 0 0 1px var(--border) !important; }
+body.dark[data-palette="v2"] .week-recap,
+body.dark[data-palette="v2"] .today-hero,
+body.dark[data-palette="v2"] .log-new-card {
+  background: linear-gradient(160deg, var(--accent-tint) 0%, var(--card) 70%) !important;
+  border: 1px solid var(--border) !important; box-shadow: var(--ui-card-shadow) !important;
+}
+
+/* form controls sit on the raised step, and light up in the accent on focus */
+body.dark[data-palette="v2"] input[type=text],
+body.dark[data-palette="v2"] input[type=search],
+body.dark[data-palette="v2"] input[type=number],
+body.dark[data-palette="v2"] input[type=date],
+body.dark[data-palette="v2"] input[type=time],
+body.dark[data-palette="v2"] select,
+body.dark[data-palette="v2"] textarea {
+  background: var(--surface-3) !important; color: var(--text) !important; border: 1px solid var(--border) !important;
+}
+body.dark[data-palette="v2"] input::placeholder,
+body.dark[data-palette="v2"] textarea::placeholder { color: var(--muted); opacity: 1; }
+body.dark[data-palette="v2"] input:focus,
+body.dark[data-palette="v2"] select:focus,
+body.dark[data-palette="v2"] textarea:focus { outline: none; border-color: var(--accent) !important; box-shadow: 0 0 0 3px var(--accent-tint) !important; }
+body.dark[data-palette="v2"] :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+/* buttons: primary is the accent; secondary is a quiet raised chip */
+body.dark[data-palette="v2"] .btn-primary { background: var(--accent) !important; color: var(--on-accent) !important; border-color: var(--accent) !important; box-shadow: none !important; }
+body.dark[data-palette="v2"] .btn-primary:hover { background: var(--accent-hover) !important; opacity: 1; }
+body.dark[data-palette="v2"] .edit-btn,
+body.dark[data-palette="v2"] .tf-btn,
+body.dark[data-palette="v2"] .sym-btn,
+body.dark[data-palette="v2"] .fav-chip,
+body.dark[data-palette="v2"] .relog-btn,
+body.dark[data-palette="v2"] .notes-btn,
+body.dark[data-palette="v2"] .bulk-mode-btn,
+body.dark[data-palette="v2"] .meal-filter-btn,
+body.dark[data-palette="v2"] .sym-toggle-btn,
+body.dark[data-palette="v2"] .rbtn:not(.pos-active):not(.neg-active),
+body.dark[data-palette="v2"] .lv-cell:not(.pos):not(.neg) {
+  background: var(--surface-3) !important; border-color: var(--border) !important; color: var(--text-2) !important; box-shadow: none !important;
+}
+body.dark[data-palette="v2"] .sym-toggle-btn { background: transparent !important; border-color: transparent !important; }
+body.dark[data-palette="v2"] .edit-btn:hover,
+body.dark[data-palette="v2"] .tf-btn:hover,
+body.dark[data-palette="v2"] .sym-btn:hover,
+body.dark[data-palette="v2"] .fav-chip:hover,
+body.dark[data-palette="v2"] .bulk-mode-btn:hover,
+body.dark[data-palette="v2"] .meal-filter-btn:hover { border-color: var(--border-strong) !important; color: var(--text) !important; }
+body.dark[data-palette="v2"] .tf-btn.active,
+body.dark[data-palette="v2"] .bulk-mode-btn.active,
+body.dark[data-palette="v2"] .meal-filter-btn.active { background: var(--accent-tint) !important; color: var(--accent) !important; border-color: color-mix(in srgb, var(--accent) 45%, transparent) !important; }
+body.dark[data-palette="v2"] .sym-btn.active { background: var(--accent-tint) !important; color: var(--text) !important; border-color: var(--accent) !important; }
+body.dark[data-palette="v2"] .sym-add-btn,
+body.dark[data-palette="v2"] .sym-manage-btn { background: transparent !important; color: var(--muted) !important; border-color: var(--border) !important; }
+body.dark[data-palette="v2"] .lv-cell.due:not(.pos):not(.neg) { background: var(--warn-tint) !important; color: var(--warn) !important; border-color: color-mix(in srgb, var(--warn) 45%, transparent) !important; }
+body.dark[data-palette="v2"] .lv-cell.pos,
+body.dark[data-palette="v2"] .rbtn.pos-active { background: var(--pos) !important; color: var(--on-fill) !important; border-color: var(--pos) !important; }
+body.dark[data-palette="v2"] .lv-cell.neg,
+body.dark[data-palette="v2"] .rbtn.neg-active { background: var(--neg) !important; color: var(--on-fill) !important; border-color: var(--neg) !important; }
+
+/* 1-5 score buttons: a tinted chip until chosen, the solid colour once chosen —
+   five bright pastel blocks per row was the loudest thing on the dark Vitals */
+body.dark[data-palette="v2"] .sev-btn { box-shadow: none !important; }
+body.dark[data-palette="v2"] .sev-btn[data-sev="1"]:not(.sel-1) { background: var(--sev1-bg) !important; color: var(--sev1) !important; }
+body.dark[data-palette="v2"] .sev-btn[data-sev="2"]:not(.sel-2) { background: var(--sev2-bg) !important; color: var(--sev2) !important; }
+body.dark[data-palette="v2"] .sev-btn[data-sev="3"]:not(.sel-3) { background: var(--sev3-bg) !important; color: var(--sev3) !important; }
+body.dark[data-palette="v2"] .sev-btn[data-sev="4"]:not(.sel-4) { background: var(--sev4-bg) !important; color: var(--sev4) !important; }
+body.dark[data-palette="v2"] .sev-btn[data-sev="5"]:not(.sel-5) { background: var(--sev5-bg) !important; color: var(--sev5) !important; }
+body.dark[data-palette="v2"] .sev-btn.sel-1, body.dark[data-palette="v2"] .sev-btn.sel-2,
+body.dark[data-palette="v2"] .sev-btn.sel-3, body.dark[data-palette="v2"] .sev-btn.sel-4,
+body.dark[data-palette="v2"] .sev-btn.sel-5 {
+  filter: none; border: 0; color: var(--on-fill) !important;
+  outline: 2px solid var(--text); outline-offset: 2px; box-shadow: 0 4px 12px rgba(0,0,0,0.35) !important;
+}
+/* the floating backup toolbar: quiet chips, not four different solid colours */
+body.dark[data-palette="v2"] #btn-save-pc,
+body.dark[data-palette="v2"] #btn-load-pc,
+body.dark[data-palette="v2"] #btn-snapshots,
+body.dark[data-palette="v2"] #btn-snapshots ~ button {
+  background: var(--surface-3) !important; color: var(--text-2) !important; border: 1px solid var(--border) !important; border-radius: 6px !important;
+}
+
+/* text roles */
+body.dark[data-palette="v2"] .section-title,
+body.dark[data-palette="v2"] label { color: var(--muted) !important; }
+body.dark[data-palette="v2"] h1, body.dark[data-palette="v2"] h2,
+body.dark[data-palette="v2"] h3, body.dark[data-palette="v2"] h4 { color: var(--text); }
+body.dark[data-palette="v2"] a { color: var(--accent); }
+
+/* tables */
+body.dark[data-palette="v2"] .summary-table th,
+body.dark[data-palette="v2"] .corr-table th { background: var(--surface-1) !important; color: var(--text-2) !important; border-color: var(--border) !important; }
+body.dark[data-palette="v2"] .summary-table td,
+body.dark[data-palette="v2"] .corr-table td { border-color: var(--border) !important; }
+
+/* overlays */
+body.dark[data-palette="v2"] [id$="-modal"],
+body.dark[data-palette="v2"] [id$="-modal-bg"] > div { background: var(--card); color: var(--text); border: 1px solid var(--border); box-shadow: 0 24px 60px rgba(0,0,0,0.55); }
+body.dark[data-palette="v2"] #toast { background: var(--surface-3) !important; color: var(--text) !important; border: 1px solid var(--border); }
+body.dark[data-palette="v2"] .autocomplete-dropdown { background: var(--surface-3) !important; border-color: var(--border) !important; box-shadow: 0 12px 32px rgba(0,0,0,0.5); }
+body.dark[data-palette="v2"] .ac-item:hover,
+body.dark[data-palette="v2"] .ac-item.highlighted { background: var(--accent-tint) !important; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
    PART 4 — the app's typeface, embedded; and the opt-in typography
    (fst_typography = 'linear').
 
@@ -4692,6 +4839,10 @@ try {
   // script behaves exactly as it did before. A palette owns the light/dark
   // decision, so it replaces the ui-style class rather than stacking with it.
   var _fstPal = localStorage.getItem('fst_palette');
+  // v108: mirrors PALETTE_LEGACY and the plain-dark → Slate move below
+  _fstPal = ({ midnight: 'navy', ember: 'mocha', dim: 'slate', eclipse: 'oled', evergreen: 'forest', carbon: 'graphite' })[_fstPal] || _fstPal;
+  if (_fstStyle === 'obsidian') { document.body.classList.remove('visual-theme-obsidian'); if (!_fstPal && localStorage.getItem('fst_theme') === 'dark') _fstPal = 'oled'; }
+  if (!_fstPal && localStorage.getItem('fst_theme') === 'dark') _fstPal = 'slate';
   if (_fstPal && /^[a-z]+$/.test(_fstPal)) {
     if (_fstStyle) document.body.classList.remove('visual-theme-' + _fstStyle);
     document.body.classList.add('visual-theme-' + _fstPal);
@@ -5921,7 +6072,7 @@ let _currentListModalSec = null;
 let _currentListModalEnt = null;
 let _trendFlipped = false;
 
-function winButtonsHTML(entry) {
+function winButtonsHTML(entry, inLogs) {
   const elapsed = elapsedHoursSince(entry.date, entry.logTime);
   const winsHTML = `<div class="windows-row">` +
     WINDOWS.map(w => {
@@ -5938,7 +6089,7 @@ function winButtonsHTML(entry) {
         </div>
       </div>`;
     }).join('') + `</div>`;
-  return winsHTML + symptomsHTML(entry);
+  return winsHTML + symptomsHTML(entry, inLogs);
 }
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -7383,9 +7534,51 @@ function blankSymptoms() {
   return s;
 }
 
-function loadLastMealType() {
-  return localStorage.getItem('fst_last_meal_type') || '';
+// The log form's default meal follows the clock: breakfast in the morning,
+// lunch at midday, snack in the afternoon, dinner in the evening and snack
+// again late at night. Only a default — picking a meal by hand sticks until
+// the form is reset (after a log, on returning to the tab, on app resume).
+const MEAL_BY_TIME = [            // [from 'HH:MM' inclusive, meal type]
+  ['00:00', 'snack'],
+  ['04:00', 'breakfast'],
+  ['11:00', 'lunch'],
+  ['15:00', 'snack'],
+  ['18:30', 'dinner'],
+  ['22:00', 'snack'],
+];
+// PURE: 'HH:MM' → meal type ('' when the time cannot be read).
+function mealTypeForTime(hhmm) {
+  const m = /^(\d{1,2}):(\d{2})/.exec(String(hhmm || ''));
+  if (!m) return '';
+  const mins = (+m[1]) * 60 + (+m[2]);
+  let meal = '';
+  MEAL_BY_TIME.forEach(([from, type]) => {
+    const [h, mm] = from.split(':').map(Number);
+    if (mins >= h * 60 + mm) meal = type;
+  });
+  return meal;
 }
+let _mealPicked = false;   // true once the meal select was changed by hand
+function nowHHMM() {
+  const n = new Date();
+  return `${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}`;
+}
+// Fresh entry: today, now, and the meal that goes with now.
+function resetLogClock() {
+  const t = document.getElementById('inp-time'), dt = document.getElementById('inp-date'), ml = document.getElementById('inp-meal');
+  if (t) t.value = nowHHMM();
+  if (dt) dt.value = today();
+  _mealPicked = false;
+  if (ml) ml.value = mealTypeForTime(t ? t.value : nowHHMM());
+}
+// The time field moved by hand: the meal follows it unless it was picked.
+function syncMealToTime() {
+  if (_mealPicked) return;
+  const t = document.getElementById('inp-time'), ml = document.getElementById('inp-meal');
+  const meal = t ? mealTypeForTime(t.value) : '';
+  if (ml && meal) ml.value = meal;
+}
+
 function saveLastMealType(mealType) {
   if (mealType) localStorage.setItem('fst_last_meal_type', mealType);
 }
@@ -7428,8 +7621,17 @@ let _compareFoodA = '';
 let _compareFoodB = '';
 let _bulkMode = false;
 let _symptomsExpanded = {};
-function toggleSymptoms(id) {
-  _symptomsExpanded[id] = !_symptomsExpanded[id];
+// The newest item of each meal on the Logs list opens with its symptoms
+// showing, for one-tap logging. Rebuilt by renderPending(); an explicit tap
+// (true/false in _symptomsExpanded) always wins over this default.
+let _symptomsDefaultOpen = new Set();
+// inLogs: only the Logs list honours the default; History shows the same
+// entries and must open only on a tap.
+function symptomsOpen(id, inLogs) {
+  return (id in _symptomsExpanded) ? !!_symptomsExpanded[id] : (!!inLogs && _symptomsDefaultOpen.has(id));
+}
+function toggleSymptoms(id, inLogs) {
+  _symptomsExpanded[id] = !symptomsOpen(id, inLogs);
   renderPending();
   renderHistory();
 }
@@ -7553,11 +7755,7 @@ function showTab(name, btn) {
   syncBottomNav(name);
   
   // INSTANT SYNC: Update clock ONLY if the food input is empty (starting a fresh entry)
-  if (name === 'log' && !document.getElementById('inp-food').value.trim()) {
-    const n = new Date();
-    document.getElementById('inp-time').value = `${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}`;
-    document.getElementById('inp-date').value = `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`;
-  }
+  if (name === 'log' && !document.getElementById('inp-food').value.trim()) resetLogClock();
 
   render();
 }
@@ -7672,16 +7870,19 @@ function toggleBulkMode() {
 // PURE (v104): the occasion a tap belongs to — same date, same meal type, and
 // within the same run of eating. A day's "Snack" can span ten hours and the list
 // already draws those as separate occasions, so a bulk tap must hit the one you
-// tapped and nothing else. Built from the SAME list the renderer groups (pending
-// items, newest-first), so what you see is what gets written; a fully-marked item
-// cannot receive a bulk write anyway, so leaving it out costs nothing.
+// tapped and nothing else. Built from the same date + meal grouping the renderer
+// uses (newest-first), so what you see is what gets written.
+// Fully-marked items of the same sitting are included too: since bulk can now
+// re-mark a window that was already stamped, a sitting whose other windows are
+// all done must still move together (they only change when they held the same
+// mark as the tapped item — see markReaction()).
 // Still deliberately NOT mealId: a meal logged one item at a time gets a fresh
 // mealId per add, which shrank every bulk tap to a single entry (v68 regression).
 // The time gap groups those adds the way the eating actually happened.
 function bulkOccasionTargets(entries, entry) {
   if (!entry) return [];
   const mealKey = entry.mealType || '';
-  const pending = sortEntriesNewest((entries || []).filter(e => hasPending(e) && e.date === entry.date && (e.mealType || '') === mealKey));
+  const pending = sortEntriesNewest((entries || []).filter(e => e.date === entry.date && (e.mealType || '') === mealKey));
   const occ = splitIntoOccasions(pending).find(g => g.some(e => e.id === entry.id));
   return (occ && occ.length) ? occ : [entry];
 }
@@ -8103,9 +8304,7 @@ function addEntry() {
   if (_logAge) { _logAge = ''; const sel = document.getElementById('log-age-sel'); if (sel) sel.value = ''; }
   document.getElementById('inp-food').value = '';
   refreshFoodAvoidWarning();
-  document.getElementById('inp-date').value = today();
-  const n = new Date();
-  document.getElementById('inp-time').value = `${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}`;
+  resetLogClock();
   toast(foods.length > 1 ? `${foods.length} entries added ✓` : 'Entry added ✓');
   hapticTick();
   render();
@@ -8190,15 +8389,19 @@ function markReaction(id, winKey, value) {
   const entry = entries.find(e => e.id === id);
   if (!entry) return;
   const targets = getBulkTargets(entries, entry);
-  const nextValue = (entry.windows[winKey] === value) ? null : value;
+  const was = entry.windows[winKey] === undefined ? null : entry.windows[winKey];
+  const nextValue = (was === value) ? null : value;
   const changes = [];
   targets.forEach(target => {
-    const cur = target.windows[winKey];
+    const cur = target.windows[winKey] === undefined ? null : target.windows[winKey];
     if (target !== entry) {
-      // Bulk fills the rest of the occasion but never overwrites a window
-      // that was already marked, and un-toggling clears only the clicked entry.
+      // Bulk fills the unmarked rest of the occasion AND moves every item that
+      // held the same mark as the one tapped — a meal stamped ✓ together and
+      // regretted later flips to ✕ together. An item you had already marked
+      // differently is an exception you made on purpose and is left alone;
+      // un-toggling clears only the clicked entry.
       if (nextValue === null) return;
-      if (cur !== null && cur !== undefined) return;
+      if (cur !== null && cur !== was) return;
     }
     if (cur === nextValue) return;
     changes.push({ id: target.id, winKey, prev: cur === undefined ? null : cur });
@@ -8325,24 +8528,28 @@ function deleteCustomSym(key) {
 //  LABEL only, which keeps historical entry keys stable.)
 
 // ─── Dark / Light mode ───────────────────────────────────────────────────────
+// v108: 🌙 flips between your light look and your dark look. Dark is always
+// one of the dark palettes (Slate unless you picked another in 🎨), so every
+// screen gets the full dark finish rather than the old partial body.dark.
 function toggleTheme() {
-  const dark = document.body.classList.toggle('dark');
-  document.getElementById('theme-toggle').textContent = dark ? '☀️' : '🌙';
-  localStorage.setItem('fst_theme', dark ? 'dark' : 'light');
+  const goDark = !document.body.classList.contains('dark');
+  const key = goDark ? preferredDarkPalette() : preferredLightPalette();
+  try {
+    key ? localStorage.setItem('fst_palette', key) : localStorage.removeItem('fst_palette');
+    localStorage.setItem('fst_theme', goDark ? 'dark' : 'light');
+  } catch (e) {}
+  applyVisualTheme(localStorage.getItem('fst_ui_style') || 'current');
+  if (document.getElementById('appearance-body')) renderAppearance();
 }
-(function() {
-  if (localStorage.getItem('fst_theme') === 'dark') {
-    document.body.classList.add('dark');
-    document.getElementById('theme-toggle').textContent = '☀️';
-  }
-})();
 
 
-// ── Visual theme cycle (3 themes; ocean/herbal/amethyst retired v57) ──
+
+// ── Visual theme cycle (ocean/herbal/amethyst retired v57; obsidian v108 —
+//    its dark half was a black-and-white repaint that broke the log card and
+//    the bottom nav; OLED Black replaces it) ──
 const VISUAL_THEMES = [
   { key: 'current',   label: 'Default',       emoji: '🩵' },
   { key: 'warm',      label: 'Warm',          emoji: '🍂' },
-  { key: 'obsidian',  label: 'Obsidian',      emoji: '🖤' },
 ];
 
 const ALL_THEME_CLASSES = VISUAL_THEMES
@@ -8362,19 +8569,52 @@ function normalizeUiStyle(style) {
 // Each palette owns its own light/dark mode — picking Graphite gives you
 // Graphite, not Graphite-in-whatever-mode-you-left-on.
 const PALETTES = [
-  { key: 'graphite',  label: 'Graphite',  emoji: '🌑', mode: 'dark'  },
-  { key: 'midnight',  label: 'Midnight',  emoji: '🌌', mode: 'dark'  },
-  { key: 'ember',     label: 'Ember',     emoji: '🔥', mode: 'dark'  },
-  { key: 'dim',       label: 'Dim Room',  emoji: '🌘', mode: 'dark'  },
-  { key: 'eclipse',   label: 'Eclipse',   emoji: '🕶️', mode: 'dark'  },
-  { key: 'evergreen', label: 'Evergreen', emoji: '🌲', mode: 'dark'  },
-  { key: 'carbon',    label: 'Carbon',    emoji: '⬛', mode: 'dark'  },
+  { key: 'slate',     label: 'Slate',      emoji: '🌙', mode: 'dark'  },
+  { key: 'navy',      label: 'Navy',       emoji: '🌌', mode: 'dark'  },
+  { key: 'graphite',  label: 'Graphite',   emoji: '🌑', mode: 'dark'  },
+  { key: 'mocha',     label: 'Mocha',      emoji: '☕', mode: 'dark'  },
+  { key: 'forest',    label: 'Forest',     emoji: '🌲', mode: 'dark'  },
+  { key: 'oled',      label: 'OLED Black', emoji: '⬛', mode: 'dark'  },
   { key: 'daylight',  label: 'Daylight',  emoji: '☀️', mode: 'light' },
   { key: 'paper',     label: 'Paper',     emoji: '📜', mode: 'light' },
   { key: 'clarity',   label: 'Clarity',   emoji: '🔍', mode: 'light' },
 ];
-const paletteFor = key => PALETTES.find(p => p.key === key) || null;
+// v108: the v71 dark set was replaced; a stored retired key maps to the
+// nearest new look instead of silently dropping back to light.
+const PALETTE_LEGACY = { midnight: 'navy', ember: 'mocha', dim: 'slate', eclipse: 'oled', evergreen: 'forest', carbon: 'graphite' };
+const DEFAULT_DARK_PALETTE = 'slate';
+const paletteFor = key => PALETTES.find(p => p.key === (PALETTE_LEGACY[key] || key)) || null;
 const activePalette = () => { try { return paletteFor(localStorage.getItem('fst_palette')); } catch (e) { return null; } };
+// The dark look 🌙 switches to: the last dark palette picked, else Slate.
+function preferredDarkPalette() {
+  let k = null; try { k = localStorage.getItem('fst_dark_palette'); } catch (e) {}
+  const pal = paletteFor(k);
+  return pal && pal.mode === 'dark' ? pal.key : DEFAULT_DARK_PALETTE;
+}
+// The light look 🌙 switches back to: the last light palette picked ('' = Original).
+function preferredLightPalette() {
+  let k = ''; try { k = localStorage.getItem('fst_light_palette') || ''; } catch (e) {}
+  const pal = paletteFor(k);
+  return pal && pal.mode === 'light' ? pal.key : '';
+}
+(function() {
+  // one-time moves into the v108 model: a plain-dark user gets Slate, an
+  // Obsidian user (style retired) gets OLED Black, a retired palette key is
+  // rewritten to its replacement.
+  try {
+    const pal = localStorage.getItem('fst_palette');
+    if (pal && PALETTE_LEGACY[pal]) localStorage.setItem('fst_palette', PALETTE_LEGACY[pal]);
+    if (localStorage.getItem('fst_ui_style') === 'obsidian') {
+      localStorage.setItem('fst_ui_style', 'current');
+      if (!pal && localStorage.getItem('fst_theme') === 'dark') localStorage.setItem('fst_palette', 'oled');
+    }
+    if (!localStorage.getItem('fst_palette') && localStorage.getItem('fst_theme') === 'dark') localStorage.setItem('fst_palette', DEFAULT_DARK_PALETTE);
+  } catch (e) {}
+  if (localStorage.getItem('fst_theme') === 'dark') {
+    document.body.classList.add('dark');
+    document.getElementById('theme-toggle').textContent = '☀️';
+  }
+})();
 
 // The value <meta name="theme-color"> ships with in the markup, read once
 // before anything can overwrite it, so "back to Original" restores the shipped
@@ -8417,9 +8657,9 @@ function applyVisualTheme(style) {
     const navy = pal ? getComputedStyle(document.body).getPropertyValue('--navy').trim() : '';
     _themeColorMeta.setAttribute('content', navy || SHIPPED_THEME_COLOR);
   }
-  // 🌙 would be a no-op while a palette owns the mode, so it steps aside
+  // 🌙 stays: it flips between your light and dark looks (toggleTheme)
   const tglBtn = document.getElementById('theme-toggle');
-  if (tglBtn && (pal || hadPalette)) tglBtn.style.display = pal ? 'none' : '';
+  if (tglBtn) { tglBtn.style.display = ''; tglBtn.textContent = document.body.classList.contains('dark') ? '☀️' : '🌙'; }
   const btn = document.getElementById('visual-theme-toggle');
   if (btn) {
     btn.setAttribute('data-theme', norm);
@@ -8450,13 +8690,12 @@ function toggleVisualTheme() {
 // palette that is NOT applied to <body>, so it cannot read the CSS variables.
 // Keys must match the blocks at the end of the stylesheet.
 const PALETTE_SWATCH = {
-  graphite:  ['#08090a', '#191a1b', '#f7f8f8', '#8e9398', '#0f1011', '#8884fe'],
-  midnight:  ['#070b12', '#171b23', '#dfeef7', '#88969e', '#0d1119', '#7dbdfe'],
-  ember:     ['#100c0a', '#201b19', '#f1e8de', '#9c948b', '#16120f', '#f2c744'],
-  dim:       ['#14171b', '#1f2327', '#d5dde3', '#929a9f', '#171b1f', '#d28290'],
-  eclipse:   ['#060708', '#141517', '#f5f9fc', '#aaadb0', '#0c0d0f', '#3ae1e6'],
-  evergreen: ['#08110e', '#161f1c', '#e2eee8', '#8f9a94', '#0d1713', '#62d493'],
-  carbon:    ['#0a0a0b', '#1a1b1c', '#eeeeee', '#949494', '#101112', '#d9d9d9'],
+  slate:     ['#14181e', '#1c222a', '#e7ebf0', '#8f99a6', '#1a1f27', '#76a9fa'],
+  navy:      ['#0e1525', '#162139', '#e3eaf6', '#8d9bb6', '#131d33', '#7fb2ff'],
+  graphite:  ['#161617', '#1f1f22', '#ececee', '#98989f', '#1c1c1e', '#64a2ff'],
+  mocha:     ['#191512', '#241d19', '#efe6dc', '#a6988a', '#211b17', '#e3aa6c'],
+  forest:    ['#111715', '#19231f', '#e2ede7', '#8ea299', '#161f1c', '#5fc79a'],
+  oled:      ['#000000', '#121315', '#ededed', '#8e9196', '#0a0a0b', '#7aa7ff'],
   daylight:  ['#eceff3', '#fbfdff', '#12181d', '#535960', '#614158', '#760061'],
   paper:     ['#f1eadd', '#fdf6eb', '#281a0f', '#645447', '#674236', '#9e3105'],
   clarity:   ['#ededed', '#f9f9f8', '#0d0f11', '#3d3f42', '#564463', '#3d015a'],
@@ -8486,7 +8725,13 @@ function toggleTypography() {
 
 function setPalette(key) {
   const pal = paletteFor(key);
-  try { pal ? localStorage.setItem('fst_palette', pal.key) : localStorage.removeItem('fst_palette'); } catch (e) {}
+  try {
+    pal ? localStorage.setItem('fst_palette', pal.key) : localStorage.removeItem('fst_palette');
+    // remember the pick per mode, so 🌙 flips between YOUR light and dark looks
+    if (pal && pal.mode === 'dark') localStorage.setItem('fst_dark_palette', pal.key);
+    else localStorage.setItem('fst_light_palette', pal ? pal.key : '');
+    localStorage.setItem('fst_theme', pal && pal.mode === 'dark' ? 'dark' : 'light');
+  } catch (e) {}
   applyVisualTheme(localStorage.getItem('fst_ui_style') || 'current');
   renderAppearance();
   toast(pal ? pal.emoji + ' ' + pal.label : '🩵 Back to the original look');
@@ -8519,7 +8764,7 @@ function renderAppearance() {
     .concat(PALETTES.map(p => swatchCard(p.key, p.label, p.emoji, p.mode, curKey === p.key)));
   const typo = typographyOn();
   el.innerHTML = `
-    <div class="ap-sub">Colours only — nothing about your data, your scores or the layout changes. <strong>Original</strong> is exactly what you have today, and it is one tap away at any time.</div>
+    <div class="ap-sub">Colours only — nothing about your data, your scores or the layout changes. <strong>Original</strong> is exactly what you have today, and it is one tap away at any time. 🌙 in the header flips between the light and the dark look you last picked here.</div>
     <div class="ap-grid">${cards.join('')}</div>
     ${cur ? `<button class="ap-reset" onclick="setPalette('')">↩︎ Back to the original look</button>` : ''}
     <div class="ap-row">
@@ -14246,7 +14491,7 @@ function foodExposureInfo(foodName) {
 
 // ─── Food-name families ───────────────────────────────────────────────────────
 // Food identity is the exact logged NAME, and names carry amounts and prep
-// ("Nuts 50-70g" vs "Nut spread 10-13g [brand]") — so any factor
+// ("Quimbles 50-70g" vs "Quimble butter 10-13g [brand]") — so any factor
 // built on "never seen this name before" must check the food FAMILY too.
 // Family = the first two significant name words match (digit tokens and short
 // filler words dropped); single-word names match on that one word. Used by the
@@ -14435,7 +14680,7 @@ function computeDetective(dateStr, symKey, lookback) {
     }
 
     // novelty — name-variant aware: a new NAME whose family is a known food
-    // ("Nut spread 10-13g" vs staple "Nuts 50-70g") is only
+    // ("Quimble butter 10-13g" vs staple "Quimbles 50-70g") is only
     // mildly novel, and the reintro gap counts variant touches too
     const firstEver = dates[0], lastEver = dates[dates.length - 1];
     const brandNew = firstEver >= from;
@@ -17015,10 +17260,10 @@ window.__fstExternalChange = function (key) {
 };
 
 // ─── Symptom buttons HTML ─────────────────────────────────────────────────────
-function symptomsHTML(entry) {
+function symptomsHTML(entry, inLogs) {
   const syms = allSymptoms();
   const activeCount = syms.filter(s => entry.symptoms && entry.symptoms[s.key]).length;
-  const isExpanded = !!_symptomsExpanded[entry.id];
+  const isExpanded = symptomsOpen(entry.id, inLogs);
 
   // Creates a little badge if you have any symptoms checked
   const activeBadge = activeCount > 0 
@@ -17026,7 +17271,7 @@ function symptomsHTML(entry) {
     : '';
 
   // The sleek toggle button
-  const toggleBtn = `<button class="sym-toggle-btn" onclick="toggleSymptoms('${entry.id}')">
+  const toggleBtn = `<button class="sym-toggle-btn" onclick="toggleSymptoms('${entry.id}', ${!!inLogs})">
     <span style="font-weight:800; color:var(--muted); text-transform:uppercase; display:flex; align-items:center;">
       🏷️ Symptoms ${activeBadge}
     </span>
@@ -17318,8 +17563,19 @@ function cellChoiceHTML(e) {
   </div>`;
 }
 let _denseOpenId = null;
+let _denseClosed = {};   // default-open rows (see _symptomsDefaultOpen) the user folded
+function denseIsOpen(id) {
+  return _denseOpenId === id || (_symptomsDefaultOpen.has(id) && !_denseClosed[id]);
+}
 function toggleDenseActions(id) {
-  _denseOpenId = (_denseOpenId === id) ? null : id;
+  if (denseIsOpen(id)) {
+    if (_denseOpenId === id) _denseOpenId = null;
+    if (_symptomsDefaultOpen.has(id)) _denseClosed[id] = true;
+  } else if (_symptomsDefaultOpen.has(id)) {
+    delete _denseClosed[id];
+  } else {
+    _denseOpenId = id;
+  }
   renderPending();
 }
 function lvCellHTML(e, w) {
@@ -17350,16 +17606,20 @@ function lvActionsHTML(e) {
       <button class="edit-btn" onclick="openMealCopyFromEntry('${e.id}')" title="Copy this whole sitting into another meal">🍽️ Copy meal</button>
       <button class="edit-btn" onclick="jumpToSummaryRow(${escAttr(JSON.stringify(e.food))})">📋 Summary</button>
     </div>
-    <div class="lv-symptoms">${symptomsHTML(e)}</div>
+    <div class="lv-symptoms">${symptomsHTML(e, true)}</div>
   </div>`;
+}
+// The meal-marker class for a meal type ('' and unknown types read as "other").
+function mealTagCls(mealType) {
+  return 'meal-tag-' + (['breakfast', 'lunch', 'snack', 'dinner'].includes(mealType) ? mealType : 'other');
 }
 function denseListHTML(mealOrder, groups, mealLabels, suspectFoods) {
   const avIdx = avoidLabelIndex(loadFoodStatus());
   // The window header: without it the four cells are unlabelled guesswork.
   const head = `<div class="lv-matrix-head"><span class="lv-spacer"></span>${WINDOWS.map(w => `<span class="lv-wlabel">${esc(w.label.replace(/\s*h$/, '').replace(/\s/g, ''))}</span>`).join('')}</div>`;
   return head + mealOrder.filter(m => groups[m].length).map(mealKey => `
-    <div class="lv-group">
-      <div class="lv-group-head">${mealLabels[mealKey]} · ${groups[mealKey].length}</div>
+    <div class="lv-group ${mealTagCls(mealKey)}">
+      <div class="lv-group-head"><span class="meal-pill">${mealLabels[mealKey]} · ${groups[mealKey].length}</span></div>
       <div class="lv-card">${(occ => { const need = occasionsNeedingHeadings(occ); return occ.map((items, oi) => `${need.has(oi) ? `<div class="lv-sub">🕐 ${esc(occasionLabel(items))} · ${items.length}<button onclick="openMealCopyFromEntry('${items[0].id}')" title="Copy this sitting into another meal" style="margin-left:8px; text-transform:none; letter-spacing:0; font-size:10.5px; font-weight:700; padding:2px 7px; border-radius:6px; border:1px solid var(--border); background:var(--card); color:var(--muted); cursor:pointer;">📋 Copy</button></div>` : ''}${items.map(e => {
         const ago = hoursAgoLabel(e.date, e.logTime);
         const nSym = e.symptoms ? Object.keys(e.symptoms).filter(k => e.symptoms[k]).length : 0;
@@ -17367,7 +17627,7 @@ function denseListHTML(mealOrder, groups, mealLabels, suspectFoods) {
         // In Two-pane the row drives the right pane instead of expanding — the
         // panel's four actions live there, so an expander would duplicate them.
         const inSplit = _viewNow === 'split';
-        const open = !inSplit && _denseOpenId === e.id;
+        const open = !inSplit && denseIsOpen(e.id);
         const picked = inSplit && normFood(_splitFood || '') === normFood(e.food);
         return `<div class="lv-row${picked ? ' lv-picked' : ''}">
           <button type="button" class="lv-main" aria-expanded="${open}" title="${inSplit ? 'Show this food on the right' : 'Symptoms, Edit, Again, Summary'}"
@@ -17584,7 +17844,7 @@ function renderPending() {
   if (_pendingMealFilter) entries = entries.filter(e => (e.mealType || '') === _pendingMealFilter);
   if (hint) {
     hint.innerHTML = _bulkMode
-      ? `<div class="bulk-mode-hint"><strong>Bulk edit is on.</strong> Clicking a reaction or symptom applies it to every item of that <em>same occasion</em> — the run of eating you tapped, not the whole day's meal. Already-marked windows on other items are left untouched.</div>`
+      ? `<div class="bulk-mode-hint"><strong>Bulk edit is on.</strong> Clicking a reaction or symptom applies it to every item of that <em>same occasion</em> — the run of eating you tapped, not the whole day's meal. Items that held the same mark move with it (so a sitting marked ✓ can be re-marked ✕ in one tap); items you had marked differently are left untouched.</div>`
       : '';
   }
   if (!entries.length) {
@@ -17601,6 +17861,8 @@ function renderPending() {
     const key = mealOrder.includes(e.mealType) ? e.mealType : '';
     groups[key].push(e);
   });
+  // The top (newest) item of every meal opens with its symptoms showing.
+  _symptomsDefaultOpen = new Set(mealOrder.filter(m => groups[m].length).map(m => groups[m][0].id));
 
   const view = effectiveLogView(_logView, window.innerWidth);
   _viewNow = view;
@@ -17625,7 +17887,7 @@ function renderPending() {
     const mealActs = mealEntriesToday(mealKey).length ? `
       <button onclick="openMealCopy(${escAttr(JSON.stringify(mealKey))})" title="Copy today's items of this meal into another meal — pick the items, date and time first" style="text-transform:none; letter-spacing:0; font-size:11px; font-weight:700; padding:3px 9px; border-radius:6px; border:1px solid var(--border); background:var(--card); color:var(--muted); cursor:pointer;">📋 Copy to…</button>
       <button onclick="bundleFromMealToday(${escAttr(JSON.stringify(mealKey))})" title="Save today's items of this meal as a reusable bundle" style="text-transform:none; letter-spacing:0; font-size:11px; font-weight:700; padding:3px 9px; border-radius:6px; border:1px solid var(--border); background:var(--card); color:var(--muted); cursor:pointer;">🍱 Bundle</button>` : '';
-    html += `<div class="meal-section-header">${mealLabels[mealKey]}${mealActs}</div>`;
+    html += `<div class="meal-section-header ${mealTagCls(mealKey)}"><span class="meal-pill">${mealLabels[mealKey]}</span>${mealActs}</div>`;
     // v103: same occasion split as the Dense view — a snack group spanning the
     // afternoon and the evening is not one sitting. Silent on a one-sitting meal.
     const _occ = splitIntoOccasions(group);
@@ -17635,7 +17897,7 @@ function renderPending() {
       const suspectTag = suspectFoods.has(e.food) ? `<span class="suspect-flag" style="margin:0;" title="${(s => s ? `${s.neg} of ${s.total} rated windows reacted (50%+) — all-time history` : '')(suspectFoods.get(e.food))}">⚠️</span>` : '';
       
 return `
-      <div class="pending-entry">
+      <div class="pending-entry ${mealTagCls(e.mealType)}">
         
         <div style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:flex-start;">
           
@@ -17653,7 +17915,7 @@ return `
               ${suspectTag}
             </div>
             
-            <div style="margin-top:12px; width:100%;">${winButtonsHTML(e)}</div>
+            <div style="margin-top:12px; width:100%;">${winButtonsHTML(e, true)}</div>
           </div>
 
           <div style="flex:0 0 120px; display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
@@ -17703,7 +17965,7 @@ function renderHistory() {
         return `<span class="status-chip ${cls}"><span class="win-dot ${w.cls}"></span>${w.label} ${icon}</span>`;
       }).join('');
       
-      return `<div class="history-entry">
+      return `<div class="history-entry ${mealTagCls(e.mealType)}">
         
         <div style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:flex-start;">
           
@@ -19302,6 +19564,8 @@ async function importFullBackup(text, inputEl) {
     if (data.itemTypes !== null) saveItemTypeMap(data.itemTypes); // v68: type overrides travel; saveItemTypeMap refreshes the cache
     if (data.trialMetrics !== null) saveTrialMetrics(data.trialMetrics); // v69
     localStorage.setItem('fst_theme', data.theme);
+    // v108: dark is always a palette — a dark backup lands in your dark look
+    if (data.theme === 'dark' && !activePalette()) localStorage.setItem('fst_palette', preferredDarkPalette());
     applyVisualTheme(data.uiStyle);
 
     if (data.entries.length && data.entries[0].mealType) saveLastMealType(data.entries[0].mealType);
@@ -19318,7 +19582,7 @@ async function importFullBackup(text, inputEl) {
     // no palette is set, which is everyone who has not opened the picker.
     if (activePalette()) applyVisualTheme(localStorage.getItem('fst_ui_style') || 'current');
 
-    document.getElementById('inp-meal').value = loadLastMealType();
+    resetLogClock();
     // Land on TODAY, not the newest imported day — first score taps after a
     // restore used to silently write into an old date.
     _checkinDate = today();
@@ -19570,12 +19834,7 @@ setInterval(() => {
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState !== 'visible') return;
   const foodInp = document.getElementById('inp-food');
-  if (foodInp && !foodInp.value.trim()) { // same guard as showTab: never clobber a draft
-    const n = new Date();
-    const t = document.getElementById('inp-time'), dt = document.getElementById('inp-date');
-    if (t) t.value = `${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}`;
-    if (dt) dt.value = today();
-  }
+  if (foodInp && !foodInp.value.trim()) resetLogClock(); // same guard as showTab: never clobber a draft
   const hdr = document.getElementById('header-date');
   if (hdr) hdr.textContent = fmt(today());
   if (!_checkinDateManual && _checkinDate !== null && _checkinDate !== today()) _checkinDate = today();
@@ -23738,6 +23997,33 @@ function runSelfTest() {
                { id: 'y', date: D(1), logTime: '13:00', mealType: 'snack', food: 'B', windows: {}, symptoms: {} }];
     return eq(bulkOccasionTargets(E, E[0]).map(e => e.id).join('|'), 'x');
   });
+  t('bulk: a sitting stamped ✓ re-marks to ✕ in one tap, exceptions kept', () => {
+    // a: tapped · b: same ✓ (moves) · c: unmarked (fills) · d: ✕ on purpose
+    // (kept) · e: every window done, same ✓ (moves — no longer "pending")
+    const mk = (id, w1, full) => ({ id, date: D(0), logTime: '08:00', mealType: 'breakfast', food: 'F' + id,
+      windows: full ? { w1, w2: true, w3: true, w4: true } : { w1, w2: null, w3: null, w4: null }, symptoms: {} });
+    const E = [mk('a', true), mk('b', true), mk('c', null), mk('d', false), mk('e', true, true)];
+    const sv = { lm: loadMigrated, s: save, r: renderAfterMark, u: startUndo, c: maybeCelebrateWindowsClear, h: hapticTick, b: _bulkMode };
+    loadMigrated = () => E; save = () => {}; renderAfterMark = () => {}; startUndo = () => {}; maybeCelebrateWindowsClear = () => {}; hapticTick = () => {};
+    _bulkMode = true;
+    try { markReaction('a', 'w1', false); }
+    finally { loadMigrated = sv.lm; save = sv.s; renderAfterMark = sv.r; startUndo = sv.u; maybeCelebrateWindowsClear = sv.c; hapticTick = sv.h; _bulkMode = sv.b; }
+    return eq(E.map(e => e.id + '=' + e.windows.w1).join(' '), 'a=false b=false c=false d=false e=false');
+  });
+  t('bulk: re-marking leaves an item marked the other way alone', () => {
+    const mk = (id, w1) => ({ id, date: D(0), logTime: '08:00', mealType: 'breakfast', food: 'F' + id, windows: { w1, w2: null, w3: null, w4: null }, symptoms: {} });
+    const E = [mk('a', false), mk('b', true), mk('c', false)];
+    const sv = { lm: loadMigrated, s: save, r: renderAfterMark, u: startUndo, c: maybeCelebrateWindowsClear, h: hapticTick, b: _bulkMode };
+    loadMigrated = () => E; save = () => {}; renderAfterMark = () => {}; startUndo = () => {}; maybeCelebrateWindowsClear = () => {}; hapticTick = () => {};
+    _bulkMode = true;
+    try { markReaction('a', 'w1', true); }
+    finally { loadMigrated = sv.lm; save = sv.s; renderAfterMark = sv.r; startUndo = sv.u; maybeCelebrateWindowsClear = sv.c; hapticTick = sv.h; _bulkMode = sv.b; }
+    // a was ✕ → ✓; c shared a's ✕ so it follows; b was already ✓ and stays ✓
+    return eq(E.map(e => e.id + '=' + e.windows.w1).join(' '), 'a=true b=true c=true');
+  });
+  t('log form: the default meal follows the clock', () =>
+    eq(['06:30', '10:59', '11:00', '14:20', '16:45', '18:30', '20:10', '23:15', '02:00', ''].map(mealTypeForTime).join(' '),
+       'breakfast breakfast lunch lunch snack dinner dinner snack snack '));
   t('bulk: a one-sitting dinner still takes the whole sitting', () => {
     const E = ['19:42', '19:40', '19:40'].map((tm, i) =>
       ({ id: 'd' + i, date: D(0), logTime: tm, mealType: 'dinner', food: 'Dinnerfood ' + i, windows: {}, symptoms: {} }));
@@ -25416,18 +25702,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     await window.__fstStorageReady; // ensure IndexedDB data is loaded before first read/render
     // Self-test mode: fixtures + write-guard + report, no normal boot at all.
     if (new URLSearchParams(location.search).get('selftest') === '1') { runSelfTest(); return; }
-    document.getElementById('inp-date').value = today();
-    
-    // Set current time as default
-    (function() {
-      const n = new Date();
-      document.getElementById('inp-time').value =
-        `${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}`;
-    })();
+    // Today, now, and the meal that goes with now
+    resetLogClock();
     
     if (!localStorage.getItem('fst_ui_style')) localStorage.setItem('fst_ui_style', 'current');
-    document.getElementById('inp-meal').value = loadLastMealType();
-    document.getElementById('inp-meal').addEventListener('change', e => saveLastMealType(e.target.value));
+    document.getElementById('inp-meal').addEventListener('change', e => { _mealPicked = true; saveLastMealType(e.target.value); });
+    document.getElementById('inp-time').addEventListener('change', syncMealToTime);
     document.getElementById('header-date').textContent = fmt(today());
     
     document.getElementById('bundle-search')?.addEventListener('input', renderBundleModalItems);
