@@ -4883,7 +4883,7 @@ try {
   </div>
 
   <div style="margin-left: auto; display: flex; align-items: center; gap: 4px;">
-    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v116</span>
+    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v117</span>
   </div>
 
   <div id="nav-more-tray" style="display:none; flex-basis:100%; flex-wrap:wrap; gap:4px; padding-top:6px; margin-top:4px; border-top:1px dashed rgba(255,255,255,0.18);">
@@ -19847,6 +19847,26 @@ document.addEventListener('visibilitychange', () => {
 // the profiles keep that logic: "Left side" shows the user's left cheek/ear.
 
 const FM_FRONT_REGIONS = [
+  // v117: gap-fillers — listed first so they draw underneath and only take the
+  // taps in the bare skin between the older spots, which keep their whole zones.
+  // dotx/doty: where a spot's centre is under an older zone, its dot and badge
+  // sit on the part that still takes taps, so tapping the dot logs this spot.
+  { k:'forehead_ol', lbl:'Left outer forehead',   cx:92,  cy:106, rx:14, ry:24 },
+  { k:'forehead_or', lbl:'Right outer forehead',  cx:208, cy:106, rx:14, ry:24 },
+  { k:'abovebrow_l', lbl:'Left above brow',       cx:120, cy:137, rx:22, ry:7  },
+  { k:'abovebrow_r', lbl:'Right above brow',      cx:180, cy:137, rx:22, ry:7  },
+  { k:'lid_l',       lbl:'Left eyelid',           cx:117, cy:167, rx:17, ry:7  },
+  { k:'lid_r',       lbl:'Right eyelid',          cx:183, cy:167, rx:17, ry:7  },
+  { k:'cheekbone_l', lbl:'Left cheekbone',        cx:87,  cy:184, rx:13, ry:19 },
+  { k:'cheekbone_r', lbl:'Right cheekbone',       cx:213, cy:184, rx:13, ry:19 },
+  { k:'cheek_out_l', lbl:'Left outer cheek',      cx:86,  cy:222, rx:8,  ry:19, dotx:83,  doty:208 },
+  { k:'cheek_out_r', lbl:'Right outer cheek',     cx:214, cy:222, rx:8,  ry:19, dotx:217, doty:208 },
+  { k:'cheek_in_l',  lbl:'Left inner cheek',      cx:119, cy:207, rx:12, ry:12, dotx:116, doty:200 },
+  { k:'cheek_in_r',  lbl:'Right inner cheek',     cx:181, cy:207, rx:12, ry:12, dotx:184, doty:200 },
+  { k:'cheek_lo_l',  lbl:'Left lower cheek',      cx:115, cy:249, rx:12, ry:10 },
+  { k:'cheek_lo_r',  lbl:'Right lower cheek',     cx:185, cy:249, rx:12, ry:10 },
+  { k:'chin_l',      lbl:'Left chin',             cx:131, cy:273, rx:10, ry:12 },
+  { k:'chin_r',      lbl:'Right chin',            cx:169, cy:273, rx:10, ry:12 },
   { k:'hairline',    lbl:'Hairline',              cx:150, cy:57,  rx:60, ry:16 },
   { k:'forehead_ul', lbl:'Left upper forehead',   cx:122, cy:90,  rx:26, ry:13 },
   { k:'forehead_ur', lbl:'Right upper forehead',  cx:178, cy:90,  rx:26, ry:13 },
@@ -19878,6 +19898,16 @@ const FM_FRONT_REGIONS = [
 ];
 // One profile, defined facing image-left; the right view mirrors it in code.
 const FM_PROFILE_REGIONS = [
+  // v117: gap-fillers, drawn underneath the older spots (see the front view).
+  { k:'forehead_top', lbl:'top of forehead',       cx:122, cy:72,  rx:28, ry:9  },
+  { k:'brow',        lbl:'brow (side)',            cx:113, cy:146, rx:15, ry:7  },
+  { k:'cheekbone',   lbl:'cheekbone (side)',       cx:138, cy:186, rx:13, ry:13 },
+  { k:'cheek_up',    lbl:'upper cheek (side)',     cx:110, cy:199, rx:13, ry:9  },
+  { k:'lips',        lbl:'lips (side)',            cx:88,  cy:221, rx:9,  ry:13 },
+  { k:'cheek_lo',    lbl:'lower cheek (side)',     cx:114, cy:240, rx:13, ry:9, dotx:112, doty:246 },
+  { k:'chin',        lbl:'chin (side)',            cx:96,  cy:248, rx:12, ry:10 },
+  { k:'under_chin',  lbl:'under chin',             cx:126, cy:267, rx:10, ry:7  },
+  { k:'throat',      lbl:'throat (side)',          cx:134, cy:300, rx:13, ry:18 },
   { k:'hairline',    lbl:'hairline (side)',        cx:196, cy:92,  rx:34, ry:24 },
   // v96: the hairline seen from the side — a thin strip from the top of the head
   // down to the temple. Listed after the older spot so it takes the taps where
@@ -19903,9 +19933,9 @@ const FM_PROFILE_REGIONS = [
   { k:'neck',        lbl:'neck (side)',            cx:174, cy:312, rx:33, ry:23 },
 ];
 const FACE_REGIONS = [
-  ...FM_FRONT_REGIONS.map(r => ({ key:r.k, view:'front', label:r.lbl, cx:r.cx, cy:r.cy, rx:r.rx, ry:r.ry, rot:r.rot || 0 })),
-  ...FM_PROFILE_REGIONS.map(r => ({ key:'l_' + r.k, view:'left',  label:'Left '  + r.lbl, cx:r.cx,       cy:r.cy, rx:r.rx, ry:r.ry, rot:r.rot || 0 })),
-  ...FM_PROFILE_REGIONS.map(r => ({ key:'r_' + r.k, view:'right', label:'Right ' + r.lbl, cx:300 - r.cx, cy:r.cy, rx:r.rx, ry:r.ry, rot:-(r.rot || 0) })),
+  ...FM_FRONT_REGIONS.map(r => ({ key:r.k, view:'front', label:r.lbl, cx:r.cx, cy:r.cy, rx:r.rx, ry:r.ry, rot:r.rot || 0, dotx:r.dotx || r.cx, doty:r.doty || r.cy })),
+  ...FM_PROFILE_REGIONS.map(r => ({ key:'l_' + r.k, view:'left',  label:'Left '  + r.lbl, cx:r.cx,       cy:r.cy, rx:r.rx, ry:r.ry, rot:r.rot || 0, dotx:r.dotx || r.cx, doty:r.doty || r.cy })),
+  ...FM_PROFILE_REGIONS.map(r => ({ key:'r_' + r.k, view:'right', label:'Right ' + r.lbl, cx:300 - r.cx, cy:r.cy, rx:r.rx, ry:r.ry, rot:-(r.rot || 0), dotx:300 - (r.dotx || r.cx), doty:r.doty || r.cy })),
 ];
 // Non-facial reaction points. view:'body' keeps them OUT of the front/left/right
 // SVG loop while still living in the shared region registry — stats, the log
@@ -20136,8 +20166,8 @@ function renderFaceMap() {
       onclick="fmToggleSel(this.dataset.region)" onmouseenter="fmHover(this.dataset.region)" onmouseleave="fmHover('')">
       <title>${esc(r.label)}${s ? ` — ${s.count} mark${s.count === 1 ? '' : 's'}` : ''}</title>
       <ellipse class="fm-zone" cx="${r.cx}" cy="${r.cy}" rx="${r.rx}" ry="${r.ry}"${tf} style="fill-opacity:${op};"/>
-      ${w ? `<g class="fm-badge"><circle cx="${r.cx}" cy="${r.cy}" r="10"/><text x="${r.cx}" y="${r.cy}" dy="3.5">${s.count}</text></g>`
-          : `<circle class="fm-dotmark" cx="${r.cx}" cy="${r.cy}" r="3"/>`}
+      ${w ? `<g class="fm-badge"><circle cx="${r.dotx}" cy="${r.doty}" r="10"/><text x="${r.dotx}" y="${r.doty}" dy="3.5">${s.count}</text></g>`
+          : `<circle class="fm-dotmark" cx="${r.dotx}" cy="${r.doty}" r="3"/>`}
     </g>`;
   }).join('');
 
@@ -20859,7 +20889,7 @@ function fmDayRegionsSVG(spots, view, sel) {
       onclick="dfmToggle(this.dataset.region)">
       <title>${esc(fmDaySpotTip(r.label, s))}</title>
       <ellipse class="fm-zone" cx="${r.cx}" cy="${r.cy}" rx="${r.rx}" ry="${r.ry}"${tf}/>
-      ${s ? '' : `<circle class="fm-dotmark" cx="${r.cx}" cy="${r.cy}" r="3"/>`}
+      ${s ? '' : `<circle class="fm-dotmark" cx="${r.dotx}" cy="${r.doty}" r="3"/>`}
     </g>`;
   }).join('');
 }
@@ -24138,6 +24168,25 @@ function runSelfTest() {
       const i = regs.indexOf(rj);
       const over = regs.slice(i + 1).find(o => inside(o, rj.cx, rj.cy));
       if (over) bad.push(key + ' is under ' + over.key);
+    });
+    return bad.length ? bad.join('; ') : true;
+  });
+  // v117: a gap-filler's centre can sit under an older zone, so its dot may be
+  // placed apart from it. Pin that tapping a dot reaches the spot it belongs to.
+  t('face map: every dot sits on its own spot, uncovered', () => {
+    const inside = (r, x, y) => {
+      const a = -(r.rot || 0) * Math.PI / 180, dx = x - r.cx, dy = y - r.cy;
+      const u = dx * Math.cos(a) - dy * Math.sin(a), v = dx * Math.sin(a) + dy * Math.cos(a);
+      return (u / r.rx) * (u / r.rx) + (v / r.ry) * (v / r.ry) <= 1;
+    };
+    const bad = [];
+    ['front', 'left', 'right'].forEach(view => {
+      const regs = FACE_REGIONS.filter(r => r.view === view);
+      regs.forEach((r, i) => {
+        if (!inside(r, r.dotx, r.doty)) bad.push(r.key + ' dot is off its zone');
+        const over = regs.slice(i + 1).find(o => inside(o, r.dotx, r.doty));
+        if (over) bad.push(r.key + ' is under ' + over.key);
+      });
     });
     return bad.length ? bad.join('; ') : true;
   });
