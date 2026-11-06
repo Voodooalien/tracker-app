@@ -4883,7 +4883,7 @@ try {
   </div>
 
   <div style="margin-left: auto; display: flex; align-items: center; gap: 4px;">
-    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v117</span>
+    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v118</span>
   </div>
 
   <div id="nav-more-tray" style="display:none; flex-basis:100%; flex-wrap:wrap; gap:4px; padding-top:6px; margin-top:4px; border-top:1px dashed rgba(255,255,255,0.18);">
@@ -12720,6 +12720,38 @@ document.addEventListener('keydown', (ev) => {
 // the Logs list is where you land right after eating.
 const MEAL_PICK = [['breakfast', '🌅 Breakfast'], ['lunch', '☀️ Lunch'], ['snack', '🍎 Snack'], ['dinner', '🌙 Dinner']];
 function mealLabelOf(k) { const m = MEAL_PICK.find(x => x[0] === k); return m ? m[1] : 'Other / Unset'; }
+// PURE (v118): one day's entries → one block per meal type, in the order the
+// meals actually happened (earliest log time wins), entries time-sorted inside.
+// One block per TYPE and never two: a snack at 09:33 and another at 20:57 share
+// a block, and the time range on the heading is what tells them apart. Meals
+// with nothing logged are left out; anything without a meal type falls into a
+// final 'Other / Unset' block, and entries with no time sort to the end.
+function groupEntriesByMeal(dayEntries) {
+  const order = {};
+  MEAL_PICK.forEach(([k], i) => { order[k] = i; });
+  const rank = k => (order[k] === undefined ? 99 : order[k]);
+  const tKey = e => e.logTime || '24:00';
+  const byKey = new Map();
+  (dayEntries || []).forEach(e => {
+    const k = e.mealType || '';
+    if (!byKey.has(k)) byKey.set(k, []);
+    byKey.get(k).push(e);
+  });
+  return [...byKey.entries()].map(([key, list]) => {
+    const sorted = [...list].sort((a, b) =>
+      tKey(a).localeCompare(tKey(b)) || String(a.id || '').localeCompare(String(b.id || '')));
+    const times = sorted.map(e => e.logTime).filter(Boolean);   // already ascending
+    return {
+      key,
+      label: mealLabelOf(key),
+      tagClass: 'meal-tag-' + (order[key] === undefined ? 'other' : key),
+      entries: sorted,
+      first: times[0] || '',
+      last: times[times.length - 1] || '',
+    };
+  }).sort((a, b) =>
+    (a.first || '99:99').localeCompare(b.first || '99:99') || rank(a.key) - rank(b.key));
+}
 function mealEntriesToday(mealKey) {
   const t = today();
   return loadMigrated().filter(e => e.date === t && (e.mealType || '') === mealKey);
@@ -14830,14 +14862,27 @@ function renderDetective() {
   const cols = [];
   for (let i = _detLookback; i >= 0; i--) {
     const d = addDays(D.date, -i);
-    const dayEntries = entries.filter(e => e.date === d);
+    // v118: the span used to be one flat pile per day, so a food eaten three
+    // times read as three identical rows instead of breakfast, lunch, dinner.
+    const blocks = groupEntriesByMeal(entries.filter(e => e.date === d));
+    const rowHTML = e => {
+      const hot = suspectTop.has(e.food);
+      const neg = WINDOWS.some(w => e.windows[w.key] === false);
+      return `<div style="font-size:12px; padding:4px 8px 4px 11px; margin-bottom:4px; border-radius:7px; background:${hot ? 'rgba(231,76,60,0.10)' : 'var(--bg)'}; border:1px solid ${hot ? 'rgba(231,76,60,0.4)' : 'var(--border)'}; box-shadow:inset 3px 0 0 var(--meal-c, var(--border)); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${escAttr(e.food)}${e.logTime ? ' · ' + escAttr(e.logTime) : ''}">${neg ? '<span style="color:var(--neg); font-weight:900;">✕</span> ' : ''}${esc(e.food)}</div>`;
+    };
+    const body = blocks.map(b => {
+      const range = b.first ? (b.first === b.last ? b.first : b.first + '–' + b.last) : '';
+      return `<div class="${b.tagClass}" style="margin-bottom:11px;">
+        <div style="display:flex; align-items:baseline; gap:6px; flex-wrap:wrap; font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.4px; color:var(--meal-c); margin-bottom:5px; padding-bottom:3px; border-bottom:1px solid color-mix(in srgb, var(--meal-c) 35%, transparent);">
+          <span>${esc(b.label)} · ${b.entries.length}</span>
+          ${range ? `<span style="margin-left:auto; font-weight:700; letter-spacing:0; opacity:.65;">${esc(range)}</span>` : ''}
+        </div>
+        ${b.entries.map(rowHTML).join('')}
+      </div>`;
+    }).join('');
     cols.push(`<div style="flex:1; min-width:150px;">
       <div style="font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.5px; color:${i === 0 ? 'var(--neg)' : 'var(--muted)'}; margin-bottom:6px;">${i === 0 ? '🎯 ' : ''}${fmtDayShort(d)}${i === 0 ? ' — the day' : ` (−${i}d)`}</div>
-      ${dayEntries.length ? dayEntries.map(e => {
-        const hot = suspectTop.has(e.food);
-        const neg = WINDOWS.some(w => e.windows[w.key] === false);
-        return `<div style="font-size:12px; padding:4px 8px; margin-bottom:4px; border-radius:7px; background:${hot ? 'rgba(231,76,60,0.10)' : 'var(--bg)'}; border:1px solid ${hot ? 'rgba(231,76,60,0.4)' : 'var(--border)'}; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${escAttr(e.food)}">${neg ? '<span style="color:var(--neg); font-weight:900;">✕</span> ' : ''}${esc(e.food)}</div>`;
-      }).join('') : '<div style="font-size:12px; color:var(--muted); padding:4px 0;">nothing logged</div>'}
+      ${body || '<div style="font-size:12px; color:var(--muted); padding:4px 0;">nothing logged</div>'}
     </div>`);
   }
   const timeline = `
@@ -22899,6 +22944,39 @@ function runSelfTest() {
     eq(DET.suspects[0].factors.some(f => f.label.indexOf('smoking gun') === 0), false));
   t('detective: Banana floors at 2 (counter-evidence)', () => eq(DET.suspects[1].food + ':' + DET.suspects[1].score, 'Banana:2'));
   t('detective: the case day has check-in scores', () => eq(DET.hasCheckin, true));
+
+  // -- v118: the span's meal sectioning --
+  {
+    const MG = groupEntriesByMeal([
+      { id: 'd1', mealType: 'dinner',    logTime: '19:30' },
+      { id: 's2', mealType: 'snack',     logTime: '20:57' },
+      { id: 'b1', mealType: 'breakfast', logTime: '07:39' },
+      { id: 's1', mealType: 'snack',     logTime: '09:33' },
+      { id: 'l1', mealType: 'lunch',     logTime: '12:31' },
+      { id: 'b2', mealType: 'breakfast', logTime: '07:12' },
+      { id: 'x1', mealType: '',          logTime: '' },
+    ]);
+    t('meal split: blocks follow the clock, not a fixed meal order', () =>
+      eq(MG.map(b => b.key || 'other').join('>'), 'breakfast>snack>lunch>dinner>other'));
+    t('meal split: a morning and a night snack stay in ONE block', () => {
+      const s = MG.find(b => b.key === 'snack');
+      return eq(s.entries.length + ' ' + s.first + '–' + s.last, '2 09:33–20:57');
+    });
+    t('meal split: entries are time-sorted inside their block', () =>
+      eq(MG[0].entries.map(e => e.id).join(','), 'b2,b1'));
+    t('meal split: a meal-less entry lands last, labelled and tagged other', () => {
+      const o = MG[MG.length - 1];
+      return eq(o.label + '|' + o.tagClass + '|' + o.first, 'Other / Unset|meal-tag-other|');
+    });
+    t('meal split: a meal with nothing logged gets no empty block', () =>
+      eq(groupEntriesByMeal([{ id: 'b', mealType: 'breakfast', logTime: '08:00' }]).length, 1));
+    t('meal split: an untimed entry sorts behind the timed ones in its meal', () =>
+      eq(groupEntriesByMeal([
+        { id: 'n', mealType: 'lunch', logTime: '' },
+        { id: 'm', mealType: 'lunch', logTime: '12:00' },
+      ])[0].entries.map(e => e.id).join(','), 'm,n'));
+    t('meal split: no entries, no blocks', () => eq(groupEntriesByMeal([]).length, 0));
+  }
 
   // -- v112: the three defects that let a known culprit rank 32nd of 46 --
   {
