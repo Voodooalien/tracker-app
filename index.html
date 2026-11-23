@@ -683,6 +683,27 @@
     box-shadow: inset 0 -2px 0 var(--navy);
   }
   .note-scope-hint { font-size: 11px; color: var(--muted); line-height: 1.45; margin-bottom: 10px; }
+  /* v119 note sections: a read-only sorting of the one note text into tabs */
+  .ns-tabs { display: flex; flex-wrap: wrap; gap: 5px; margin: 4px 0 10px; }
+  .ns-tab {
+    background: none; border: 1.5px solid var(--border); color: var(--muted);
+    border-radius: 14px; padding: 4px 11px; font-family: inherit;
+    font-size: 12px; font-weight: 700; cursor: pointer; transition: all .12s;
+  }
+  .ns-tab:hover { color: var(--navy-ink); }
+  .ns-tab.on { color: var(--navy-ink); border-color: var(--navy); background: var(--bg); }
+  .ns-tab b { font-weight: 600; opacity: .7; margin-left: 3px; }
+  .ns-body { max-height: 600px; overflow-y: auto; font-size: 13px; line-height: 1.5; color: var(--text); }
+  #notes-modal .ns-body { min-height: 300px; border: 1.5px solid var(--border); border-radius: 8px; padding: 6px 12px; }
+  .ns-para { white-space: pre-wrap; word-break: break-word; padding: 7px 0; border-bottom: 1px solid var(--border); }
+  .ns-para:last-child { border-bottom: none; }
+  .ns-ctx { display: inline-block; font-size: 10.5px; font-weight: 800; color: var(--muted); border: 1px solid var(--border); border-radius: 4px; padding: 0 5px; margin-right: 6px; }
+  .ns-sub { font-size: 11px; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; margin: 12px 0 2px; }
+  .ns-tl-row { display: flex; gap: 10px; }
+  .ns-tl-mark { flex: 0 0 52px; text-align: right; font-weight: 800; color: var(--navy-ink); padding-top: 7px; font-size: 12px; }
+  .ns-tl-items { flex: 1; min-width: 0; border-left: 2px solid var(--navy); padding-left: 10px; }
+  .ns-empty { color: var(--muted); font-style: italic; padding: 8px 0; }
+  .ns-hint { font-size: 11px; color: var(--muted); margin-top: 8px; }
   .note-scope-tag {
     font-size: 11px; font-weight: 700; border-radius: 5px;
     padding: 3px 8px; border: 1.5px solid var(--border); color: var(--muted);
@@ -4883,7 +4904,7 @@ try {
   </div>
 
   <div style="margin-left: auto; display: flex; align-items: center; gap: 4px;">
-    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v118</span>
+    <span style="margin-left:8px; padding-bottom:2px; font-size:10px; color:rgba(255,255,255,0.28); user-select:none; letter-spacing:.4px;">v119</span>
   </div>
 
   <div id="nav-more-tray" style="display:none; flex-basis:100%; flex-wrap:wrap; gap:4px; padding-top:6px; margin-top:4px; border-top:1px dashed rgba(255,255,255,0.18);">
@@ -5842,6 +5863,8 @@ html body select.status-badge-select.status-toxic {
     <div id="note-link-row"></div>
     <div id="note-consolidate-row"></div>
     <div id="note-consolidate-preview"></div>
+    <div id="note-tabs-row"></div>
+    <div id="note-sections" class="ns-body" style="display:none;"></div>
     <textarea id="notes-textarea" placeholder="Write observations, patterns, or anything useful about this food…"></textarea>
     <div class="modal-actions">
       <button class="btn-cancel-note" onclick="closeNotesModal()">Cancel</button>
@@ -9923,6 +9946,126 @@ function deleteCheckinSym(key) {
     `"${(symDef && symDef.label) || key}" removed — ${Object.keys(purged).length} day score(s) purged`);
 }
 
+// ─── Note sections (v119) ────────────────────────────────────────────────────
+// A note is still ONE stored text. These tabs are a read-only sorting of it, so
+// saving, linking, merging and undo are all untouched. Sorting is by keyword at
+// paragraph level; a paragraph that covers several topics shows in each of its
+// tabs rather than being forced into one. Keywords live here, in one place.
+const NOTE_SECTIONS = [
+  { key: 'pain',  label: '⏱ Pain & timeline', re: /pain|cecum|cramp|burn|ache|hurt|sting|sore/i },
+  { key: 'gut',   label: '🚽 Gut & gas',       re: /gas|bloat|bowel|stool|toilet|poop|diarr|constip|fart|burp|\bbms?\b|nause/i },
+  { key: 'sleep', label: '😴 Sleep',           re: /sleep|slept|woke|wake|night|insomn|\bnap/i },
+  { key: 'skin',  label: '🧴 Skin',            re: /skin|pimple|acne|face|jaw|cheek|neck|inflam|itch|rash|chronic|outbreak|breakout|redness|spots?\b/i },
+];
+const NOTE_OTHER_LABEL = '⚡ Energy & other';
+const NOTE_MAX_HOUR = 72;   // past three days an "hour mark" is no longer a reaction time
+
+// PURE: note text -> { timeline:[{h,label,text,ctx}], pain:[], gut:[], sleep:[], skin:[], other:[], total }
+function sectionNote(text) {
+  const out = { timeline: [], pain: [], gut: [], sleep: [], skin: [], other: [], total: 0 };
+  const blocks = String(text == null ? '' : text).split(/\r?\n\s*\r?\n/);
+  let ctx = '';
+  const seen = new Set();
+  blocks.forEach(raw => {
+    const block = raw.trim();
+    if (!/\p{L}/u.test(block)) return;                     // divider lines only
+    const bare = block.replace(/[^\p{L}\p{N}\s]/gu, '').replace(/\s+/g, ' ').trim();
+    if (/^(day|week)\s*\d+$/i.test(bare)) { ctx = bare; return; }   // "Day 3:" headers become context
+    out.total++;
+    const para = { text: block, ctx };
+    // hour marks, sentence by sentence, so the timeline shows the line that says it
+    let hasMark = false;
+    block.split(/(?<=[.!?])\s+|\r?\n/).forEach(sent => {
+      const re = /(\d+(?:\.\d+)?)(?:\s*(?:-|–|to)\s*(\d+(?:\.\d+)?))?\s*(?:h|hrs?|hours?)\b/gi;
+      let m;
+      while ((m = re.exec(sent))) {
+        const before = sent.slice(Math.max(0, m.index - 16), m.index);
+        if (/slept|sleep/i.test(before)) continue;          // "slept 7 hours" is a duration, not a mark
+        const h = parseFloat(m[1]);
+        if (!(h >= 0) || h > NOTE_MAX_HOUR) continue;
+        const label = m[2] ? m[1] + '–' + m[2] + 'H' : m[1] + 'H';
+        const line = sent.trim().length >= 12 ? sent.trim() : block;
+        const id = label + '|' + line;
+        hasMark = true;
+        if (seen.has(id)) continue;
+        seen.add(id);
+        out.timeline.push({ h, label, text: line, ctx });
+      }
+    });
+    let hit = false;
+    NOTE_SECTIONS.forEach(sec => {
+      if (!sec.re.test(block)) return;
+      hit = true;
+      if (sec.key === 'pain' && hasMark) return;           // already on the timeline
+      out[sec.key].push(para);
+    });
+    if (!hit && !hasMark) out.other.push(para);
+  });
+  out.timeline.sort((a, b) => a.h - b.h);
+  return out;
+}
+
+function noteTabCount(sec, k) {
+  if (k === 'pain') return sec.timeline.length + sec.pain.length;
+  return (sec[k] || []).length;
+}
+function noteTabsHTML(sec, active, where) {
+  const tab = (k, label, n) => `<button type="button" class="ns-tab${active === k ? ' on' : ''}" aria-pressed="${active === k}" onclick="setNoteTab('${where}','${k}')">${label}${n == null ? '' : `<b>${n}</b>`}</button>`;
+  return `<div class="ns-tabs" role="group" aria-label="Note sections">${tab('all', '📋 All')}`
+    + NOTE_SECTIONS.map(s => tab(s.key, s.label, noteTabCount(sec, s.key))).join('')
+    + tab('other', NOTE_OTHER_LABEL, sec.other.length) + `</div>`;
+}
+function noteParaHTML(p) {
+  return `<div class="ns-para">${p.ctx ? `<span class="ns-ctx">${esc(p.ctx)}</span>` : ''}${esc(p.text)}</div>`;
+}
+function noteSectionBodyHTML(sec, k) {
+  const empty = `<div class="ns-empty">Nothing about this in the note.</div>`;
+  let html = '';
+  if (k === 'pain') {
+    const groups = [];
+    sec.timeline.forEach(t => {
+      const g = groups.length && groups[groups.length - 1].label === t.label ? groups[groups.length - 1] : null;
+      if (g) g.items.push(t); else groups.push({ label: t.label, items: [t] });
+    });
+    if (groups.length) html += `<div class="ns-sub">Timeline · hours after eating</div>`
+      + groups.map(g => `<div class="ns-tl-row"><div class="ns-tl-mark">${esc(g.label)}</div><div class="ns-tl-items">${g.items.map(noteParaHTML).join('')}</div></div>`).join('');
+    if (sec.pain.length) html += `<div class="ns-sub">${groups.length ? 'Pain · no time given' : 'Pain'}</div>` + sec.pain.map(noteParaHTML).join('');
+  } else {
+    html = (sec[k] || []).map(noteParaHTML).join('');
+  }
+  return (html || empty) + `<div class="ns-hint">Sorted automatically by keywords — a paragraph about several things shows in each tab. Edit in 📋 All.</div>`;
+}
+
+// Which tab each surface is on. The popup always opens on All (that is where
+// editing happens); the Food Profile remembers the last tab between foods.
+const _noteTab = { modal: 'all', fp: 'all' };
+let _fpNoteText = '';
+function setNoteTab(where, k) {
+  _noteTab[where] = k;
+  if (where === 'modal') renderNoteTabsModal();
+  else { const host = document.getElementById('fp-note-sections'); if (host) host.innerHTML = fpNoteSectionsHTML(_fpNoteText); }
+}
+function renderNoteTabsModal() {
+  const ta = document.getElementById('notes-textarea');
+  const row = document.getElementById('note-tabs-row');
+  const body = document.getElementById('note-sections');
+  if (!ta || !row || !body) return;
+  const sec = sectionNote(ta.value);
+  if (!sec.total) _noteTab.modal = 'all';
+  const k = _noteTab.modal;
+  row.innerHTML = sec.total ? noteTabsHTML(sec, k, 'modal') : '';
+  ta.style.display = k === 'all' ? '' : 'none';
+  body.style.display = k === 'all' ? 'none' : '';
+  body.innerHTML = k === 'all' ? '' : noteSectionBodyHTML(sec, k);
+}
+function fpNoteSectionsHTML(text) {
+  _fpNoteText = String(text == null ? '' : text);
+  const sec = sectionNote(_fpNoteText);
+  const k = sec.total ? _noteTab.fp : 'all';
+  return (sec.total ? noteTabsHTML(sec, k, 'fp') : '')
+    + (k === 'all' ? `<div class="fp-note">${esc(_fpNoteText)}</div>` : `<div class="ns-body">${noteSectionBodyHTML(sec, k)}</div>`);
+}
+
 function openNotesModal(food) {
   _notesFood = food;
   const cur = resolveFoodNote(food);
@@ -9933,6 +10076,8 @@ function openNotesModal(food) {
   document.getElementById('notes-modal-food').textContent = food;
   document.getElementById('notes-textarea').value = cur ? cur.text : '';
   renderNotesScope();
+  _noteTab.modal = 'all';
+  renderNoteTabsModal();
   document.getElementById('notes-modal-bg').classList.add('open');
   setTimeout(() => document.getElementById('notes-textarea').focus(), 50);
 }
@@ -10022,6 +10167,7 @@ async function dropServingOverride() {
   _notesScope = 'item';
   document.getElementById('notes-textarea').value = String(shared);
   renderNotesScope();
+  renderNoteTabsModal();
   renderSummary();
   if (_fpFood) renderFoodProfile();
   startUndo({ type: 'notes', ...undo }, 'Serving note removed — the shared note shows here now · 🛟 snapshot saved first');
@@ -22657,7 +22803,7 @@ function renderFoodProfile() {
     ${noteHit && noteHit.text
       ? `<div class="fp-note-tag">${noteHit.scope === 'item'
           ? `🍽️ Covers every serving size of “${esc(noteHit.key)}”`
-          : `📏 Written on “${esc(noteHit.key)}” alone`}</div><div class="fp-note">${esc(noteHit.text)}</div>`
+          : `📏 Written on “${esc(noteHit.key)}” alone`}</div><div id="fp-note-sections">${fpNoteSectionsHTML(noteHit.text)}</div>`
       : '<div class="fp-empty">No note yet — add one from 📋 Summary.</div>'}
   </div>`;
 
@@ -25005,6 +25151,32 @@ function runSelfTest() {
     const e = migrate({ id: 'c1', date: '2026-01-01', food: 'X', logTime: '12:00', mealType: 'lunch', notes: '', windows: { w1: true } });
     const h = markingHealth([e]);
     return eq([h.marked, h.unmarked, h.pos, h.neg].join('|'), '1|3|1|0');
+  });
+
+  // ── note sections (v119): read-only sorting of one note into tabs ──
+  t('note sections: hour marks land on the timeline in time order', () => {
+    const NL = String.fromCharCode(10);
+    const s = sectionNote('Felt fine.' + NL + NL + 'Strong pain 4H later.' + NL + NL + 'Mild pain 2H after eating.');
+    return eq(s.timeline.map(x => x.label).join(','), '2H,4H');
+  });
+  t('note sections: a range mark keeps its range and sorts by its start', () => {
+    const s = sectionNote('Gas at 7-9H and cramps 3H later.');
+    return eq(s.timeline.map(x => x.label).join(','), '3H,7–9H');
+  });
+  t('note sections: a paragraph about two topics shows in both tabs', () => {
+    const s = sectionNote('Slept badly and my skin flared.');
+    return (s.sleep.length === 1 && s.skin.length === 1) ? true : JSON.stringify(s);
+  });
+  t('note sections: "slept 7 hours" is a duration, not a timeline mark', () =>
+    sectionNote('Slept 7 hours, woke rested.').timeline.length === 0 ? true : 'slept-hours became a mark');
+  t('note sections: a Day header becomes context, not a paragraph', () => {
+    const NL = String.fromCharCode(10);
+    const s = sectionNote('Day 2:' + NL + NL + 'More gas than usual.');
+    return (s.total === 1 && s.gut.length === 1 && s.gut[0].ctx === 'Day 2') ? true : JSON.stringify(s);
+  });
+  t('note sections: unmatched text goes to Energy & other; empty note has nothing', () => {
+    const s = sectionNote('Tastes great.');
+    return (s.other.length === 1 && sectionNote('').total === 0) ? true : JSON.stringify(s);
   });
 
   // ── note scope: item-level vs exact-name notes (v73) ──
